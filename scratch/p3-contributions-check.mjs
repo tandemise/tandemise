@@ -572,7 +572,7 @@ section('daemon: park and hand back');
   const commitFile = (name) => { writeFileSync(join(checkout, name), `${name}\n`); gitc('add', name); gitc('commit', '-q', '-m', name); };
   gitc('init', '-q', '-b', 'main');
   commitFile('README.md');
-  execFileSync('git', ['init', '-q', '--bare', remoteRepo]);
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remoteRepo]);
   // Named for GitHub and rewritten to the bare repository, with no `origin`:
   // the fetch has to find the remote whose configured URL is acme/app.
   gitc('config', `url.${remoteRepo}.insteadOf`, 'https://github.com/acme/app.git');
@@ -835,7 +835,7 @@ section('daemon: park and hand back');
       mkdirSync(unrelated, { recursive: true });
       const gu = (...args) => execFileSync('git', ['-c', 'user.name=check', '-c', 'user.email=check@example.com', ...args], { cwd: unrelated, stdio: 'pipe' }).toString().trim();
       gu('init', '-q', '-b', 'main'); writeFileSync(join(unrelated, 'x.txt'), 'x\n'); gu('add', '.'); gu('commit', '-q', '-m', 'x');
-      execFileSync('git', ['init', '-q', '--bare', unrelatedRemote]);
+      execFileSync('git', ['init', '-q', '--bare', '-b', 'main', unrelatedRemote]);
       gu('remote', 'add', 'origin', unrelatedRemote); gu('push', '-q', 'origin', 'main');
       const unrelatedClone = cloneOf(unrelatedRemote, 'unrelated-clone');
       const otherSha = commitOn('main', 'other-12.txt', 'refs/pull/12/head', unrelatedClone, 'origin');
