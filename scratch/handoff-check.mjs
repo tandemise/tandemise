@@ -704,6 +704,27 @@ section('engine');
     check('maxConcurrent 1: no two runs of the profile overlap', overlaps.length === 0, runs.map((r) => [r.taskId.slice(-4), r.startedAt.slice(17), r.finishedAt?.slice(17)]));
   }
 
+  // ---- a failed check's own words reach the retry: the gate says only "checks.tests is FAIL", and an agent
+  //      told just that re-ran a 15-minute suite hunting a broken test when the check had merely timed out
+  {
+    const repoDir = join(HOME, 'failing-check-repo');
+    mkdirSync(repoDir, { recursive: true });
+    execFileSync('git', ['init', '-q', '-b', 'main', repoDir]);
+    execFileSync('git', ['-C', repoDir, '-c', 'user.name=check', '-c', 'user.email=check@example.com', 'commit', '-q', '--allow-empty', '-m', 'init']);
+    const { NO_CHECKS } = await import('@tandemise/domain');
+    const repository = h.container.resolve(h.app.REPO_REPOSITORY).create({
+      id: ids.repository(), workspaceId: ws, name: 'failing-check', path: repoDir, defaultBranch: 'main', remoteUrl: null,
+      checks: { ...NO_CHECKS, test: 'echo "sum.test: expected 2, got 3" >&2; exit 1' },
+    });
+    const m = await addMission({ key: 'failing_check', maxAttempts: 1, completionGate: 'checks.tests == PASS', repositoryId: repository.id, ...staffed(agents.within) });
+    await settled(m.id);
+    const feedback = task(m.id).retryFeedback ?? '';
+    check('a failed check: the retry feedback keeps the gate\'s words and adds the check\'s command and output',
+      task(m.id).status === 'FAILED' && feedback.includes('checks.tests is FAIL') && feedback.includes('exited 1') && feedback.includes('sum.test: expected 2, got 3'),
+      { s: task(m.id).status, f: feedback });
+    check('a failed check: the row a person reads stays the gate\'s one line', !(task(m.id).statusReason ?? '').includes('sum.test'), task(m.id).statusReason);
+  }
+
   // ---- a tighten pass already on record for this round is never run again (a restart mid-round)
   const r = await addMission({ key: 'restarted', status: 'PENDING', ...staffed(agents.wordy) });
   h.recorder.record({ workspaceId: ws, missionId: r.mission.id, taskId: r.id, roleId: 'design' },
