@@ -1,6 +1,6 @@
 /**
  * The window names the platform's own things: Finder and macOS on a Mac, File
- * Explorer and Windows on Windows, "file manager" and "your desktop setting" on Linux.
+ * Explorer and Windows on Windows, "file manager" and "your system" on Linux.
  *
  * Found dogfooding v0.10.0 on Linux (GitHub #95): Settings said "System follows
  * macOS" and every reveal button said "Finder". One helper,
@@ -35,11 +35,11 @@ console.log('── the words for each platform\n');
   ok('Windows: the System theme follows Windows (U2)', win.system === 'Windows', win);
   const linux = platformWords('linux');
   ok('Linux: file manager (U2)', linux.fileManager === 'file manager', linux);
-  ok('Linux: the System theme follows your desktop setting', linux.system === 'your desktop setting', linux);
+  ok('Linux: the System theme follows your system (U2)', linux.system === 'your system', linux);
   const hint = `System follows ${linux.system}.`;
-  ok('Linux: the theme hint reads "System follows your desktop setting."', hint === 'System follows your desktop setting.', hint);
+  ok('Linux: the theme hint reads "System follows your system."', hint === 'System follows your system.', hint);
   for (const other of ['freebsd', 'openbsd', 'sunos', 'aix']) {
-    ok(`${other} gets the generic words`, platformWords(other).fileManager === 'file manager' && platformWords(other).system === 'your desktop setting');
+    ok(`${other} gets the generic words`, platformWords(other).fileManager === 'file manager' && platformWords(other).system === 'your system');
   }
   globalThis.window = { tandemise: { platform: 'win32' } };
   ok('with no argument it asks the window which platform it runs on', platformWords().fileManager === 'File Explorer');

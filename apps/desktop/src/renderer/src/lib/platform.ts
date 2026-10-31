@@ -4,7 +4,7 @@ import type { Platform } from '../../../shared/bridge.js';
 export interface PlatformWords {
   /** What reveals a file: "Finder", "File Explorer", or "file manager". */
   readonly fileManager: string;
-  /** What the System theme follows: "macOS", "Windows", or "your desktop setting". */
+  /** What the System theme follows: "macOS", "Windows", or "your system". */
   readonly system: string;
 }
 
@@ -16,5 +16,5 @@ export interface PlatformWords {
 export function platformWords(platform: Platform = window.tandemise.platform): PlatformWords {
   if (platform === 'darwin') return { fileManager: 'Finder', system: 'macOS' };
   if (platform === 'win32') return { fileManager: 'File Explorer', system: 'Windows' };
-  return { fileManager: 'file manager', system: 'your desktop setting' };
+  return { fileManager: 'file manager', system: 'your system' };
 }
