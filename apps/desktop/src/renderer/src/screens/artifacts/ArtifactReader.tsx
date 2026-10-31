@@ -86,7 +86,7 @@ function ReaderDocument({ view, onVersion }: { view: ArtifactReadView; onVersion
   return (
     <article>
       <header className="reader__head">
-        <h1 className="reader__title">{manifest.title}</h1>
+        <h2 className="reader__title">{manifest.title}</h2>
         <div className="reader__byline">
           <Attribution
             by={manifest.author ?? actors.ref(manifest.authorId)}

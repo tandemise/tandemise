@@ -62,9 +62,10 @@ export function DoneWhen({ missionId }: { missionId: string }): JSX.Element | nu
               type="button"
               className="list__row"
               onClick={() => setReading(target)}
-              aria-label={`${row.key}: ${status.label}. Open the ${target.title}`}
             >
               {content}
+              {/* The visible words name the row (2.5.3); what pressing it does follows them. */}
+              <span className="visually-hidden">Open the {target.title}</span>
             </button>
           );
         })}

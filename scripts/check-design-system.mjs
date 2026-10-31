@@ -31,6 +31,10 @@
 //      which pass it to one) in the desktop renderer: a keyboard user never
 //      sees it, and it is not a reliable name. Use `Tooltip`, `Truncate`, or
 //      an `aria-label` on an icon-only control.
+//  11. a control that shows only an icon (`<button>`, `<a>`, `Button`, `Link`,
+//      or `Button iconOnly`) has no `aria-label` / `aria-labelledby`. A control
+//      with a spread attribute is trusted (the name may be in it); the a11y
+//      acceptance suite checks those in the running window.
 //
 //   node scripts/check-design-system.mjs     (after `npm run build`: it reads packages/design/dist)
 import { execFileSync } from 'node:child_process';
@@ -223,6 +227,46 @@ for (const m of brand.matchAll(/\/\*\*\s*`(--[a-z0-9-]+)`\s*\*\/\s*\n\s*\w+:\s*'
         if (/^[a-z]/.test(tag) || PASS_THROUGH.has(tag)) {
           fail(file, lineOf(text, node.getStart(source)), `native title on <${tag}> - use Tooltip, Truncate or an aria-label (a title is invisible to keyboard users)`);
         }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
+// ------------------------------------------------------ icon-only controls
+
+// 11. A control that shows only an icon has an accessible name (WCAG 1.1.1,
+// 4.1.2): a `<button>`, `<a>`, `Button` or `Link` whose only children are
+// icons, or a `Button iconOnly`, carries `aria-label` or `aria-labelledby`.
+// The a11y acceptance suite checks the same in the running window, where a
+// name built at runtime is visible too.
+{
+  const { default: ts } = await import('typescript');
+  const CONTROLS = new Set(['button', 'a', 'Button', 'Link']);
+  const ICONS = new Set(['Icon', 'svg', 'Logo']);
+  // A spread (`{...rest}`, `{...control}`) may carry the name, and this static rule cannot see into it, so a
+  // control with one is trusted here; the a11y acceptance suite checks the name it renders with.
+  const named = (attributes) => attributes.properties.some((p) => ts.isJsxAttribute(p) && /^aria-label(ledby)?$/.test(p.name.getText()))
+    || attributes.properties.some((p) => ts.isJsxSpreadAttribute(p));
+  const hasAttr = (attributes, name) => attributes.properties.some((p) => ts.isJsxAttribute(p) && p.name.getText() === name);
+  const roots = [join(desktop, 'src/renderer'), join(design, 'src/react')];
+  for (const file of roots.flatMap((dir) => walk(dir)).filter((f) => f.endsWith('.tsx'))) {
+    const text = readFileSync(file, 'utf8');
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const report = (node, tag) => fail(file, lineOf(text, node.getStart(source)), `<${tag}> shows only an icon and has no aria-label or aria-labelledby - name it (a Tooltip's words are not its name)`);
+    const visit = (node) => {
+      if (ts.isJsxElement(node)) {
+        const tag = node.openingElement.tagName.getText(source);
+        if (CONTROLS.has(tag) && !named(node.openingElement.attributes)) {
+          const shown = node.children.filter((c) => !(ts.isJsxText(c) && c.getText(source).trim() === ''));
+          const iconOnly = shown.length > 0 && shown.every((c) => (ts.isJsxSelfClosingElement(c) || ts.isJsxElement(c))
+            && ICONS.has((ts.isJsxElement(c) ? c.openingElement : c).tagName.getText(source)));
+          if (iconOnly || (tag === 'Button' && hasAttr(node.openingElement.attributes, 'iconOnly'))) report(node, tag);
+        }
+      } else if (ts.isJsxSelfClosingElement(node)) {
+        const tag = node.tagName.getText(source);
+        if (tag === 'Button' && hasAttr(node.attributes, 'iconOnly') && !named(node.attributes)) report(node, tag);
       }
       ts.forEachChild(node, visit);
     };

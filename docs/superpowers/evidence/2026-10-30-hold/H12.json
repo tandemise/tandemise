@@ -1,0 +1,162 @@
+{
+  "id": "H12",
+  "title": "The terminal panel works with a keyboard and a screen reader",
+  "ok": true,
+  "checks": [
+    {
+      "label": "the panel is open on the held step",
+      "ok": true,
+      "observed": "Terminal: design"
+    },
+    {
+      "label": "dark: axe (WCAG 2.0/2.1 A+AA) finds nothing in the panel",
+      "ok": true,
+      "observed": []
+    },
+    {
+      "label": "light: axe (WCAG 2.0/2.1 A+AA) finds nothing in the panel",
+      "ok": true,
+      "observed": []
+    },
+    {
+      "label": "every control has an accessible name",
+      "ok": true,
+      "observed": []
+    },
+    {
+      "label": "the terminal is a named region, described by how to leave it",
+      "ok": true,
+      "observed": {
+        "role": "group",
+        "label": "Terminal for design",
+        "keys": "F6 moves between the terminal and the buttons above it; the terminal keeps Tab and Esc for itself."
+      }
+    },
+    {
+      "label": "Screen reader mode is a toggle that turns on xterm's accessibility tree",
+      "ok": true,
+      "observed": {
+        "pressed": "true",
+        "tree": true
+      }
+    },
+    {
+      "label": "Tab in the terminal stays in the terminal (the program gets it)",
+      "ok": true,
+      "observed": {
+        "terminal": true,
+        "inPanel": true,
+        "name": "Terminal input"
+      }
+    },
+    {
+      "label": "F6 moves focus out of the terminal to the panel's buttons",
+      "ok": true,
+      "observed": {
+        "terminal": false,
+        "inPanel": true,
+        "name": "Continue"
+      }
+    },
+    {
+      "label": "and that button shows its focus ring",
+      "ok": true
+    },
+    {
+      "label": "Tab cycles inside the panel (it is a modal dialog)",
+      "ok": true
+    },
+    {
+      "label": "F6 again goes back into the terminal",
+      "ok": true,
+      "observed": {
+        "terminal": true,
+        "inPanel": true,
+        "name": "Terminal input"
+      }
+    },
+    {
+      "label": "Escape in the terminal leaves the panel open",
+      "ok": true,
+      "observed": "Terminal: design"
+    },
+    {
+      "label": "and focus in the terminal",
+      "ok": true,
+      "observed": {
+        "terminal": true,
+        "inPanel": true,
+        "name": "Terminal input"
+      }
+    },
+    {
+      "label": "the program received the Escape (its line reads \"^[escprobe\")",
+      "ok": true,
+      "observed": [
+        "^[escprobe"
+      ]
+    },
+    {
+      "label": "Continue is pending: Continue and Release are disabled",
+      "ok": true,
+      "observed": [
+        {
+          "text": "Continuing…",
+          "disabled": true
+        },
+        {
+          "text": "Release",
+          "disabled": true
+        },
+        {
+          "text": "Screen reader mode",
+          "disabled": false
+        },
+        {
+          "text": "Close terminal",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "label": "F6 leaves the terminal for an enabled control while Continue is pending",
+      "ok": true,
+      "observed": {
+        "terminal": false,
+        "disabled": false,
+        "name": "Screen reader mode"
+      }
+    },
+    {
+      "label": "with every control disabled, F6 moves focus to the panel itself",
+      "ok": true,
+      "observed": {
+        "terminal": false,
+        "panel": true
+      }
+    },
+    {
+      "label": "Escape on the panel's buttons closes the panel (after dismissing the button's tooltip)",
+      "ok": true,
+      "observed": ""
+    },
+    {
+      "label": "proof (API): the step is still HELD after closing",
+      "ok": true,
+      "observed": "HELD"
+    },
+    {
+      "label": "its card offers Open terminal",
+      "ok": true,
+      "observed": {
+        "text": "Open terminal",
+        "disabled": false,
+        "title": ""
+      }
+    }
+  ],
+  "notes": [],
+  "shots": [
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H12-focus-out-of-terminal.png"
+  ]
+}

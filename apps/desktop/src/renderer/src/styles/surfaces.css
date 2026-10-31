@@ -255,8 +255,10 @@
   font-size: var(--fs-md);
 }
 
+/* The ring is drawn inside the panel's edge: the field's own bottom rule becomes the focus ring (2.4.7). */
 .palette__input:focus {
   outline: none;
+  box-shadow: inset 0 -2px 0 var(--focus-ring);
 }
 
 .palette__list {
@@ -302,7 +304,8 @@
 .palette__hint {
   margin-left: auto;
   font-size: var(--fs-xs);
-  color: var(--text-tertiary);
+  /* Secondary, not tertiary: it sits on the active row's fill, where tertiary falls under 4.5:1. */
+  color: var(--text-secondary);
 }
 
 .palette__foot {

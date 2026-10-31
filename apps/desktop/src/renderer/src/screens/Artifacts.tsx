@@ -40,6 +40,8 @@ export function Artifacts({ openId = null }: { openId?: string | null } = {}): J
             <Icon name="search" size={14} className="search__icon" />
             <input
               className="input"
+              type="search"
+              aria-label="Search artifacts"
               placeholder="Search titles and contents…"
               value={input}
               onChange={(event) => setInput(event.target.value)}
