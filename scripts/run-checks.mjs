@@ -8,7 +8,15 @@
 //
 //   node scripts/run-checks.mjs              # every offline check
 //   node scripts/run-checks.mjs resume-check # just the named ones
+//
+// Each check gets its own TMPDIR. The checks make scratch dirs with
+// mkdtemp(tmpdir(), 'tdm-…') and leave them, and on Linux /tmp is on disk until
+// reboot (three days of runs left ~2,000 dirs and 11 GB). The dir is removed when
+// the check passes and kept, with its path printed, when it fails.
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export const OFFLINE_CHECKS = [
   'about-check',
@@ -83,14 +91,21 @@ const TIMEOUT_MS = 5 * 60_000;
 function run(name) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(process.execPath, [`scratch/${name}.mjs`], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const tmp = mkdtempSync(join(tmpdir(), `tandemise-check-${name}-`));
+    const child = spawn(process.execPath, [`scratch/${name}.mjs`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, TMPDIR: tmp },
+    });
     let output = '';
     child.stdout.on('data', (d) => (output += d));
     child.stderr.on('data', (d) => (output += d));
     const timer = setTimeout(() => child.kill('SIGKILL'), TIMEOUT_MS);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
-      resolve({ name, ok: code === 0, code: signal ?? code, output, ms: Date.now() - started });
+      const ok = code === 0;
+      if (ok) rmSync(tmp, { recursive: true, force: true, maxRetries: 3 });
+      else output += `\n(scratch files kept in ${tmp})\n`;
+      resolve({ name, ok, code: signal ?? code, output, ms: Date.now() - started });
     });
   });
 }
