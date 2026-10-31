@@ -62,18 +62,45 @@ await page.send('Emulation.setFocusEmulationEnabled', { enabled: true });
 
 const theme = async (t) => {
   await page.evaluate(`localStorage.setItem('tandemise.theme', '${t}'); document.documentElement.setAttribute('data-theme', '${t}')`);
-  await sleep(250);
+  await sleep(FADE_MS);
 };
-const go = async (hash, wait = 1800) => {
+/** Waits until `expression` is true in the page (polled), or fails naming `label`. */
+const waitFor = async (expression, label, timeoutMs = 30_000) => {
+  for (const end = Date.now() + timeoutMs; ;) {
+    if (await page.evaluate(`Boolean(${expression})`)) return;
+    if (Date.now() > end) throw new Error(`timed out waiting for ${label}`);
+    await sleep(150);
+  }
+};
+/**
+ * The screen at `hash` has loaded: its route is current, its page title (the one h1) is drawn, no skeleton is
+ * left, and the DOM has been still for a moment (the queries behind it have answered).
+ */
+const settled = `(() => {
+  const now = document.body.innerText.length;
+  const still = window.__a11yLast === now;
+  window.__a11yLast = now;
+  return !!document.querySelector('main h1') && !document.querySelector('.skeleton') && still;
+})()`;
+const go = async (hash) => {
   await page.navigate(hash);
-  await sleep(wait);
+  await waitFor(`location.hash === ${JSON.stringify(hash)}`, `route ${hash}`);
+  await page.evaluate('window.__a11yLast = -1');
+  await waitFor(settled, `${hash} to load`);
+  await waitFor(settled, `${hash} to settle`);
 };
+/** A dialog is open: in the DOM, then given its fade-in (axe measures colours as painted). */
+const dialogShown = async (label) => {
+  await waitFor(`document.querySelector('[role=dialog], [role=alertdialog]')`, label);
+  await sleep(FADE_MS);
+};
+/** The enter animations (`--duration-slow` and less), the only fixed wait left. */
+const FADE_MS = 300;
 const escape = () => press(page, 'Escape');
 const dialogOpen = () => page.evaluate(`!!document.querySelector('[role=dialog], [role=alertdialog]')`);
 const clickSelector = async (selector) => {
   const ok = await page.evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return false; el.scrollIntoView({ block: 'center' }); el.click(); return true; })()`);
   if (!ok) throw new Error(`nothing matches ${selector}`);
-  await sleep(700);
 };
 
 /**
@@ -81,31 +108,30 @@ const clickSelector = async (selector) => {
  * open dialog (focus stays inside, Escape closes it); `wait` is how long the screen takes to settle.
  */
 const STATES = [
-  { name: 'home', open: () => go('#/', 2500) },
+  { name: 'home', open: () => go('#/') },
   { name: 'board', open: () => go('#/board') },
   { name: 'board-intake', open: () => go('#/board/intake') },
   { name: 'missions', open: () => go('#/missions/in-progress') },
   { name: 'missions-backlog', open: () => go('#/missions/backlog') },
   { name: 'missions-routines', open: () => go('#/missions/routines') },
-  { name: 'routine-dialog', modal: true, open: async () => { await go('#/missions/routines'); await page.click('New routine'); await sleep(800); } },
+  { name: 'routine-dialog', modal: true, open: async () => { await go('#/missions/routines'); await page.click('New routine'); await dialogShown('the routine dialog'); } },
   { name: 'new-mission', open: () => go('#/missions/new') },
-  { name: 'new-mission-errors', open: async () => { await go('#/missions/new'); await page.evaluate(`document.querySelector('main form')?.requestSubmit()`); await sleep(800); } },
-  { name: 'mission-feed', open: () => go(`#/missions/${S.a}/feed`, 2500) },
-  { name: 'mission-plan', open: () => go(`#/missions/${S.a}/plan`, 2500) },
-  { name: 'mission-timeline', open: () => go(`#/missions/${S.a}/timeline`, 2500) },
-  { name: 'mission-artifacts', open: () => go(`#/missions/${S.a}/artifacts`, 2500) },
-  { name: 'mission-checks', open: () => go(`#/missions/${S.a}/checks`, 2500) },
-  { name: 'mission-metrics', open: () => go(`#/missions/${S.a}/metrics`, 2500) },
-  { name: 'task-drawer', modal: true, open: async () => { await go(`#/missions/${S.a}/plan`, 2500); await clickSelector('.taskcard'); } },
-  { name: 'mission-cancel-confirm', modal: true, open: async () => { await go(`#/missions/${S.a}/feed`, 2500); await page.click('Cancel'); await sleep(600); } },
-  { name: 'mission-limit', open: () => go(`#/missions/${S.d}`, 2500) },
-  { name: 'mission-limit-metrics', open: () => go(`#/missions/${S.d}/metrics`, 2500) },
-  { name: 'mission-get-ready', open: () => go(`#/missions/${S.h}`, 2500) },
-  { name: 'mission-stalled', open: () => go(`#/missions/${S.b}`, 2500) },
-  { name: 'inbox', open: () => go('#/inbox', 2500) },
-  { name: 'inbox-stalled', open: () => go('#/inbox/stalled', 2500) },
+  { name: 'mission-feed', open: () => go(`#/missions/${S.a}/feed`) },
+  { name: 'mission-plan', open: () => go(`#/missions/${S.a}/plan`) },
+  { name: 'mission-timeline', open: () => go(`#/missions/${S.a}/timeline`) },
+  { name: 'mission-artifacts', open: () => go(`#/missions/${S.a}/artifacts`) },
+  { name: 'mission-checks', open: () => go(`#/missions/${S.a}/checks`) },
+  { name: 'mission-metrics', open: () => go(`#/missions/${S.a}/metrics`) },
+  { name: 'task-drawer', modal: true, open: async () => { await go(`#/missions/${S.a}/plan`); await clickSelector('.taskcard'); await dialogShown('the task drawer'); } },
+  { name: 'mission-cancel-confirm', modal: true, open: async () => { await go(`#/missions/${S.a}/feed`); await page.click('Cancel'); await dialogShown('the cancel confirmation'); } },
+  { name: 'mission-limit', open: () => go(`#/missions/${S.d}`) },
+  { name: 'mission-limit-metrics', open: () => go(`#/missions/${S.d}/metrics`) },
+  { name: 'mission-get-ready', open: () => go(`#/missions/${S.h}`) },
+  { name: 'mission-stalled', open: () => go(`#/missions/${S.b}`) },
+  { name: 'inbox', open: () => go('#/inbox') },
+  { name: 'inbox-stalled', open: () => go('#/inbox/stalled') },
   { name: 'artifacts', open: () => go('#/artifacts') },
-  { name: 'artifact-reader', open: async () => { await go('#/artifacts'); await clickSelector('main .list__row, main [data-artifact-row], main button.artifactrow'); await sleep(1200); } },
+  { name: 'artifact-reader', open: async () => { await go('#/artifacts'); await clickSelector('main .list__row, main [data-artifact-row], main button.artifactrow'); await waitFor(`document.querySelector('main .reader__title') && !document.querySelector('main .skeleton')`, 'the artifact reader'); } },
   { name: 'repositories', open: () => go('#/project') },
   { name: 'team', open: () => go('#/team') },
   { name: 'team-staffing', open: () => go('#/team/staffing') },
@@ -125,7 +151,15 @@ const STATES = [
   { name: 'command-palette', modal: true, open: async () => {
     await go('#/');
     await page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: ${process.platform === 'darwin'}, ctrlKey: ${process.platform !== 'darwin'}, bubbles: true }))`);
-    await sleep(700);
+    await dialogShown('the command palette');
+  } },
+  // Narrowed to one match, its list no longer scrolls, so nothing but the field takes Tab: the trap must hold it.
+  { name: 'command-palette-filtered', modal: true, open: async () => {
+    await go('#/');
+    await page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: ${process.platform === 'darwin'}, ctrlKey: ${process.platform !== 'darwin'}, bubbles: true }))`);
+    await dialogShown('the command palette');
+    await page.fill('Jump to a mission, or type a command', 'Settings');
+    await waitFor(`document.querySelectorAll('.palette__item').length === 1`, 'one match');
   } },
 ];
 
@@ -148,8 +182,7 @@ async function audit(state, scheme, { modal = false, deep = false, reopen } = {}
     record(state, scheme, 'keyboard', kb);
     if (modal) {
       await escape();
-      await sleep(500);
-      const closed = !(await dialogOpen());
+      const closed = await waitFor(`!document.querySelector('[role=dialog], [role=alertdialog]')`, 'the dialog to close', 3000).then(() => true, () => false);
       record(state, scheme, 'escape', { ok: closed, problems: closed ? [] : ['Escape did not close the dialog'] });
       if (reopen) await reopen();
     }
@@ -157,12 +190,13 @@ async function audit(state, scheme, { modal = false, deep = false, reopen } = {}
   if (deep && doReflow && !modal) {
     const name = `${state}-${scheme}`;
     await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 256, deviceScaleFactor: 2, mobile: false });
-    await sleep(700);
+    await waitFor('document.documentElement.clientWidth <= 320', 'the 320px layout');
+    await sleep(FADE_MS);
     if (['home', 'mission-plan', 'inbox', 'settings', 'new-mission', 'missions'].includes(state)) await page.screenshot(join(EVIDENCE, 'shots', `reflow-320-${name}.png`));
     record(state, scheme, 'reflow-320', await reflow(page, { width: 320, height: 256 }));
     record(state, scheme, 'zoom-200', await reflow(page, { width: 640, height: 400 }));
     await page.send('Emulation.setDeviceMetricsOverride', DESKTOP);
-    await sleep(400);
+    await waitFor('document.documentElement.clientWidth > 1000', 'the desktop layout');
     record(state, scheme, 'spacing', await textSpacing(page));
   }
 }
@@ -173,13 +207,11 @@ for (const state of STATES) {
   for (const scheme of ['dark', 'light']) {
     try {
       await theme(scheme);
-      if (await dialogOpen()) { await escape(); await sleep(400); }
+      if (await dialogOpen()) { await escape(); await waitFor(`!document.querySelector('[role=dialog]')`, 'no dialog'); }
       await state.open();
-      // A dialog or drawer fades in; axe measures colours as painted, so let it finish.
-      if (state.modal) await sleep(900);
       await page.evaluate('window.scrollTo(0, 0)');
       await audit(state.name, scheme, { modal: state.modal, deep: scheme === 'dark' });
-      if (state.modal && (await dialogOpen())) { await escape(); await sleep(400); }
+      if (state.modal && (await dialogOpen())) { await escape(); await waitFor(`!document.querySelector('[role=dialog]')`, 'no dialog'); }
     } catch (error) {
       fail(state.name, scheme, 'open', error);
     }
@@ -190,29 +222,29 @@ for (const state of STATES) {
 if (!only || only.includes('focus')) {
   log('focus and live regions');
   await theme('dark');
-  await go('#/', 2500);
+  await go('#/');
   await page.evaluate(`(() => { const a = document.createElement('span'); a.tabIndex = -1; document.body.prepend(a); a.focus(); a.remove(); })()`);
   await press(page, 'Tab');
-  await sleep(200);
+  await sleep(FADE_MS);
   await page.screenshot(join(EVIDENCE, 'shots', 'focus-skip-link-dark.png'));
   for (let i = 0; i < 3; i++) await press(page, 'Tab');
-  await sleep(200);
+  await sleep(FADE_MS);
   await page.screenshot(join(EVIDENCE, 'shots', 'focus-nav-dark.png'));
   await theme('light');
-  await sleep(300);
+  await sleep(FADE_MS);
   await page.screenshot(join(EVIDENCE, 'shots', 'focus-nav-light.png'));
-  await go(`#/missions/${S.a}/plan`, 2500);
+  await go(`#/missions/${S.a}/plan`);
   await clickSelector('.taskcard');
-  await sleep(900);
+  await dialogShown('the task drawer');
   // Two stops into the drawer: a focus ring over its light surface.
   await press(page, 'Tab');
   await press(page, 'Tab');
-  await sleep(600);
+  await sleep(FADE_MS);
   await page.screenshot(join(EVIDENCE, 'shots', 'focus-drawer-light.png'));
   await escape();
   await theme('dark');
-  // 4.1.3: a screen with live agent work must not announce every "Now" update; a minute of a running mission.
-  await go(`#/missions/${S.c}/feed`, 2500);
+  // 4.1.3: a screen with live agent work must not announce every "Now" update; 20 s of a running mission.
+  await go(`#/missions/${S.c}/feed`);
   const announced = await watchLiveRegions(page, 20_000);
   const ok = announced.length <= 4;
   record('live-regions', 'dark', 'status', { ok, problems: ok ? [] : [`${announced.length} live-region updates in 20s on a running mission: ${announced.slice(0, 5).join(' | ')}`] });
@@ -245,11 +277,11 @@ async function separateWindow(name, { withDaemon }) {
     await p.waitForText(withDaemon ? 'project' : 'daemon is not running', { timeoutMs: 120_000 });
     await p.send('Emulation.setDeviceMetricsOverride', DESKTOP);
     await p.send('Emulation.setFocusEmulationEnabled', { enabled: true });
-    await sleep(1500);
+    for (const end = Date.now() + 30_000; !(await p.evaluate(`!!document.querySelector('main h1')`)); ) { if (Date.now() > end) throw new Error('the screen did not draw'); await sleep(150); }
     const saved = page;
     for (const scheme of ['dark', 'light']) {
       await p.evaluate(`localStorage.setItem('tandemise.theme', '${scheme}'); document.documentElement.setAttribute('data-theme', '${scheme}')`);
-      await sleep(400);
+      await sleep(FADE_MS);
       record(name, scheme, 'axe', await axe(p));
       // A screen of its own, before there is anything to navigate to: a main and an h1, no nav.
       record(name, scheme, 'structure', await structure(p, { nav: false }));
@@ -257,7 +289,8 @@ async function separateWindow(name, { withDaemon }) {
       if (doKeyboard) record(name, scheme, 'keyboard', await keyboard(p, { expectSkip: false }));
       if (scheme === 'dark' && doReflow) {
         await p.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 256, deviceScaleFactor: 2, mobile: false });
-        await sleep(600);
+        for (const end = Date.now() + 10_000; !(await p.evaluate('document.documentElement.clientWidth <= 320')) && Date.now() < end; ) await sleep(100);
+        await sleep(FADE_MS);
         await p.screenshot(join(EVIDENCE, 'shots', `reflow-320-${name}-dark.png`));
         record(name, scheme, 'reflow-320', await reflow(p, { width: 320, height: 256 }));
         record(name, scheme, 'zoom-200', await reflow(p, { width: 640, height: 400 }));

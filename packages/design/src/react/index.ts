@@ -20,7 +20,7 @@ export { Icon, type IconProps, type IconName } from './Icon.js';
 export { Logo, type LogoProps } from './Logo.js';
 export { Field, type FieldProps, type FieldControlProps, type FieldLabel } from './Field.js';
 export { Dialog, type DialogProps } from './Dialog.js';
-export { useDialogLayer, trapTarget, initialFocusTarget, openLayerCount, FOCUSABLE_SELECTOR, type DialogLayerOptions, type InitialFocus } from './layer.js';
+export { useDialogLayer, trapTarget, initialFocusTarget, isTabbable, openLayerCount, FOCUSABLE_SELECTOR, type DialogLayerOptions, type InitialFocus } from './layer.js';
 export { Tabs, Tab, nextTabIndex, type TabsProps, type TabProps } from './Tabs.js';
 export { Tooltip, tooltipPosition, tooltipFit, useTooltip, type TooltipProps, type TooltipTriggerProps, type TooltipPlacement, type TooltipState } from './Tooltip.js';
 export { Truncate, isClipped, type TruncateProps } from './Truncate.js';

@@ -85,8 +85,15 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
     const inTerminal = (event.target as HTMLElement).closest('.xterm') !== null;
     if (event.key === 'F6') {
       event.preventDefault();
-      if (inTerminal) root.querySelector<HTMLElement>('.terminal-panel__actions button:not(:disabled)')?.focus();
-      else root.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus();
+      if (inTerminal) {
+        // Out to the actions; while they are disabled (Continue or Release in flight), to any other control
+        // outside the terminal, and failing that to the panel itself, so F6 never leaves focus in the terminal.
+        const outside = [...root.querySelectorAll<HTMLElement>(PANEL_STOPS)].filter((el) => el.closest('.xterm') === null && el.getClientRects().length > 0);
+        const target = outside.find((el) => el.closest('.terminal-panel__actions') !== null) ?? outside[0] ?? root;
+        target.focus();
+      } else {
+        root.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus();
+      }
       return;
     }
     if (inTerminal) return;
@@ -96,7 +103,7 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
       return;
     }
     if (event.key !== 'Tab') return;
-    const stops = [...root.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input, select, textarea, [tabindex="0"]')]
+    const stops = [...root.querySelectorAll<HTMLElement>(PANEL_STOPS)]
       .filter((el) => el.getClientRects().length > 0 && el.closest('.xterm') === null);
     const terminalInput = root.querySelector<HTMLElement>('.xterm-helper-textarea');
     if (terminalInput) stops.push(terminalInput);
@@ -110,7 +117,7 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
 
   return (
     <div className="overlay terminal-overlay">
-      <section ref={panel} className="terminal-panel" role="dialog" aria-modal="true" aria-label={`Terminal: ${task.title}`} onKeyDown={onKeyDown}>
+      <section ref={panel} tabIndex={-1} className="terminal-panel" role="dialog" aria-modal="true" aria-label={`Terminal: ${task.title}`} onKeyDown={onKeyDown}>
         <header className="terminal-panel__head">
           <Icon name="terminal" size={15} className="terminal-panel__icon" />
           <div className="terminal-panel__titles">
@@ -208,6 +215,9 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
     </div>
   );
 }
+
+/** What Tab and F6 may land on in the panel, outside the terminal. */
+const PANEL_STOPS = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
 
 const SCREEN_READER_KEY = 'tandemise.terminal.screenReader';
 

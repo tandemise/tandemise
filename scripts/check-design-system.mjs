@@ -32,7 +32,9 @@
 //      sees it, and it is not a reliable name. Use `Tooltip`, `Truncate`, or
 //      an `aria-label` on an icon-only control.
 //  11. a control that shows only an icon (`<button>`, `<a>`, `Button`, `Link`,
-//      or `Button iconOnly`) has no `aria-label` / `aria-labelledby`.
+//      or `Button iconOnly`) has no `aria-label` / `aria-labelledby`. A control
+//      with a spread attribute is trusted (the name may be in it); the a11y
+//      acceptance suite checks those in the running window.
 //
 //   node scripts/check-design-system.mjs     (after `npm run build`: it reads packages/design/dist)
 import { execFileSync } from 'node:child_process';
@@ -243,6 +245,8 @@ for (const m of brand.matchAll(/\/\*\*\s*`(--[a-z0-9-]+)`\s*\*\/\s*\n\s*\w+:\s*'
   const { default: ts } = await import('typescript');
   const CONTROLS = new Set(['button', 'a', 'Button', 'Link']);
   const ICONS = new Set(['Icon', 'svg', 'Logo']);
+  // A spread (`{...rest}`, `{...control}`) may carry the name, and this static rule cannot see into it, so a
+  // control with one is trusted here; the a11y acceptance suite checks the name it renders with.
   const named = (attributes) => attributes.properties.some((p) => ts.isJsxAttribute(p) && /^aria-label(ledby)?$/.test(p.name.getText()))
     || attributes.properties.some((p) => ts.isJsxSpreadAttribute(p));
   const hasAttr = (attributes, name) => attributes.properties.some((p) => ts.isJsxAttribute(p) && p.name.getText() === name);

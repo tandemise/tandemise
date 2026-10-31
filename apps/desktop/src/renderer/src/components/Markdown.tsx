@@ -13,10 +13,21 @@ export function Markdown({ source }: { source: string }): JSX.Element {
   return <div className="prose">{renderBlocks(source.replace(/\r\n/g, '\n'))}</div>;
 }
 
+/** The smallest heading level the document uses (4 if none), ignoring `#` lines inside fenced code. */
+function topHeadingLevel(lines: readonly string[]): number {
+  let top = 4;
+  let fenced = false;
+  for (const line of lines) {
+    if (/^```/.test(line)) fenced = !fenced;
+    else if (!fenced) top = Math.min(top, /^(#{1,4})\s/.exec(line)?.[1]?.length ?? 4);
+  }
+  return top;
+}
+
 function renderBlocks(source: string): ReactNode[] {
   const lines = source.split('\n');
   // The document's top heading level, whatever it wrote it as (`#` or `##`), becomes an h3 for a screen reader.
-  const top = Math.min(4, ...lines.map((l) => /^(#{1,4})\s/.exec(l)?.[1]?.length ?? 4));
+  const top = topHeadingLevel(lines);
   const out: ReactNode[] = [];
   let i = 0;
   let key = 0;

@@ -153,6 +153,8 @@ export async function keyboard(page, { max = 160, expectSkip = true, modal = fal
     await press(page, 'Tab');
     await sleep(25);
     const stop = await page.evaluate(FOCUS_PROBE);
+    // In an aria-modal dialog Tab never reaches the document: the trap keeps it inside (or pulls it in).
+    if (stop.body && modal) { problems.push(`Tab left the open dialog for the document (after ${stops.length} stop(s))`); break; }
     if (stop.body) { if (stops.length > 0) { wrapped = true; break; } continue; }
     if (stops.length > 0 && stop.key === stops[0].key) { wrapped = true; break; }
     const seen = stops.findIndex((s) => s.key === stop.key);

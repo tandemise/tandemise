@@ -5,7 +5,7 @@
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
 import { axe, iconNames, press } from '../../a11y/lib/audit.mjs';
-import { cardHold, openFeed, panelButton, panelLabel, readState, shoot, stepOf, typeLine } from '../common.mjs';
+import { cardHold, openFeed, paint, panelButton, panelLabel, readState, screenText, shoot, stepOf, typeLine, waitScreen } from '../common.mjs';
 
 const c = await context();
 const { page, sleep } = c;
@@ -18,9 +18,9 @@ const focused = () => page.evaluate(`(() => { const a = document.activeElement; 
 
 for (const scheme of ['dark', 'light']) {
   await page.evaluate(`localStorage.setItem('tandemise.theme', '${scheme}'); document.documentElement.setAttribute('data-theme', '${scheme}')`);
-  await sleep(500);
+  await paint(c); await sleep(600); await paint(c);
   const found = await axe(page, { context: `document.querySelector('.terminal-panel')` });
-  ev.check(`${scheme}: axe (WCAG 2.0/2.1 A+AA) finds nothing in the panel`, found.ok, found.problems.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' | ')}`));
+  ev.check(`${scheme}: axe (WCAG 2.0/2.1 A+AA) finds nothing in the panel`, found.ok, found.problems.map((v) => `${v.id}: ${v.nodes.map((n) => `${n.target} (${n.summary.slice(0, 160)})`).join(' | ')}`));
 }
 const names = await iconNames(page);
 ev.check('every control has an accessible name', names.ok, names.problems);
@@ -57,6 +57,42 @@ ev.check('F6 again goes back into the terminal', (await focused()).terminal, awa
 
 // The Tabs that reached the program are on its input line: end that line, so H2 types onto a clean one.
 await typeLine(c, '');
+
+// Escape in the terminal is the program's (Claude Code interrupts with it): the panel stays, focus stays, and the
+// program gets the byte. The PTY echoes ESC as "^[", and the fake echoes the line it read.
+await page.evaluate(`document.querySelector('.terminal-panel .xterm-helper-textarea')?.focus()`);
+await press(page, 'Escape');
+await sleep(300);
+ev.check('Escape in the terminal leaves the panel open', (await panelLabel(c)) === `Terminal: ${step.title}`, await panelLabel(c));
+ev.check('and focus in the terminal', (await focused()).terminal, await focused());
+await typeLine(c, 'escprobe');
+const echoed = await waitScreen(c, 'escprobe').catch(() => screenText(c));
+ev.check('the program received the Escape (its line reads "^[escprobe")', echoed.includes('^[escprobe'), echoed.split('\n').filter((l) => l.includes('escprobe')));
+
+// F6 while Continue is in flight: Continue and Release are disabled, so F6 goes to the next control outside the
+// terminal; with every control disabled it goes to the panel itself. Never stuck in the terminal (2.1.2).
+// The continue request is held at the network layer and failed afterwards, so the hold is untouched.
+await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/continue*', requestStage: 'Request' }] });
+const paused = new Promise((resolve) => { page.onEvent = (msg) => { if (msg.method === 'Fetch.requestPaused') resolve(msg.params.requestId); }; });
+await panelButton(c, 'Continue');
+const requestId = await Promise.race([paused, sleep(10_000).then(() => null)]);
+const pending = await page.evaluate(`[...document.querySelectorAll('.terminal-panel__actions button')].map((b) => ({ text: b.innerText.trim(), disabled: b.disabled }))`);
+ev.check('Continue is pending: Continue and Release are disabled', requestId !== null && pending.filter((b) => b.disabled).length >= 2, pending);
+await page.evaluate(`document.querySelector('.terminal-panel .xterm-helper-textarea')?.focus()`);
+await press(page, 'F6');
+await sleep(200);
+const pendingOut = await page.evaluate(`(() => { const a = document.activeElement; return { terminal: !!a.closest('.xterm'), disabled: !!a.disabled, name: (a.innerText || a.getAttribute('aria-label') || '').trim().slice(0, 40) }; })()`);
+ev.check('F6 leaves the terminal for an enabled control while Continue is pending', !pendingOut.terminal && !pendingOut.disabled, pendingOut);
+await page.evaluate(`document.querySelectorAll('.terminal-panel button').forEach((b) => { b.dataset.h12 = String(b.disabled); b.disabled = true; })`);
+await page.evaluate(`document.querySelector('.terminal-panel .xterm-helper-textarea')?.focus()`);
+await press(page, 'F6');
+await sleep(200);
+const noneOut = await page.evaluate(`(() => { const a = document.activeElement; return { terminal: !!a.closest('.xterm'), panel: a.classList.contains('terminal-panel') }; })()`);
+ev.check('with every control disabled, F6 moves focus to the panel itself', !noneOut.terminal && noneOut.panel, noneOut);
+await page.evaluate(`document.querySelectorAll('.terminal-panel button').forEach((b) => { b.disabled = b.dataset.h12 === 'true'; delete b.dataset.h12; })`);
+if (requestId) await page.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' });
+await page.send('Fetch.disable');
+await sleep(500);
 
 // Escape outside the terminal closes the panel; the hold and its session keep running. The focused button's
 // tooltip is showing, and the first Escape dismisses it (1.4.13); the next closes the panel.

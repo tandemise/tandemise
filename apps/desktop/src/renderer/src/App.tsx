@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Redirect, Route, Router, Switch, useLocation } from 'wouter';
 import { useHashLocation } from 'wouter/use-hash-location';
 import { Sidebar } from './components/Sidebar.js';
@@ -63,9 +63,15 @@ function Shell(): JSX.Element {
  * speaks when its words change).
  */
 function ConnectionAnnouncer({ connected }: { connected: boolean }): JSX.Element {
+  // Empty until the state first changes: the starting state is on screen already and is not news.
+  const first = useRef(connected);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    if (connected !== first.current) setChanged(true);
+  }, [connected]);
   return (
     <div className="visually-hidden" role="status">
-      {connected ? 'Connected to the daemon.' : 'Not connected to the daemon.'}
+      {changed ? (connected ? 'Connected to the daemon.' : 'Not connected to the daemon.') : ''}
     </div>
   );
 }
@@ -125,7 +131,8 @@ function ProjectShell(): JSX.Element {
     <div className="app">
       <SkipLink target="main" />
       <Sidebar pendingApprovals={pending} stream={stream} />
-      <main className="main" id="main" tabIndex={-1}>
+      {/* SkipLink gives it tabindex=-1 when it first lands there. */}
+      <main className="main" id="main">
         {/* Per-route, and keyed by location: a screen that fails should not
             follow you to the next one, and navigating away is the most natural
             way to ask for a retry. */}

@@ -27,12 +27,15 @@ export const FOCUSABLE_SELECTOR = [
 ].join(', ');
 
 /**
- * Whether an element can take focus right now: rendered, and not inside a
+ * Whether Tab can land on an element right now: in the tab order (tabIndex >= 0;
+ * a `<summary>` is 0 natively), rendered, and not inside a
  * closed `<details>`. Chromium keeps boxes for a closed disclosure's content
  * (`content-visibility: hidden`), so a client rect alone counted a button
  * nobody can focus, and Tab into a dialog that held one went nowhere.
  */
 export function isTabbable(element: HTMLElement): boolean {
+  // Out of the tab order on purpose (a listbox option the palette reaches with arrow keys, a roving tab).
+  if (element.tabIndex < 0) return false;
   if (typeof element.checkVisibility === 'function') {
     if (!element.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true })) return false;
   } else if (element.getClientRects().length === 0) {
@@ -67,9 +70,14 @@ export function trapTarget<T>(focusables: readonly T[], active: T | null, backwa
 export type InitialFocus = string | readonly string[];
 
 /** The element initial focus lands on: the first selector, in order, with a match inside `panel`. */
-export function initialFocusTarget(panel: ParentNode, initialFocus: InitialFocus): HTMLElement | null {
+export function initialFocusTarget(
+  panel: ParentNode,
+  initialFocus: InitialFocus,
+  /** Whether a match can take focus; injectable so the ranking is tested without a DOM. */
+  tabbable: (element: HTMLElement) => boolean = isTabbable,
+): HTMLElement | null {
   for (const selector of typeof initialFocus === 'string' ? [initialFocus] : initialFocus) {
-    const match = [...panel.querySelectorAll<HTMLElement>(selector)].find(isTabbable);
+    const match = [...panel.querySelectorAll<HTMLElement>(selector)].find(tabbable);
     if (match) return match;
   }
   return null;
