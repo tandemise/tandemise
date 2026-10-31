@@ -59,6 +59,9 @@ const DESKTOP = { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false 
 await page.send('Emulation.setDeviceMetricsOverride', DESKTOP);
 // The window may sit behind others on an idle display; the page must still behave as focused for Tab to move.
 await page.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+// The display's pointer may rest over the window (xvfb puts it mid-screen): park it in an empty corner, so no hover
+// state or hover tooltip colours a measurement or takes an Escape.
+await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1279, y: 799 });
 
 const theme = async (t) => {
   await page.evaluate(`localStorage.setItem('tandemise.theme', '${t}'); document.documentElement.setAttribute('data-theme', '${t}')`);
@@ -181,9 +184,16 @@ async function audit(state, scheme, { modal = false, deep = false, reopen } = {}
     const kb = await keyboard(page, { modal });
     record(state, scheme, 'keyboard', kb);
     if (modal) {
+      // An open tooltip takes the first Escape (1.4.13: dismissable without moving focus); the dialog the next.
+      const tooltip = await page.evaluate(`[...document.querySelectorAll('[role=tooltip]')].some((t) => t.checkVisibility())`);
+      if (tooltip) {
+        await escape();
+        await waitFor(`![...document.querySelectorAll('[role=tooltip]')].some((t) => t.checkVisibility())`, 'the tooltip to close', 3000);
+      }
       await escape();
       const closed = await waitFor(`!document.querySelector('[role=dialog], [role=alertdialog]')`, 'the dialog to close', 3000).then(() => true, () => false);
-      record(state, scheme, 'escape', { ok: closed, problems: closed ? [] : ['Escape did not close the dialog'] });
+      const at = closed ? '' : await page.evaluate(`(() => { const a = document.activeElement; return (a?.tagName ?? '') + ' ' + (a?.getAttribute('aria-label') || a?.innerText || a?.type || '').slice(0, 40); })()`);
+      record(state, scheme, 'escape', { ok: closed, problems: closed ? [] : [`Escape did not close the dialog (focus on ${at})`] });
       if (reopen) await reopen();
     }
   }
