@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.10.0](https://github.com/tandemise/tandemise/compare/v0.9.0...v0.10.0) (2026-10-31)
+
+
+### Features
+
+* a storybook for the design system ([#82](https://github.com/tandemise/tandemise/issues/82)) ([a8546cc](https://github.com/tandemise/tandemise/commit/a8546ccae6299416372febe1a00b901db2a09e5e))
+* accessible sizes, tooltips, tokens and components for the design system ([#89](https://github.com/tandemise/tandemise/issues/89)) ([63e6246](https://github.com/tandemise/tandemise/commit/63e6246ae654897871f31b3dcd1c653880a9912b))
+* extend the design system with tokens, react components and a gallery ([#79](https://github.com/tandemise/tandemise/issues/79)) ([f9fae59](https://github.com/tandemise/tandemise/commit/f9fae59a1a4543981ccf5a28f0677ebdb5032e5b))
+
+
+### Bug Fixes
+
+* give each offline check its own TMPDIR and remove it on success ([#94](https://github.com/tandemise/tandemise/issues/94)) ([f7b7a13](https://github.com/tandemise/tandemise/commit/f7b7a138e868dbe353ece971eab47bdd39ed2333))
+* make the desktop app meet wcag 2.1 aa ([#93](https://github.com/tandemise/tandemise/issues/93)) ([7374ee0](https://github.com/tandemise/tandemise/commit/7374ee064d176a4929bbd0492bc8a932bb3ac9c3))
+* readable status colours in light mode and dialog autofocus ([#84](https://github.com/tandemise/tandemise/issues/84)) ([69af84e](https://github.com/tandemise/tandemise/commit/69af84e4f2a8fadffef05fac918bbd2c8e74408c))
+* the demo-data seed writes today's artifact shape ([#86](https://github.com/tandemise/tandemise/issues/86)) ([0cfe61f](https://github.com/tandemise/tandemise/commit/0cfe61f32d7cd7d22b17a1bec6951e5efc459def))
+
+
+### Documentation
+
+* refresh the readme and docs after the pivot ([#92](https://github.com/tandemise/tandemise/issues/92)) ([84d7886](https://github.com/tandemise/tandemise/commit/84d7886a6c73f696af67b25ba326f5945d8d65b6))
+
 ## [0.9.0](https://github.com/tandemise/tandemise/compare/v0.8.0...v0.9.0) (2026-10-31)
 
 
