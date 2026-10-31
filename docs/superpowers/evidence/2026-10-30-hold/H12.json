@@ -76,6 +76,66 @@
       }
     },
     {
+      "label": "Escape in the terminal leaves the panel open",
+      "ok": true,
+      "observed": "Terminal: design"
+    },
+    {
+      "label": "and focus in the terminal",
+      "ok": true,
+      "observed": {
+        "terminal": true,
+        "inPanel": true,
+        "name": "Terminal input"
+      }
+    },
+    {
+      "label": "the program received the Escape (its line reads \"^[escprobe\")",
+      "ok": true,
+      "observed": [
+        "^[escprobe"
+      ]
+    },
+    {
+      "label": "Continue is pending: Continue and Release are disabled",
+      "ok": true,
+      "observed": [
+        {
+          "text": "Continuing…",
+          "disabled": true
+        },
+        {
+          "text": "Release",
+          "disabled": true
+        },
+        {
+          "text": "Screen reader mode",
+          "disabled": false
+        },
+        {
+          "text": "Close terminal",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "label": "F6 leaves the terminal for an enabled control while Continue is pending",
+      "ok": true,
+      "observed": {
+        "terminal": false,
+        "disabled": false,
+        "name": "Screen reader mode"
+      }
+    },
+    {
+      "label": "with every control disabled, F6 moves focus to the panel itself",
+      "ok": true,
+      "observed": {
+        "terminal": false,
+        "panel": true
+      }
+    },
+    {
       "label": "Escape on the panel's buttons closes the panel (after dismissing the button's tooltip)",
       "ok": true,
       "observed": ""

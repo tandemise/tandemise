@@ -1,6 +1,6 @@
 # Accessibility run (WCAG 2.1 AA, real window)
 
-2026-10-31T20:23:32.108Z · 473 checks · 0 failing
+2026-10-31T21:08:54.174Z · 470 checks · 0 failing
 
 | Screen / state | axe nodes (dark) | axe nodes (light) | other problems | failing checks |
 |---|---|---|---|---|
@@ -12,7 +12,6 @@
 | missions-routines | 0 | 0 | 0 | — |
 | routine-dialog | 0 | 0 | 0 | — |
 | new-mission | 0 | 0 | 0 | — |
-| new-mission-errors | 0 | 0 | 0 | — |
 | mission-feed | 0 | 0 | 0 | — |
 | mission-plan | 0 | 0 | 0 | — |
 | mission-timeline | 0 | 0 | 0 | — |
@@ -46,6 +45,7 @@
 | settings | 0 | 0 | 0 | — |
 | settings-intake | 0 | 0 | 0 | — |
 | command-palette | 0 | 0 | 0 | — |
+| command-palette-filtered | 0 | 0 | 0 | — |
 | live-regions | 0 | 0 | 0 | — |
 | first-run | 0 | 0 | 0 | — |
 | daemon-down | 0 | 0 | 0 | — |

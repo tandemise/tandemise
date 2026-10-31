@@ -96,6 +96,8 @@ await sleep(500);
 
 // Escape outside the terminal closes the panel; the hold and its session keep running. The focused button's
 // tooltip is showing, and the first Escape dismisses it (1.4.13); the next closes the panel.
+// From the terminal (the step above left focus on the panel itself), F6 goes out to a button.
+await page.evaluate(`document.querySelector('.terminal-panel .xterm-helper-textarea')?.focus()`);
 await press(page, 'F6');
 await sleep(150);
 await press(page, 'Escape');

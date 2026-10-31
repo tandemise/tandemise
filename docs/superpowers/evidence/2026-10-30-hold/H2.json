@@ -11,12 +11,12 @@
     {
       "label": "the session reports the file written",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m69rf90hsk22czak37\nhello from the panel\n> hello from the panel\n\n>\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69vsfhyz3376hty9d\nhello from the panel\n> hello from the panel\n\n>\n^[escprobe\n> scprobe\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (disk): d.txt is in the step's worktree",
       "ok": true,
-      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m69rf118g5wxyn737b/missions/msn_01m69rf5x7fdykpyej3n/worktrees/onboarding-hold-slow-now-mvwtllxz-design-35vsb78h/d.txt"
+      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69vscemfxdwwt5xs5/worktrees/onboarding-hold-slow-now-mvwvo77p-design-pec9gaq4/d.txt"
     },
     {
       "label": "proof (disk): with what the session wrote",

@@ -680,94 +680,6 @@
     "problems": []
   },
   {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "axe",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "structure",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "names",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "keyboard",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "reflow-320",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "zoom-200",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "dark",
-    "check": "spacing",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "light",
-    "check": "axe",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "light",
-    "check": "structure",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "light",
-    "check": "names",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
-    "state": "new-mission-errors",
-    "scheme": "light",
-    "check": "keyboard",
-    "ok": true,
-    "count": 0,
-    "problems": []
-  },
-  {
     "state": "mission-feed",
     "scheme": "dark",
     "check": "axe",
@@ -3593,6 +3505,70 @@
   },
   {
     "state": "command-palette",
+    "scheme": "light",
+    "check": "escape",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "dark",
+    "check": "axe",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "dark",
+    "check": "names",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "dark",
+    "check": "keyboard",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "dark",
+    "check": "escape",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "light",
+    "check": "axe",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "light",
+    "check": "names",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
+    "scheme": "light",
+    "check": "keyboard",
+    "ok": true,
+    "count": 0,
+    "problems": []
+  },
+  {
+    "state": "command-palette-filtered",
     "scheme": "light",
     "check": "escape",
     "ok": true,

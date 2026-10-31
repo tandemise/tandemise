@@ -13,7 +13,7 @@ axe nodes are the elements axe-core flagged under the WCAG 2.0/2.1 A+AA rules; f
 | missions-routines | 6 / 6 | 0 / 0 | 8 of 11 | 0 of 11 |
 | routine-dialog | 6 / 6 | 0 / 0 | 8 of 8 | 0 of 8 |
 | new-mission | 0 / 0 | 0 / 0 | 3 of 11 | 0 of 11 |
-| new-mission-errors | 0 / 0 | 0 / 0 | 3 of 11 | 0 of 11 |
+| new-mission-errors | 0 / 0 | not run | 3 of 11 | not run |
 | mission-feed | 12 / 7 | 0 / 0 | 6 of 11 | 0 of 11 |
 | mission-plan | 6 / 6 | 0 / 0 | 6 of 11 | 0 of 11 |
 | mission-timeline | 6 / 6 | 0 / 0 | 6 of 11 | 0 of 11 |
@@ -48,9 +48,10 @@ axe nodes are the elements axe-core flagged under the WCAG 2.0/2.1 A+AA rules; f
 | settings-intake | 0 / 0 | 0 / 0 | 3 of 11 | 0 of 11 |
 | command-palette | 0 / 0 | 0 / 0 | 4 of 8 | 0 of 8 |
 | live-regions | 0 / 0 | 0 / 0 | 0 of 1 | 0 of 1 |
+| command-palette-filtered | not run | 0 / 0 | not run | 0 of 8 |
 | first-run | not run | 0 / 0 | not run | 0 of 11 |
 | daemon-down | not run | 0 / 0 | not run | 0 of 11 |
-| **all** | **255** | **0** | **202 of 448** | **0 of 473** |
+| **all** | **255** | **0** | **202 of 448** | **0 of 470** |
 
 The "before" run attached to an already-seeded window, so it did not open the first-run and daemon-down windows
 (they were audited by hand: neither had a main landmark).

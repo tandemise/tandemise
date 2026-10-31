@@ -10,14 +10,14 @@
     {
       "label": "the window says the daemon is gone",
       "ok": true,
-      "observed": "Reconnecting…"
+      "observed": "The Tandemise daemon is not running"
     },
     {
       "label": "proof: a new daemon is up",
       "ok": true,
       "observed": {
-        "old": 1748436,
-        "now": 1750945
+        "old": 1861972,
+        "now": 1870434
       }
     },
     {
@@ -32,10 +32,10 @@
       "label": "proof (API): its terminal is not open",
       "ok": true,
       "observed": {
-        "holdId": "hld_01m69rgsgxkx3tjm6acx",
-        "heldBy": "mem_01m69rf118g5wxyn737c",
+        "holdId": "hld_01m69vtzknn4ye6exget",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "heldByName": "Demostenes Garcia",
-        "startedAt": "2026-10-31T19:55:52.221Z",
+        "startedAt": "2026-10-31T20:53:51.861Z",
         "terminalOpen": false
       }
     },
@@ -53,24 +53,24 @@
       "label": "the terminal opens again on the session the first terminal captured, not the run's",
       "ok": true,
       "observed": {
-        "resumed": "Fake session fake-session-1793476552389\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
-        "before": "sess-hold-run_01m69rf90hsk22czak37"
+        "resumed": "Fake session fake-session-1793480032025\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+        "before": "sess-hold-run_01m69vsfhyz3376hty9d"
       }
     },
     {
       "label": "proof (API): its terminal is open again, same hold",
       "ok": true,
       "observed": {
-        "holdId": "hld_01m69rgsgxkx3tjm6acx",
-        "heldBy": "mem_01m69rf118g5wxyn737c",
+        "holdId": "hld_01m69vtzknn4ye6exget",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "heldByName": "Demostenes Garcia",
-        "startedAt": "2026-10-31T19:55:52.221Z",
+        "startedAt": "2026-10-31T20:53:51.861Z",
         "terminalOpen": true
       }
     }
   ],
   "notes": [
-    "daemon 1748436 stopped"
+    "daemon 1861972 stopped"
   ],
   "shots": [
     "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H5-daemon-gone.png",

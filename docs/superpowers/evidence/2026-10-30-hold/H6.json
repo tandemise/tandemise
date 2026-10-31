@@ -12,13 +12,13 @@
       "ok": true,
       "observed": {
         "status": "AWAITING_INPUT",
-        "card": "Which layout should onboarding use (mvwtsd6g)?"
+        "card": "Which layout should onboarding use (mvwvuwkg)?"
       }
     },
     {
       "label": "the question waits on you in the Inbox",
       "ok": true,
-      "observed": "Inbox\nWhat is waiting on a person.\nWhich layout should onboarding use (mvwtsd6g)?\nFor you·Ask about onboarding mvwts8i3\nQuestion\njust now"
+      "observed": "Inbox\nWhat is waiting on a person.\nWhich layout should onboarding use (mvwvuwkg)?\nFor you·Ask about onboarding mvwvurwb\nQuestion\njust now"
     },
     {
       "label": "Hold from its drawer opens the terminal panel",
@@ -27,7 +27,7 @@
     {
       "label": "the session is resumed in the terminal, to answer there",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m69rrpxmm46wem4z6g\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69w2v302gjyc2v5e6\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (API): the step is HELD",
@@ -47,7 +47,7 @@
     {
       "label": "it is listed as decided: withdrawn because the work moved on",
       "ok": true,
-      "observed": "sd6g)?\nWithdrawn — the work ended first · “Held by Demostenes Garcia.”\nAsk about onboarding mvwts8i3\nApprove the plan fo"
+      "observed": "uwkg)?\nWithdrawn — the work ended first · “Held by Demostenes Garcia.”\nAsk about onboarding mvwvurwb\nApprove the plan fo"
     },
     {
       "label": "Release in the drawer ends the hold",

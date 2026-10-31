@@ -7,26 +7,26 @@
       "label": "proof (API): it runs on one of the two",
       "ok": true,
       "observed": {
-        "on": "rt_01m69rwj2pes29fvf6bg",
-        "a": "rt_01m69rwj2pes29fvf6bg",
-        "b": "rt_01m69rwj2tgw1j3ksbdh"
+        "on": "rt_01m69w6nr721wvw8rbhp",
+        "a": "rt_01m69w6nr721wvw8rbhp",
+        "b": "rt_01m69w6nrdhfx4y4qq7m"
       }
     },
     {
       "label": "proof (DB): the hold is pinned to that profile",
       "ok": true,
       "observed": {
-        "id": "hld_01m69rws30qr28vqbg4h",
-        "heldBy": "mem_01m69rf118g5wxyn737c",
+        "id": "hld_01m69w6wr8gejzjt1q1c",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "fromStatus": "RUNNING",
-        "profileId": "rt_01m69rwj2pes29fvf6bg",
-        "sessionBefore": "sess-hold-run_01m69rwq8cn2h3jsbazm",
+        "profileId": "rt_01m69w6nr721wvw8rbhp",
+        "sessionBefore": "sess-hold-run_01m69w6txt8tadmzy6hq",
         "sessionAfter": null,
         "endedAt": null,
         "ending": null,
         "consumedAt": null,
         "diffStat": null,
-        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69rf118g5wxyn737b/missions/msn_01m69rwm5ax7d93e23hv/holds/hld_01m69rws30qr28vqbg4h"
+        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69w6qtvtk006mn45q/holds/hld_01m69w6wr8gejzjt1q1c"
       }
     },
     {
@@ -45,9 +45,9 @@
       "label": "proof (DB): Continue resumed on the hold's profile, not the one routing would pick now",
       "ok": true,
       "observed": {
-        "pass": "rt_01m69rwj2pes29fvf6bg",
-        "pinned": "rt_01m69rwj2pes29fvf6bg",
-        "other": "rt_01m69rwj2tgw1j3ksbdh"
+        "pass": "rt_01m69w6nr721wvw8rbhp",
+        "pinned": "rt_01m69w6nr721wvw8rbhp",
+        "other": "rt_01m69w6nrdhfx4y4qq7m"
       }
     }
   ],

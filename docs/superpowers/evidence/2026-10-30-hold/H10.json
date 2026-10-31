@@ -21,7 +21,7 @@
     {
       "label": "the step's last session is resumed",
       "ok": true,
-      "observed": "Fake session sess-quick-run_01m69rvd54z34gxdx5nn\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-quick-run_01m69w5gfsxsmcjsc89k\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (API): HELD, in a new round",
@@ -41,8 +41,8 @@
       "ok": true,
       "observed": [
         {
-          "id": "art_01m69rvjk1tm8zrrwqz6",
-          "supersedes": "art_01m69rvd6316ctc9wfzg"
+          "id": "art_01m69w5pem1612s66qaz",
+          "supersedes": "art_01m69w5gh0bsthkj7s8v"
         }
       ]
     },

@@ -31,31 +31,31 @@
       "label": "proof (DB): the hold ended as continued, and its continuation was taken",
       "ok": true,
       "observed": {
-        "id": "hld_01m69rgsgxkx3tjm6acx",
-        "heldBy": "mem_01m69rf118g5wxyn737c",
+        "id": "hld_01m69vtzknn4ye6exget",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "fromStatus": "RUNNING",
-        "profileId": "rt_01m69rf3thmvxz7et024",
-        "sessionBefore": "sess-hold-run_01m69rf90hsk22czak37",
-        "sessionAfter": "fake-session-1793476692848",
-        "endedAt": "2026-10-31T19:58:43.984Z",
+        "profileId": "rt_01m69vsabxag6tat6keh",
+        "sessionBefore": "sess-hold-run_01m69vsfhyz3376hty9d",
+        "sessionAfter": "fake-session-1793480171332",
+        "endedAt": "2026-10-31T20:56:42.374Z",
         "ending": "continued",
-        "consumedAt": "2026-10-31T19:58:44.049Z",
+        "consumedAt": "2026-10-31T20:56:42.435Z",
         "diffStat": "{\"files\":1,\"insertions\":1,\"deletions\":0}",
-        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69rf118g5wxyn737b/missions/msn_01m69rf5x7fdykpyej3n/holds/hld_01m69rgsgxkx3tjm6acx"
+        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69vscemfxdwwt5xs5/holds/hld_01m69vtzknn4ye6exget"
       }
     },
     {
       "label": "proof (DB): one new pass ran",
       "ok": true,
       "observed": {
-        "id": "run_01m69rp19yg9h0085rmg",
+        "id": "run_01m69w065gm7ngqvjr1r",
         "attempt": 2,
         "status": "SUCCEEDED",
         "round": 1,
         "purpose": "retry",
-        "sessionId": "sess-hold-run_01m69rp19yg9h0085rmg",
-        "profileId": "rt_01m69rf3thmvxz7et024",
-        "startedAt": "2026-10-31T19:58:44.049Z",
+        "sessionId": "sess-hold-run_01m69w065gm7ngqvjr1r",
+        "profileId": "rt_01m69vsabxag6tat6keh",
+        "startedAt": "2026-10-31T20:56:42.435Z",
         "errorCode": null,
         "errorMessage": null
       }
@@ -64,11 +64,11 @@
       "label": "proof (DB): that pass resumed the session the terminal captured",
       "ok": true,
       "observed": {
-        "sessionAfter": "fake-session-1793476692848",
+        "sessionAfter": "fake-session-1793480171332",
         "resumedOn": [
           {
             "type": "checkpoint",
-            "externalSessionId": "fake-session-1793476692848",
+            "externalSessionId": "fake-session-1793480171332",
             "label": "session.resumed"
           }
         ]
@@ -88,11 +88,11 @@
       "ok": true,
       "observed": {
         "type": "task.hold_ended",
-        "holdId": "hld_01m69rgsgxkx3tjm6acx",
+        "holdId": "hld_01m69vtzknn4ye6exget",
         "ending": "continued",
-        "endedBy": "mem_01m69rf118g5wxyn737c",
-        "sessionAfter": "fake-session-1793476692848",
-        "durationMs": 171763,
+        "endedBy": "mem_01m69vs7k6ct6m0hb0ss",
+        "sessionAfter": "fake-session-1793480171332",
+        "durationMs": 170513,
         "diffStat": {
           "files": 1,
           "insertions": 1,
@@ -106,7 +106,7 @@
       "observed": [
         {
           "type": "DesignBrief",
-          "run": "run_01m69rp19yg9h0085rmg"
+          "run": "run_01m69w065gm7ngqvjr1r"
         }
       ]
     },
