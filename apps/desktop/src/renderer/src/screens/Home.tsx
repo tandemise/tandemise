@@ -374,7 +374,7 @@ function MissionListRow({ summary }: { summary: MissionSummary }): JSX.Element {
       <div className="list__aside">
         {progress.totalTasks > 0 ? (
           <div style={{ width: 76 }}>
-            <div className="meter">
+            <div className="meter" aria-hidden="true">
               <div className={`meter__fill`} style={{ width: `${percent}%`, background: `var(--status-${tone})` }} />
             </div>
             <div className="dim" style={{ fontSize: 'var(--fs-micro)', marginTop: 3, textAlign: 'right' }}>

@@ -14,6 +14,8 @@ import './styles/shell.css';
 import './styles/controls.css';
 import './styles/surfaces.css';
 import './styles/features.css';
+// Last: the narrow-viewport (zoomed-in) layout relaxes the rules above (WCAG 1.4.10).
+import './styles/reflow.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

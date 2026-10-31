@@ -17,7 +17,8 @@ export function MetricsPane({ detail }: { detail: MissionDetail }): JSX.Element 
   const m = detail.metrics;
 
   return (
-    <div className="page">
+    // Focusable, so a keyboard can scroll it when nothing inside takes focus (2.1.1).
+    <div className="page" tabIndex={0} role="region" aria-label="Metrics">
       <div className="page__inner">
         <LimitSection detail={detail} />
 
@@ -176,7 +177,7 @@ function LimitBar({ status }: { status: LimitStatusView }): JSX.Element {
     <Card>
       <div className="stat__label">{status.label}</div>
       <div className="stat__value">{status.bar}</div>
-      <div className="meter" style={{ marginTop: 'var(--s2)' }} aria-label={`${status.label}: ${status.bar}`}>
+      <div className="meter" style={{ marginTop: 'var(--s2)' }} aria-hidden="true">
         <div className="meter__fill" style={{ width: `${width}%`, background: fill }} />
       </div>
       {status.note ? <p className={status.level === 'unmeasured' ? 'muted' : ''} style={{ marginTop: 'var(--s2)', fontSize: 'var(--fs-sm)' }}>{status.note}</p> : null}

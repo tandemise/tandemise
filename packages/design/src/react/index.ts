@@ -20,7 +20,7 @@ export { Icon, type IconProps, type IconName } from './Icon.js';
 export { Logo, type LogoProps } from './Logo.js';
 export { Field, type FieldProps, type FieldControlProps, type FieldLabel } from './Field.js';
 export { Dialog, type DialogProps } from './Dialog.js';
-export { useDialogLayer, trapTarget, initialFocusTarget, openLayerCount, FOCUSABLE_SELECTOR, type DialogLayerOptions, type InitialFocus } from './layer.js';
+export { useDialogLayer, trapTarget, initialFocusTarget, isTabbable, openLayerCount, FOCUSABLE_SELECTOR, type DialogLayerOptions, type InitialFocus } from './layer.js';
 export { Tabs, Tab, nextTabIndex, type TabsProps, type TabProps } from './Tabs.js';
 export { Tooltip, tooltipPosition, tooltipFit, useTooltip, type TooltipProps, type TooltipTriggerProps, type TooltipPlacement, type TooltipState } from './Tooltip.js';
 export { Truncate, isClipped, type TruncateProps } from './Truncate.js';
@@ -30,6 +30,7 @@ export { Switch, type SwitchProps } from './Switch.js';
 export { Chip, IdChip, type ChipProps, type IdChipProps } from './Chip.js';
 export { Stat, type StatProps } from './Stat.js';
 export { Banner, type BannerProps, type BannerTone } from './Banner.js';
+export { SkipLink, type SkipLinkProps } from './SkipLink.js';
 
 /** Every component this subpath exports, by name. Each must have a Storybook story in stories/ (`npm run check:design`). */
-export const COMPONENTS = ['Button', 'Badge', 'StatusPill', 'StatusDot', 'Card', 'Icon', 'Logo', 'Field', 'Dialog', 'Tabs', 'Tab', 'Tooltip', 'Truncate', 'EmptyState', 'Segmented', 'Switch', 'Chip', 'IdChip', 'Stat', 'Banner'] as const;
+export const COMPONENTS = ['Button', 'Badge', 'StatusPill', 'StatusDot', 'Card', 'Icon', 'Logo', 'Field', 'Dialog', 'Tabs', 'Tab', 'Tooltip', 'Truncate', 'EmptyState', 'Segmented', 'Switch', 'Chip', 'IdChip', 'Stat', 'Banner', 'SkipLink'] as const;

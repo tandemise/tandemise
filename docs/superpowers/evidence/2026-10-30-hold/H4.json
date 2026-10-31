@@ -11,10 +11,10 @@
       "label": "proof (API): the step is still HELD, its terminal still open",
       "ok": true,
       "observed": {
-        "holdId": "hld_01m683mn8m0anj0dx3cm",
-        "heldBy": "mem_01m683jx1kvrs3wj5c7r",
+        "holdId": "hld_01m69vtzknn4ye6exget",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "heldByName": "Demostenes Garcia",
-        "startedAt": "2026-10-31T04:31:44.404Z",
+        "startedAt": "2026-10-31T20:53:51.861Z",
         "terminalOpen": true
       }
     },
@@ -22,7 +22,7 @@
       "label": "proof (OS): the terminal process is still running",
       "ok": true,
       "observed": {
-        "pid": 4097323,
+        "pid": 1864156,
         "alive": true
       }
     },
@@ -54,7 +54,7 @@
     {
       "label": "the reopened panel repaints the scrollback: the greeting, your typing, the file",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m683k4hn2g22fmd5mc\nhello from the panel\n> hello from the panel\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69vsfhyz3376hty9d\nhello from the panel\n> hello from the panel\n\n>\n^[escprobe\n> scprobe\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (DB): still the same hold",
@@ -63,7 +63,7 @@
   ],
   "notes": [],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H4-drawer-held.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H4-reopened.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H4-drawer-held.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H4-reopened.png"
   ]
 }

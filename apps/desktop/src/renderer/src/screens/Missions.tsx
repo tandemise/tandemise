@@ -9,7 +9,7 @@ import { useListNavigation } from '../lib/keyboard.js';
 import { missionTone, pluralize, relativeTime } from '../lib/format.js';
 import { Backlog } from './missions/Backlog.js';
 import { Routines } from './missions/Routines.js';
-import { Badge, Banner, Button, Card, Chip, Truncate } from '@tandemise/design/react';
+import { Badge, Banner, Button, Card, Chip, Tab, Tabs, Truncate } from '@tandemise/design/react';
 
 type Filter = 'backlog' | 'routines' | 'active' | 'blocked' | 'finished' | 'all' | 'progress';
 
@@ -93,6 +93,8 @@ export function Missions({ initial = 'active' }: { initial?: Filter } = {}): JSX
               <Icon name="search" size={14} className="search__icon" />
               <input
                 className="input"
+                type="search"
+                aria-label="Filter missions"
                 placeholder="Filter missions…"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -106,20 +108,13 @@ export function Missions({ initial = 'active' }: { initial?: Filter } = {}): JSX
         }
       />
 
-      <div className="tabs">
+      <Tabs label="Which missions">
         {FILTERS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            className="tab"
-            aria-selected={filter === option.value}
-            onClick={() => setFilter(option.value)}
-          >
+          <Tab key={option.value} selected={filter === option.value} onClick={() => setFilter(option.value)} count={counts[option.value]}>
             {option.label}
-            <span className="tab__count">{counts[option.value]}</span>
-          </button>
+          </Tab>
         ))}
-      </div>
+      </Tabs>
 
       <div className="page">
         <div className="page__inner">
@@ -203,7 +198,7 @@ export function Missions({ initial = 'active' }: { initial?: Filter } = {}): JSX
                         {summary.repositoryName ? <Chip muted>{summary.repositoryName}</Chip> : null}
                         {progress.totalTasks > 0 ? (
                           <div style={{ width: 84 }}>
-                            <div className="meter">
+                            <div className="meter" aria-hidden="true">
                               <div className="meter__fill" style={{ width: `${percent}%`, background: `var(--status-${tone})` }} />
                             </div>
                             <div className="dim" style={{ fontSize: 'var(--fs-micro)', marginTop: 3, textAlign: 'right' }}>
