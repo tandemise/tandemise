@@ -15,6 +15,7 @@ install it, and what a normal day looks like.
 | Document | What it covers |
 |---|---|
 | [FACTORY.md](FACTORY.md) | Lanes, steps, model routing and merge by risk: `planner.yaml`, `routing.yaml`, `merge.yaml` |
+| [FACTORY-DOGFOOD.md](FACTORY-DOGFOOD.md) | How Tandemise is built with Tandemise: the local factory instance, `scripts/factory.sh`, issue → Start → hold → pull request → review |
 | [intake/README.md](intake/README.md) | Writing an intake runner: the `tandemise.intake/v1` contract, tokens, the `tandemise` CLI, closures |
 | [intake/signal.v1.schema.json](intake/signal.v1.schema.json) | The JSON Schema of an intake signal |
 | [../apps/relay/README.md](../apps/relay/README.md) | Running the optional team relay: Docker Compose, invites, TLS, backup and upgrade |
