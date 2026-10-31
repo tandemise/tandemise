@@ -91,7 +91,10 @@ const TIMEOUT_MS = 5 * 60_000;
 function run(name) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const tmp = mkdtempSync(join(tmpdir(), `tandemise-check-${name}-`));
+    // Keep this name short: daemons under test put Unix sockets in
+    // <TANDEMISE_HOME>/sockets/<run id>.sock, and those paths are capped at
+    // ~104-108 bytes. A long prefix here pushed hold-daemon-check over the cap.
+    const tmp = mkdtempSync(join(tmpdir(), 'tdc-'));
     const child = spawn(process.execPath, [`scratch/${name}.mjs`], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, TMPDIR: tmp },
@@ -104,7 +107,7 @@ function run(name) {
       clearTimeout(timer);
       const ok = code === 0;
       if (ok) rmSync(tmp, { recursive: true, force: true, maxRetries: 3 });
-      else output += `\n(scratch files kept in ${tmp})\n`;
+      else output += `\n(${name} scratch files kept in ${tmp})\n`;
       resolve({ name, ok, code: signal ?? code, output, ms: Date.now() - started });
     });
   });
