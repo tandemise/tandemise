@@ -22,7 +22,7 @@ function isWorkspacePath(link: HandoffLink): link is HandoffLink & { path: strin
 /**
  * One handoff link as a button. A workspace path is resolved by the daemon
  * first (it checks the path stays inside the project's repositories or the
- * artifact store) and then shown in Finder; the renderer never builds an
+ * artifact store) and then shown in the file manager; the renderer never builds an
  * absolute path itself.
  */
 export function HandoffLinkButton({

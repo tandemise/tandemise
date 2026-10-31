@@ -14,6 +14,7 @@ import { Icon } from '../components/Icon.js';
 import { SectionHead } from '../components/primitives.js';
 import { useConnection } from '../lib/connection.js';
 import { useSystem } from '../lib/queries.js';
+import { platformWords } from '../lib/platform.js';
 import { Banner, Button, Card, Truncate } from '@tandemise/design/react';
 
 /**
@@ -95,7 +96,7 @@ export function SettingsAbout(): JSX.Element {
                   {daemon ? (
                     <Button variant="ghost" onClick={() => void window.tandemise.revealInFinder(daemon.home)}>
                       <Icon name="folder" size={14} />
-                      Show in Finder
+                      Show in {platformWords().fileManager}
                     </Button>
                   ) : null}
                 </div>

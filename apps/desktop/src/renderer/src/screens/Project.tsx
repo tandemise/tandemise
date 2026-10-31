@@ -7,6 +7,7 @@ import { Empty, ErrorState, Field, SectionHead, Segmented, SkeletonList } from '
 import { useDaemonMutation } from '../lib/queries.js';
 import { useWorkspace } from '../lib/workspace.js';
 import { shortenPath } from '../lib/format.js';
+import { platformWords } from '../lib/platform.js';
 import { Limits } from './project/Limits.js';
 import { Factory } from './project/Factory.js';
 import { Merge } from './project/Merge.js';
@@ -120,10 +121,10 @@ export function Project(): JSX.Element {
                                       </div>
                                       <div className="list__aside">
                                         <Chip muted>{repository.defaultBranch}</Chip>
-                                        <Tooltip content={`Reveal ${repository.name} in Finder`}>
+                                        <Tooltip content={`Reveal ${repository.name} in ${platformWords().fileManager}`}>
                                           <Button
                                             iconOnly variant="ghost"
-                                            aria-label={`Reveal ${repository.name} in Finder`}
+                                            aria-label={`Reveal ${repository.name} in ${platformWords().fileManager}`}
                                             onClick={() => void window.tandemise.revealInFinder(repository.path)}
                                           >
                                             <Icon name="externalLink" size={13} />

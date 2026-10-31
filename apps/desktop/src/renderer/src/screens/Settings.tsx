@@ -4,6 +4,7 @@ import { useDaemonMutation, useSettings, useSystem } from '../lib/queries.js';
 import { useConnection } from '../lib/connection.js';
 import { useThemePreference, type ThemePreference } from '../lib/theme.js';
 import { dateTime } from '../lib/format.js';
+import { platformWords } from '../lib/platform.js';
 import { NotificationSettings } from './settings/Notifications.js';
 import { TeamRelay } from './settings/TeamRelay.js';
 import { IntakeSettings } from './settings/Intake.js';
@@ -32,7 +33,7 @@ export function Settings({ section = null }: { section?: string | null } = {}): 
               <section className="section">
                 <SectionHead title="Appearance" />
                 <Card>
-                  <Field label="Theme" hint="System follows macOS. An explicit choice overrides it everywhere.">
+                  <Field label="Theme" hint={`System follows ${platformWords().system}. An explicit choice overrides it everywhere.`}>
                     {(control, label) => (
                       <Segmented<ThemePreference>
                         aria-labelledby={label.id}

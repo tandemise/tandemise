@@ -64,6 +64,7 @@ export const OFFLINE_CHECKS = [
   'p15-setup-check',
   'oauth-connect-check',
   'persistence-check',
+  'platform-words-check',
   'plan-fit-check',
   'replan-check',
   'planner-steps-check',

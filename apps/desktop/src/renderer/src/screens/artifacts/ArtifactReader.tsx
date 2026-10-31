@@ -15,6 +15,7 @@ import { showFlash } from '../../lib/notices.js';
 import { actorLabel, useActors, type Actors } from '../../lib/team.js';
 import { bytes, dateTime, pluralize, titleCase } from '../../lib/format.js';
 import { lineDiff, type DiffLine } from '../../lib/line-diff.js';
+import { platformWords } from '../../lib/platform.js';
 import { Badge, Banner, Button, Chip, Tooltip } from '@tandemise/design/react';
 
 /** Unchanged lines kept around each change in the comparison; the rest fold into "N unchanged lines". */
@@ -241,9 +242,9 @@ function ReaderDocument({ view, onVersion }: { view: ArtifactReadView; onVersion
 }
 
 /**
- * "Reveal in Finder" for a body the reader cannot show. The stored `contentRef`
- * is relative to the artifact store, which Finder cannot place, so the daemon
- * resolves the absolute path first (spec A5).
+ * "Reveal in <file manager>" for a body the reader cannot show. The stored
+ * `contentRef` is relative to the artifact store, which the file manager cannot
+ * place, so the daemon resolves the absolute path first (spec A5).
  */
 function RevealButton({ artifactId }: { artifactId: string }): JSX.Element {
   const daemon = useDaemon();
@@ -261,7 +262,7 @@ function RevealButton({ artifactId }: { artifactId: string }): JSX.Element {
   };
   return (
     <Button disabled={busy} onClick={() => void reveal()}>
-      Reveal in Finder
+      Reveal in {platformWords().fileManager}
     </Button>
   );
 }
