@@ -172,7 +172,11 @@ and be picked up by one daemon.
 
 Your own checkout is never modified: every code-writing task runs in its own
 Git worktree on its own branch, and the branch survives after the worktree is
-released so the change stays reviewable.
+released so the change stays reviewable. A step with no earlier step to build
+on fetches `origin` first and starts from the remote's current default branch
+(your local `main` is neither used nor moved, unless it already holds the
+remote's tip plus work of your own). Offline, it starts from the local branch
+and the step's target says it could not fetch.
 
 ## Checks
 

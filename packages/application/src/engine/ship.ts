@@ -125,6 +125,8 @@ export interface ShipDecideDeps {
   readonly timeoutMs: number;
   /** No CI right after a push is CI not started yet: waited for this long before it counts as none. */
   readonly ciGraceMs: number;
+  /** The code step's feedback, to tell a repeated CI failure from a new one (#197); absent, every failure starts a round. */
+  readonly feedback?: Pick<import('@tandemise/domain').FeedbackRepositoryPort, 'listByTask'>;
   /** Hold records (#50), counted into process.holds; absent, holds are unmeasured. */
   readonly holds?: Pick<import('@tandemise/domain').TaskHoldRepositoryPort, 'listByMission'>;
 }
@@ -274,7 +276,7 @@ export class ShipService {
         pr = now;
         continue;
       }
-      if (checks.state === 'FAIL') return this.#ciFailed(mission, task, checks.failing[0] ?? { name: 'a check', link: null, logTail: null });
+      if (checks.state === 'FAIL') return this.#ciFailed(mission, task, checks.failing[0] ?? { name: 'a check', link: null, logTail: null }, pr.headSha);
       const decision = await this.#decide(mission, task, repository, pr, checks, existing?.commentId ?? null);
       return this.#settle(mission, task, repository, pr, decision);
     }
@@ -522,9 +524,9 @@ export class ShipService {
   }
 
   /** CI failed on a pull request a wait step watched (#143): the same path as the ship step's own CI. */
-  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
+  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
     if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing.name}.` };
-    return this.#ciFailed(mission, task, failing);
+    return this.#ciFailed(mission, task, failing, head);
   }
 
   /** The pull request the mission's CI wait found, when that is how the mission got its pull request. */
@@ -535,7 +537,7 @@ export class ShipService {
   }
 
   /** CI failed: the code step gets another round with the log tail, up to its attempts (§8.1 step 3). */
-  #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
+  #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
     const d = this.deps.decide!;
     // An agent's step: a wait or a person's step reads as `implement` by its role, but has no code to redo.
     const code = [...this.deps.tasks.listByMission(mission.id)].reverse()
@@ -544,7 +546,17 @@ export class ShipService {
       return { kind: 'blocked', reason: `CI kept failing on ${failing.name}.` };
     }
     const tail = (failing.logTail ?? '').split('\n').slice(-SHIP_LOG_TAIL_LINES).join('\n');
-    const note = `CI failed: ${failing.name}${tail.length > 0 ? `\n\n${tail}` : ''}`;
+    // The first line names the check and the commit, so the next failure can be told apart from this one.
+    const headline = `CI failed: ${failing.name}${head === undefined ? '' : ` on commit ${head.slice(0, 7)}`}`;
+    // The same check failing on the same commit as the last round: no new commit came of that round, so
+    // another one would read the same red CI again. A person decides instead (#197).
+    const last = [...(d.feedback?.listByTask(code.id) ?? [])].reverse().find((f) => f.text.startsWith('CI failed: '));
+    if (head !== undefined && last !== undefined && last.text.split('\n')[0] === headline) {
+      const reason = `CI failed again on ${failing.name}, on the same commit ${head.slice(0, 7)}: the last round pushed nothing new, so another round would read the same result.`;
+      this.#ciRepeatCard(mission, task, failing, reason);
+      return { kind: 'blocked', reason };
+    }
+    const note = `${headline}${tail.length > 0 ? `\n\n${tail}` : ''}`;
     const rounds = d.rounds();
     d.unitOfWork.transaction(() => {
       const item = rounds.record({ task: code, text: note, artifactId: null, authorId: RUNTIME_ACTOR, recordedBy: RUNTIME_ACTOR, status: 'open', round: code.round ?? 1 });
@@ -748,6 +760,27 @@ export class ShipService {
       if (held.exitCode !== 0) missing.push({ taskKey: step.taskKey, commit });
     }
     return missing;
+  }
+
+  /** A card on the step that read CI: look again (after a push or a re-run on GitHub), or leave it blocked. */
+  #ciRepeatCard(mission: Mission, task: MissionTask, failing: { name: string; link: string | null }, reason: string): void {
+    const d = this.deps.decide;
+    if (d === undefined || d.approvals.pendingForTask(task.id).length > 0) return;
+    const card = d.approvalFactory.createOrThrow({
+      workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'intervention', risk: 'read',
+      title: `${this.title(mission)}: CI fails the same way again`,
+      rationale: reason,
+      effect: 'Retry reads CI again, for example after you push a fix or re-run the check on GitHub. Leaving it blocked stops here.',
+      evidence: [
+        { kind: 'text', label: 'Why it stopped', value: reason },
+        ...(failing.link === null ? [] : [{ kind: 'link' as const, label: failing.name, value: failing.link }]),
+      ],
+      options: [{ id: APPROVE_OPTION, label: 'Retry' }, { id: REJECT_OPTION, label: 'Leave blocked' }],
+      recommendedOptionId: null,
+      addressees: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+    });
+    d.approvals.create(card);
+    this.deps.recorder.invalidate('approvals', mission.id);
   }
 
   /** A card on the ship step: retry once the branch holds the work, or leave it. */
