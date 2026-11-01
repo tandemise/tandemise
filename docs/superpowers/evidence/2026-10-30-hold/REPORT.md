@@ -1,7 +1,7 @@
 # Hold and interact: acceptance report
 
-Run: 2026-10-31T21:00:53.726Z · build 61686d2 · fresh install at /tmp/tdm-hold-run-mvwvo4c3
-Result: **ALL PASS** (12/12 scenarios) · real Claude Code scenario skipped
+Run: 2026-10-31T21:00:53.726Z · build 61686d2 (H1-H12, real Claude Code scenario skipped); H13 run alone (`--only=h13`) on 2026-11-01 on the real Claude Code 2.1.316 with its own config dir
+Result: **ALL PASS** (13/13 scenarios)
 
 | Scenario | Result | Checks |
 |---|---|---|
@@ -17,6 +17,7 @@ Result: **ALL PASS** (12/12 scenarios) · real Claude Code scenario skipped
 | H10 — Hold an output under review: a new round, a new version, reviewed again | PASS | 8/8 |
 | H11 — Profile pinning: Continue resumes on the profile the hold was made on | PASS | 5/5 |
 | H12 — The terminal panel works with a keyboard and a screen reader | PASS | 20/20 |
+| H13-claude-prompts — A held code step on the real Claude Code: no bypass warning, trust answered in one click | PASS | 7/7 |
 
 ## H1 — Hold a running step: the panel shows its resumed session and takes your typing
 
@@ -195,3 +196,17 @@ Result: **ALL PASS** (12/12 scenarios) · real Claude Code scenario skipped
 - ✅ proof (API): the step is still HELD after closing — `"HELD"`
 - ✅ its card offers Open terminal — `{"text":"Open terminal","disabled":false,"title":""}`
 - screenshot: `H12-focus-out-of-terminal.png`
+
+## H13-claude-prompts — A held code step on the real Claude Code: no bypass warning, trust answered in one click
+
+- note: setup: Code agent runs on Claude Code with its own config dir
+- note: the headless run started: {"type":"run.started","attempt":1,"runtime":"Claude Code","target":"worktree:/tmp/tdm-hold-ux/home/workspaces/ws_01m6a9k1p3pg52zwjr53/missions/msn_01m6a9k6h7k4zvtvf1cj/worktrees/notes-line-on-claude-m
+- ✅ Claude asks to trust the folder, and the panel offers "Answer: Yes, I trust this folder" — `"buildHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code asks whether to trust this folder. Tandemise created it for this step.Answer: Yes, I trust this folderF6 moves between the terminal and the butt`
+- ✅ the question is announced in a status region — `"status"`
+- ✅ Claude Code is ready for you after one click — `"                                                                                                         ◐ medium · /effort\n──────────────────────────────────────────────────────────────────────────────────────────────`
+- ✅ it never showed the Bypass Permissions warning
+- ✅ it runs in accept-edits mode, with the step's shell tools allowed by rule — `"──────────────────────────────────────────────────────────────────────────────────\n❯\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────`
+- ✅ the one-click answer is gone once answered — `"buildHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F6 moves between the terminal and t`
+- ✅ proof (DB): the hold was released — `{"id":"hld_01m6a9kbeq7w3xa8rmev","heldBy":"mem_01m6a9k1p4qgpbksh3fr","fromStatus":"RUNNING","profileId":"rt_01m6a9k4epvt98ez6af3","sessionBefore":"b5293dcc-7493-426f-b71a-d2a00dcd8ab2","sessionAfter":"b5293dcc-7493-426f-`
+- screenshot: `H13-claude-prompts-trust-question-with-answer.png`
+- screenshot: `H13-claude-prompts-claude-ready.png`

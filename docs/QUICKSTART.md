@@ -137,8 +137,14 @@ Open a running or waiting agent step and choose **Hold**. The run stops, and
 the task panel becomes a terminal inside the agent's own session and checkout:
 type to steer it, edit files, run commands. **Continue** hands the step back and
 the pipeline picks up from the work as it stands; **Release** ends the hold and
-keeps your changes without resuming the session. The first time Claude asks
-whether to trust the folder, answer it in the terminal. The terminal needs
+keeps your changes without resuming the session. Each step works in a fresh
+checkout, so Claude Code first asks whether to trust that folder, defaulting to
+"No, exit": press **Answer: Yes, I trust this folder** above the terminal (or
+pick it with the arrow keys). Tandemise never writes your Claude Code config to
+skip that question. A held session runs in accept-edits mode with the step's
+shell tools allowed, so Claude Code's bypass-mode warning does not appear.
+Holding stops the agent's run, including commands it left running in the
+background; they are not restarted on **Continue**. The terminal needs
 `node-pty`, which compiles on install (see CONTRIBUTING.md for Linux).
 
 ## Working as a team (optional relay)
