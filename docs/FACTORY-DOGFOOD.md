@@ -14,9 +14,10 @@ operate it from a script.
 | `TANDEMISE_HOME` | `~/.tandemise-factory` (never `~/.tandemise`, which stays the person's own) |
 | The app | the newest `Tandemise-*-linux-x86_64.AppImage` in `~/.tandemise-factory/app/` |
 | The project | **Tandemise**, one repository: the clone at `~/.tandemise-factory/repos/tandemise` |
-| The brain | linked with **Keep it on this machine**: `~/.tandemise-factory/brains/<project>/`, no remote yet |
-| Tracker | GitHub Issues on `tandemise/tandemise`, board query `is:open label:dogfood` |
+| The brain | [`tandemise/tandemise-brain`](https://github.com/tandemise/tandemise-brain) (private); the daemon's clone is `~/.tandemise-factory/brains/<project>/` |
+| Tracker | GitHub Issues on `tandemise/tandemise`, board query `is:open label:dogfood` (in the brain's `factory/tracker.yaml`) |
 | Runtime | Claude Code (Runtimes → **Discover runtimes** → **Add**), concurrency 3 |
+| Test check | `npm run build && npm run check:boundaries && npm run check:design && npm run check:windows-hide && npm run -w @tandemise/desktop typecheck` (the full offline suite runs in GitHub CI, which the ship step waits for) |
 | Auto-merge | off. Every pull request waits for a person. |
 
 [`scripts/factory.sh`](../scripts/factory.sh) runs it:
@@ -50,10 +51,29 @@ The order matters (see the issues labelled `dogfood` for why):
    `tandemise/tandemise`, board query `is:open label:dogfood`, Ready `open`,
    In progress `status: in progress`, In review `status: in review`, Done
    `closed`, and "When a mission completes: move it to in review".
-6. Only then link the brain (**Project settings → Brain → Keep it on this
-   machine**). The brain copies the tracker it finds; once a brain is linked the
-   tracker form is read-only, so a tracker set afterwards means unlinking and
-   linking again.
+6. Only then link the brain. The brain copies the tracker it finds; once a
+   brain is linked the tracker form is read-only (#99), so a tracker set
+   afterwards means unlinking and linking again. The brain lives in the private
+   `tandemise/tandemise-brain`:
+   - a new instance: **Project settings → Brain → Use an existing brain**,
+     `https://github.com/tandemise/tandemise-brain.git`, **Preview**, **Link**
+     (the tracker comes with it);
+   - how it got there: the instance first kept it on this machine; **Share this
+     brain** cannot use a repository that already exists (#112, fixed in #115),
+     so the local clone was pushed to the empty repository
+     (`git -C ~/.tandemise-factory/brains/<project> push <url> main:main`), then
+     **Unlink** and **Use an existing brain**.
+7. Point the repository's test check at something that fits the 10-minute check
+   budget (#111): the gate runs it after every code step, and `npm test` (the
+   whole offline suite) takes longer. There is no screen for it yet:
+
+   ```bash
+   scripts/factory.sh api PATCH /v1/repositories/<repo id> \
+     '{"checks":{"test":"npm run build && npm run check:boundaries && npm run check:design && npm run check:windows-hide && npm run -w @tandemise/desktop typecheck","devServer":null}}'
+   ```
+
+   `devServer: null` because the detected `npm run dev` starts a daemon on the
+   default `~/.tandemise`.
 
 ## How a change goes through it
 
@@ -72,7 +92,13 @@ The order matters (see the issues labelled `dogfood` for why):
    what you want, and **Continue**: the pipeline takes the work as it stands.
 5. **Pull request.** The ship step pushes the branch and opens the pull request
    on `tandemise/tandemise`, waits for CI, and files **Review and merge** in the
-   Inbox; the issue moves to `status: in review`.
+   Inbox; the issue moves to `status: in review`. The pull request's link is in
+   the Inbox card (expand it) and in the issue's activity comment. Its body does
+   not say `Closes #<n>` yet (#113): add it when you review, or close the issue
+   after merging.
+   If a step blocks with "exhausted its retries" because the test check timed
+   out (Checks & Gates says "exceeded its time budget"), and the agent's own run
+   was green, **Accept the result and continue** is the right answer.
 6. **A person reviews and merges.** Auto-merge stays off. Merging closes the issue.
 
 ## What the person reviews
