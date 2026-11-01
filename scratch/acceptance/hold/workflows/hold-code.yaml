@@ -1,0 +1,8 @@
+name: Hold code
+description: One code step (write and shell granted), so a held session would open in bypass mode without #102.
+steps:
+  - key: build
+    role: development
+    isolation: worktree
+    objective: Add a line to NOTES.md that says the onboarding was reviewed, then write the ChangeSet.
+    outputs: [ChangeSet]

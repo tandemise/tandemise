@@ -14,6 +14,10 @@
     "./staffing-presets": {
       "types": "./dist/staffing-presets.d.ts",
       "default": "./dist/staffing-presets.js"
+    },
+    "./claude-prompts": {
+      "types": "./dist/claude-prompts.d.ts",
+      "default": "./dist/claude-prompts.js"
     }
   },
   "scripts": {
