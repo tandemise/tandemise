@@ -85,7 +85,10 @@ keepPainting([PORT]);
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
 // --real-claude adds PM1 on the real Claude Code runtime (claude at ~/.local/bin/claude, logged in).
-const scenarios = ['pm01.mjs', 'pm02.mjs', 'pm05.mjs', 'pm06.mjs', 'pm07.mjs', 'pm10.mjs', 'pm03.mjs', 'pm04.mjs', 'pm08.mjs', 'pm09.mjs', 'pm11.mjs', 'pm12.mjs', 'pm13.mjs', ...(process.argv.includes('--real-claude') ? ['pm01-real-claude.mjs'] : [])]
+const fixed = ['pm01.mjs', 'pm02.mjs', 'pm05.mjs', 'pm06.mjs', 'pm07.mjs', 'pm10.mjs', 'pm03.mjs', 'pm04.mjs', 'pm08.mjs', 'pm09.mjs', 'pm11.mjs', 'pm12.mjs', 'pm13.mjs'];
+// Any other pmNN.mjs in suite/ runs after these, in number order (the merge flow's are numbered by issue: pm173, pm174, pm184).
+const later = readdirSync(join(here, 'suite')).filter((f) => /^pm\d+\.mjs$/.test(f) && !fixed.includes(f)).sort((a, b) => Number(a.slice(2, -4)) - Number(b.slice(2, -4)));
+const scenarios = [...fixed, ...later, ...(process.argv.includes('--real-claude') ? ['pm01-real-claude.mjs'] : [])]
   .filter((file) => !only || only.some((o) => file.replace('.mjs', '') === o || (o === 'pm01' && file === 'pm01.mjs') || (o !== 'pm01' && file.includes(o))));
 
 let failed = null;
@@ -111,7 +114,7 @@ if (!process.argv.includes('--hold')) {
 
 // ---------------------------------------------------------------- summary
 const results = readdirSync(EVIDENCE).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(EVIDENCE, f), 'utf8')));
-const order = ['PM1', 'PM1R', 'PM2', 'PM3', 'PM4', 'PM5', 'PM6', 'PM7', 'PM8', 'PM9', 'PM10', 'PM11', 'PM12'];
+const order = ['PM1', 'PM1R', 'PM2', 'PM3', 'PM4', 'PM5', 'PM6', 'PM7', 'PM8', 'PM9', 'PM10', 'PM11', 'PM12', 'PM13', ...later.map((f) => `PM${Number(f.slice(2, -4))}`)];
 results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 const lines = [
   '# Planner acceptance (#53)',

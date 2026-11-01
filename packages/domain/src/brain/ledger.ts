@@ -156,7 +156,7 @@ const eventSchema = z.discriminatedUnion('op', [
       class: z.string(), model: z.string().nullable(), attempt: z.number(), gatePassed: z.boolean(),
       costUsd: z.number().nullable(), wallTimeMs: z.number().nullable(), taskKey: z.string().optional(),
     }).optional(),
-    merge: z.object({ verdict: z.enum(['merge', 'ask']), score: z.number(), pr: z.string() }).optional(),
+    merge: z.object({ verdict: z.enum(['merge', 'ask']), score: z.number(), pr: z.string(), approval: z.object({ by: z.string(), card: z.string().optional() }).optional() }).optional(),
   }),
 ]);
 

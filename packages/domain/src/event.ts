@@ -121,7 +121,8 @@ export type OrchestrationEvent =
   | { readonly type: 'task.outcome'; readonly outcomeId: string; readonly kind: string; readonly stepClass: string | null; readonly model: string | null }
   /** The merge decision for one head commit (#53 §8.6). */
   | { readonly type: 'merge.decided'; readonly decisionId: string; readonly verdict: 'merge' | 'ask'; readonly score: number; readonly repo: string; readonly number: number; readonly headSha: string }
-  | { readonly type: 'merge.merged'; readonly decisionId: string; readonly mergeSha: string; readonly by: string }
+  /** `how` (#174): Tandemise on its own, Tandemise on a person's Merge (with the card), or a person in GitHub. Absent on older events. */
+  | { readonly type: 'merge.merged'; readonly decisionId: string; readonly mergeSha: string; readonly by: string; readonly how?: 'auto' | 'approval' | 'github'; readonly approvalId?: string }
   | { readonly type: 'merge.asked'; readonly decisionId: string; readonly reasons: readonly string[] }
   | { readonly type: 'merge.reverted'; readonly decisionId: string; readonly revertPr: string | null; readonly by: string }
   | { readonly type: 'note'; readonly text: string; readonly level?: 'info' | 'warn' | 'error' };

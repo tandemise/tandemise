@@ -25,7 +25,9 @@ const check = (label, cond, detail) => {
 };
 const section = (t) => console.log(`\n== ${t}`);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// MERGE_ONLY=<text> runs only the sections whose label holds it.
 const attempt = async (label, fn) => {
+  if (process.env.MERGE_ONLY !== undefined && !label.includes(process.env.MERGE_ONLY)) return;
   try { await fn(); } catch (e) { failures.push(label); console.log(`  FAIL ${label} threw: ${e?.stack ?? e}`); }
 };
 const keepAlive = setInterval(() => {}, 1000);
@@ -790,6 +792,63 @@ await attempt('review: holds are measured, or unmeasured', async () => {
   const policy = D.parseMergePolicy({ ...app.SHIPPED_MERGE, autoMerge: 'on', never: [{ when: 'process.holds > 0' }] });
   const d = D.decideMerge({ ...facts, process: { ...facts.process, holds: null } }, policy);
   check('unmeasured holds (null) make a rule on them ask, never pass', d.verdict === 'ask', d.reasons);
+});
+
+await attempt('#174: a merge on your approval is not a merge in GitHub', async () => {
+  section('#174: a merge on your approval is not a merge in GitHub');
+  const fake = await import('./fake-gh.mjs');
+  const w = await world();
+  const queued = { defaultChecks: [{ name: 'unit', conclusion: 'success' }], autoMergeAllowed: true, autoMergeQueues: true, protection: { required_status_checks: { strict: false, contexts: ['unit'] } } };
+  const outcomes = (m) => w.h.repo.outcomes.listByWorkspace(w.ws, '1970').filter((o) => o.mission === m.id);
+  const kinds = (m) => outcomes(m).map((o) => o.kind);
+  const merged = (m) => w.h.repo.events.listByMission(m.id).find((e) => e.body.type === 'merge.merged')?.body;
+  const ship = (m) => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
+  const prOf = (m) => fake.pullRequests(w.ghDir, REPO).find((p) => w.h.repo.mergeDecisions.listByMission(m.id).some((d) => d.prNumber === p.number));
+  /** Planned, asked, and the person presses Merge; answers the card. */
+  const approve = async (title) => {
+    const m = await w.mission(title);
+    await w.h.until(() => ship(m)?.status === 'AWAITING_APPROVAL', 60000);
+    const card = w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.title.startsWith('Review and merge'));
+    await w.h.services.approvals.decide(w.caller, card.id, { optionId: 'approve' });
+    return { m, card: w.h.repo.approvals.get(card.id) };
+  };
+
+  // Queued on GitHub (auto-merge with required checks): GitHub merges it later, under the person's own gh login.
+  fake.setRepo(w.ghDir, REPO, queued);
+  const a = await approve('fix: typo in the settings title');
+  await w.h.until(() => prOf(a.m)?.autoMerge != null, 30000);
+  fake.putPullRequest(w.ghDir, REPO, { ...prOf(a.m), state: 'MERGED', mergedBy: { login: 'sam' }, mergeCommit: { oid: 'a'.repeat(40) } });
+  await w.h.until(() => w.h.repo.missions.get(a.m.id).status === 'COMPLETE', 30000).catch(() => {});
+  const outA = outcomes(a.m).find((o) => o.kind === 'merged');
+  check('queued, then merged by GitHub: a merged outcome on approval, never merged_by_person', outA !== undefined && !kinds(a.m).includes('merged_by_person'), kinds(a.m));
+  check('…keeping who approved it and the card', outA?.merge?.approval?.by === a.card.decidedBy && outA?.merge?.approval?.card === a.card.id, outA?.merge);
+  check('…the feed says merged on your approval, not in GitHub', merged(a.m)?.how === 'approval' && merged(a.m)?.approvalId === a.card.id, merged(a.m));
+  check('…and so does the step', (ship(a.m).statusReason ?? '').startsWith('Merged on your approval'), ship(a.m).statusReason);
+
+  // Merged at once.
+  fake.setRepo(w.ghDir, REPO, { defaultChecks: queued.defaultChecks, autoMergeAllowed: false, autoMergeQueues: false, protection: undefined });
+  const b = await approve('fix: typo in the footer');
+  await w.h.until(() => w.h.repo.missions.get(b.m.id).status === 'COMPLETE', 30000).catch(() => {});
+  const outB = outcomes(b.m).find((o) => o.kind === 'merged');
+  check('merged at once on approval: merged, with the approver and the card', outB?.merge?.approval?.card === b.card.id && !kinds(b.m).includes('merged_by_person'), kinds(b.m));
+
+  // The call answers "Merge already in progress" while GitHub merges it: the merge SHA came from Tandemise's own call.
+  fake.setRepo(w.ghDir, REPO, { mergeInProgress: true });
+  const p = await approve('fix: typo in the sidebar');
+  await w.h.until(() => w.h.repo.missions.get(p.m.id).status === 'COMPLETE', 30000).catch(() => {});
+  const outP = outcomes(p.m).find((o) => o.kind === 'merged');
+  check('"Merge already in progress", then merged: merged on approval, not merged_by_person', outP?.merge?.approval?.card === p.card.id && !kinds(p.m).includes('merged_by_person'), kinds(p.m));
+  check('…the feed and the step say merged on your approval', merged(p.m)?.how === 'approval' && (ship(p.m).statusReason ?? '').startsWith('Merged on your approval'), [merged(p.m), ship(p.m).statusReason]);
+  check('…recorded once', w.h.repo.events.listByMission(p.m.id).filter((e) => e.body.type === 'merge.merged').length === 1 && outcomes(p.m).filter((o) => o.kind === 'merged').length === 1);
+
+  // Queued, but GitHub merged a head Tandemise never decided on: that merge is a person's.
+  fake.setRepo(w.ghDir, REPO, queued);
+  const c = await approve('fix: typo in the header');
+  await w.h.until(() => prOf(c.m)?.autoMerge != null, 30000);
+  fake.putPullRequest(w.ghDir, REPO, { ...prOf(c.m), headRefOid: 'b'.repeat(40), state: 'MERGED', mergedBy: { login: 'sam' }, mergeCommit: { oid: 'c'.repeat(40) } });
+  await w.h.until(() => w.h.repo.missions.get(c.m.id).status === 'COMPLETE', 30000).catch(() => {});
+  check('a merge of another head stays merged_by_person', kinds(c.m).includes('merged_by_person') && !kinds(c.m).includes('merged'), kinds(c.m));
+  check('…and the feed says merged in GitHub by them', merged(c.m)?.how === 'github' && merged(c.m)?.by === 'sam' && (ship(c.m).statusReason ?? '').startsWith('Merged in GitHub by sam'), [merged(c.m), ship(c.m).statusReason]);
 });
 
 // @sections

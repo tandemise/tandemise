@@ -94,6 +94,9 @@ export interface OpenedPullRequest {
   readonly foundBy: 'wait' | null;
 }
 
+/** Who had Tandemise merge a pull request (#174): its own decision, or a person's Merge on the card. */
+type MergedHow = { readonly by: 'tandemise' } | { readonly by: 'approval'; readonly approver: string; readonly approvalId: string | null };
+
 export const MERGED_BEFORE_DECISION = 'Merged in GitHub by a person before Tandemise decided.';
 
 /** What `ShipDeps.prFacts` reads for one mission. */
@@ -435,7 +438,8 @@ export class ShipService {
 
   /** A merge queued on GitHub (`--auto`) for a decision that no longer stands is cancelled there too. */
   async cancelQueued(decision: MergeDecisionRecord): Promise<void> {
-    if (decision.mergedBy !== 'tandemise' || decision.mergedAt !== null) return;
+    // Queued by Tandemise, on its own or on a person's Merge (#174): mergedBy is set and nothing merged yet.
+    if (decision.mergedBy === null || decision.mergedAt !== null) return;
     const mission = this.deps.decide?.missions.get(decision.missionId);
     const repository = mission?.repositoryId == null ? undefined : this.deps.repositories.get(mission.repositoryId);
     if (repository === undefined) return;
@@ -450,15 +454,20 @@ export class ShipService {
   #closedOrMerged(mission: Mission, task: MissionTask, pr: PullRequestRef, decision: MergeDecisionRecord | null): ShipOutcome {
     const d = this.deps.decide!;
     if (pr.state === 'MERGED') {
-      // A merge Tandemise queued (`--auto`) that GitHub has now done.
-      // Only when GitHub merged the head that was decided; anything else is a person's merge.
-      if (decision !== null && decision.mergedAt === null && decision.mergedBy === 'tandemise' && pr.headSha === decision.headSha) {
-        return this.#recordMerged(mission, task, decision, pr.mergeSha, 'tandemise');
+      // Recorded already (Tandemise's own merge, seen again by a look that was under way): said as it was recorded.
+      const recorded = decision === null ? undefined : d.mergeDecisions.get(decision.id);
+      if (recorded !== undefined && recorded.mergedAt !== null) {
+        this.#cancelCards(mission, task);
+        return { kind: 'merged', reason: this.#mergedReason(recorded, pr) };
       }
-      if (decision !== null && decision.mergedAt === null) {
+      // A merge Tandemise ran or queued, on its own or on a person's Merge, that GitHub has now done (#174).
+      // Only when GitHub merged the head that was decided; anything else is a person's merge.
+      const ours = decision === null ? null : this.#mergedByTandemise(mission, task, decision, pr);
+      if (decision !== null && ours !== null) return this.#recordMerged(mission, task, decision, pr.mergeSha, ours);
+      if (decision !== null) {
         d.mergeDecisions.update(decision.id, { mergedAt: this.deps.clock.now() as Timestamp, mergedBy: pr.mergedBy ?? 'a person', mergeSha: pr.mergeSha });
-        this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, { type: 'merge.merged', decisionId: decision.id, mergeSha: pr.mergeSha ?? '', by: pr.mergedBy ?? 'a person' });
-        d.outcomes()?.merged(decision, 'person');
+        this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, { type: 'merge.merged', decisionId: decision.id, mergeSha: pr.mergeSha ?? '', by: pr.mergedBy ?? 'a person', how: 'github' });
+        d.outcomes()?.merged(decision, { by: 'person' });
       }
       this.#cancelCards(mission, task);
       return { kind: 'merged', reason: `Merged in GitHub by ${pr.mergedBy ?? 'a person'}: ${pr.url}` };
@@ -466,6 +475,29 @@ export class ShipService {
     if (decision !== null) d.outcomes()?.closedUnmerged(decision);
     this.#cancelCards(mission, task);
     return { kind: 'blocked', reason: PR_CLOSED };
+  }
+
+  /**
+   * Whether GitHub's merge of `pr` is one Tandemise ran (#174): it merged the
+   * decided head, and Tandemise was told to merge it, on its own (a `merge`
+   * verdict, or a merge it queued) or by a person's Merge on the card. A merge
+   * of any other head is a person's, in GitHub.
+   */
+  #mergedByTandemise(mission: Mission, task: MissionTask, decision: MergeDecisionRecord, pr: PullRequestRef): MergedHow | null {
+    if (pr.headSha !== decision.headSha) return null;
+    const approved = this.#approvalOf(mission, task, decision);
+    if (approved !== undefined) return { by: 'approval', approver: approved.decidedBy ?? 'a person', approvalId: approved.id };
+    if (decision.verdict === 'merge' || decision.mergedBy === 'tandemise') return { by: 'tandemise' };
+    return null;
+  }
+
+  #mergedReason(decision: MergeDecisionRecord, pr: PullRequestRef): string {
+    if (decision.mergedBy === 'tandemise') return `Merged on its own: risk score ${decision.score} of ${decision.allowed ?? 0} allowed.`;
+    // Merged on the approval only when it was recorded as the approver's: a merge in GitHub is recorded by login.
+    const approved = this.deps.decide!.approvals.list({ missionId: decision.missionId })
+      .some((a) => a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id)
+        && (a.decidedBy ?? 'a person') === decision.mergedBy);
+    return approved ? `Merged on your approval: risk score ${decision.score} of ${decision.allowed ?? 0}.` : `Merged in GitHub by ${pr.mergedBy ?? 'a person'}: ${pr.url}`;
   }
 
   #cancelCards(mission: Mission, task: MissionTask): void {
@@ -515,9 +547,9 @@ export class ShipService {
     const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, ...(task === null ? {} : { taskId: task.id }) };
     this.deps.recorder.deferred(() => d.unitOfWork.transaction(() => {
       d.mergeDecisions.create(record);
-      this.deps.recorder.record(scope, { type: 'merge.merged', decisionId: record.id, mergeSha: pr.mergeSha ?? '', by });
+      this.deps.recorder.record(scope, { type: 'merge.merged', decisionId: record.id, mergeSha: pr.mergeSha ?? '', by, how: 'github' });
     }));
-    d.outcomes()?.merged(record, 'person');
+    d.outcomes()?.merged(record, { by: 'person' });
     if (task !== null) this.#cancelCards(mission, task);
     this.deps.recorder.invalidate('ship', mission.id);
     return { kind: 'merged', reason };
@@ -639,26 +671,47 @@ export class ShipService {
       this.#status(mission, task, 'AWAITING_EXTERNAL', `GitHub refused the merge (${result.refused}); Tandemise tries again, or you can merge it in GitHub.`);
       return { kind: 'waiting' };
     }
-    const mergedBy = by === 'auto' ? 'tandemise' : (member ?? 'a person');
+    const how: MergedHow = by === 'auto'
+      ? { by: 'tandemise' }
+      : { by: 'approval', approver: member ?? 'a person', approvalId: this.#approvalOf(mission, task, decision)?.id ?? null };
     if (result.queued) {
-      d.mergeDecisions.update(decision.id, { mergedBy });
+      d.mergeDecisions.update(decision.id, { mergedBy: how.by === 'tandemise' ? 'tandemise' : how.approver });
       this.#status(mission, task, 'AWAITING_EXTERNAL', 'GitHub merges it once its required checks pass.');
       const after = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
       if (after.state === 'MERGED') return this.#closedOrMerged(mission, task, after, d.mergeDecisions.get(decision.id) ?? decision);
       return { kind: 'waiting' };
     }
     const after = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
-    return this.#recordMerged(mission, task, decision, after.mergeSha, mergedBy);
+    return this.#recordMerged(mission, task, decision, after.mergeSha, how);
   }
 
-  #recordMerged(mission: Mission, task: MissionTask, decision: MergeDecisionRecord, mergeSha: string | null, mergedBy: string): ShipOutcome {
+  /**
+   * Records a merge Tandemise ran (#174): on its own, or on a person's Merge,
+   * which keeps who approved it and the card. Once: a look that sees the same
+   * merge again finds it recorded.
+   */
+  #recordMerged(mission: Mission, task: MissionTask, decision: MergeDecisionRecord, mergeSha: string | null, how: MergedHow): ShipOutcome {
     const d = this.deps.decide!;
-    d.mergeDecisions.update(decision.id, { mergedAt: this.deps.clock.now() as Timestamp, mergedBy, mergeSha });
-    this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, { type: 'merge.merged', decisionId: decision.id, mergeSha: mergeSha ?? '', by: mergedBy });
-    d.outcomes()?.merged(decision, mergedBy === 'tandemise' ? 'tandemise' : 'person');
+    const current = d.mergeDecisions.get(decision.id) ?? decision;
+    const mergedBy = how.by === 'tandemise' ? 'tandemise' : how.approver;
+    if (current.mergedAt === null) {
+      d.mergeDecisions.update(decision.id, { mergedAt: this.deps.clock.now() as Timestamp, mergedBy, mergeSha });
+      this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, {
+        type: 'merge.merged', decisionId: decision.id, mergeSha: mergeSha ?? '', by: mergedBy,
+        how: how.by === 'tandemise' ? 'auto' : 'approval', ...(how.by === 'approval' && how.approvalId !== null ? { approvalId: how.approvalId } : {}),
+      });
+      d.outcomes()?.merged(decision, how.by === 'tandemise' ? { by: 'tandemise' } : { by: 'approval', approver: how.approver, approvalId: how.approvalId });
+    }
     this.#cancelCards(mission, task);
     this.deps.recorder.invalidate('ship', mission.id);
-    return { kind: 'merged', reason: mergedBy === 'tandemise' ? `Merged on its own: risk score ${decision.score} of ${decision.allowed ?? 0} allowed.` : `Merged by you: risk score ${decision.score} of ${decision.allowed ?? 0}.` };
+    return { kind: 'merged', reason: how.by === 'tandemise' ? `Merged on its own: risk score ${decision.score} of ${decision.allowed ?? 0} allowed.` : `Merged on your approval: risk score ${decision.score} of ${decision.allowed ?? 0}.` };
+  }
+
+  /** The person's Merge on this decision's card, if they said it. */
+  #approvalOf(mission: Mission, task: MissionTask, decision: MergeDecisionRecord): Approval | undefined {
+    return this.deps.decide!.approvals.list({ missionId: mission.id })
+      .find((a) => a.taskId === task.id && a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION
+        && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
   }
 
   #pushedSha(mission: Mission, pr: PullRequestRef): string | null {

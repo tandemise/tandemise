@@ -73,8 +73,14 @@ export class OutcomeRecorder {
     this.#write(task.missionId, 'changes_requested', { step: this.#stepOf(task) });
   }
 
-  merged(decision: MergeDecisionRecord, by: 'tandemise' | 'person'): void {
-    this.#write(decision.missionId, by === 'tandemise' ? 'merged' : 'merged_by_person', { merge: this.#merge(decision) });
+  /**
+   * A merge (#174): Tandemise ran it, on its own or on a person's Merge (kept
+   * with who approved it and the card), or a person merged it in GitHub.
+   */
+  merged(decision: MergeDecisionRecord, how: { by: 'tandemise' } | { by: 'approval'; approver: string; approvalId: string | null } | { by: 'person' }): void {
+    if (how.by === 'person') { this.#write(decision.missionId, 'merged_by_person', { merge: this.#merge(decision) }); return; }
+    const approval = how.by === 'approval' ? { approval: { by: how.approver, ...(how.approvalId === null ? {} : { card: how.approvalId }) } } : {};
+    this.#write(decision.missionId, 'merged', { merge: { ...this.#merge(decision), ...approval } });
   }
 
   reverted(decision: MergeDecisionRecord): void { this.#write(decision.missionId, 'reverted', { merge: this.#merge(decision) }); }
