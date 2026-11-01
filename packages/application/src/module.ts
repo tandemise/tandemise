@@ -612,6 +612,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       factoryEdits: brainEdits(r),
       skills: r.resolve(t.SKILL_REPOSITORY),
       roles: r.resolve(t.ROLE_REPOSITORY),
+      repositories: r.resolve(t.REPO_REPOSITORY),
       files: r.resolve(t.SKILL_FILES),
       clock: clock(r),
       log: log(r).child({ component: 'skills' }),
