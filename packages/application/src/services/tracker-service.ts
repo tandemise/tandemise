@@ -671,11 +671,14 @@ export class TrackerService {
       if (mission === undefined || view === undefined) throw new TandemiseError('CONFLICT', `Refine ${fresh.key} first.`);
       if (view.state === 'running') throw new TandemiseError('CONFLICT', `${fresh.key} is still being refined. Wait for the proposals.`);
       if (!view.readiness.ready) throw new TandemiseError('PRECONDITION_FAILED', `${readinessTodo(view.readiness)} on its mission first.`);
-      const criteria = view.criteria.filter((c) => c.status === 'accepted').map((c) => c.statement);
+      // Only what was decided here is written, and only ever added (#185): the
+      // item's own lines (its criteria among them) stay exactly as written.
+      const criteria = view.criteria.filter((c) => c.status === 'accepted' && c.origin !== 'tracker').map((c) => c.statement);
+      const rejected = view.criteria.filter((c) => c.status === 'rejected').map((c) => c.statement);
       const answered = view.questions.flatMap((q) => (q.status === 'answered' && q.answer !== null ? [{ question: q.text, answer: q.answer }] : []));
       const ready = config.states.ready[0]!;
-      const description = refinedDescription(fresh.description, criteria, answered);
-      await tracker.updateDescription(item.ref, description);
+      const description = refinedDescription(fresh.description, { additions: criteria, answered, rejected });
+      if (description !== fresh.description) await tracker.updateDescription(item.ref, description);
       await tracker.transition(item.ref, ready);
       this.deps.items.upsert(workspaceId, { ...fresh, description, state: ready });
       const body = refinedActivityLine({ by, criteria: criteria.length, answered: answered.length, from: fresh.state, to: ready });

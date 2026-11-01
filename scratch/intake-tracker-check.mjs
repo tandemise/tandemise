@@ -442,15 +442,48 @@ try {
 }
 
 // ------------------------------------------------------------------ refine a draft (#135)
-section('refine a draft (#135): the refined description, the activity line, and both adapters');
+section('refine a draft (#135, #185): the description only gains lines, the activity line, and both adapters');
 {
-  const original = 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Something vague\n\n## Notes\nKeep the old flow.';
-  const refined = D.refinedDescription(original, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]);
-  check('refinedDescription keeps the text, replaces the Done-when section and adds Decisions',
-    refined === 'Customers on Safari cannot pay.\n\n## Notes\nKeep the old flow.\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later', refined);
-  check('…parseCriteria reads exactly the accepted lines back', eq(D.parseCriteria(refined), ['Checkout completes on Safari 17', 'A failed payment says why']), D.parseCriteria(refined));
-  check('…and writing it twice writes the same text', D.refinedDescription(refined, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]) === refined);
-  check('an empty description gets only the sections', D.refinedDescription('', ['A'], []) === '## Done when\n- [ ] A');
+  // #185: the write-back only ever adds. Every line the item has stays as written.
+  const decided = { additions: ['Checkout completes on Safari 17', 'A failed payment says why'], answered: [{ question: 'Which Safari versions?', answer: '17 and later' }], rejected: ['Apple Pay works'] };
+  // The lines a write added: the item's own lines must all be there, in order and unchanged.
+  const addedLines = (text, item) => {
+    const mine = item.split('\n');
+    const extra = [];
+    let i = 0;
+    for (const line of text.split('\n')) {
+      if (i < mine.length && line === mine[i]) i++;
+      else extra.push(line);
+    }
+    return i === mine.length ? extra : null;
+  };
+
+  const acItem = 'Customers on Safari cannot pay.\n\n## Acceptance criteria\n- AC01: The card form shows on Safari\n- AC02: A declined card says why\n\n## Notes\nKeep the old flow.\n';
+  const ac = D.refinedDescription(acItem, decided);
+  check('an item with an Acceptance criteria section: the additions continue its ids (AC03, AC04) inside it',
+    ac === 'Customers on Safari cannot pay.\n\n## Acceptance criteria\n- AC01: The card form shows on Safari\n- AC02: A declined card says why\n- AC03: Checkout completes on Safari 17\n- AC04: A failed payment says why\n\n## Notes\nKeep the old flow.\n\n## Decisions\n- Which Safari versions? — 17 and later\n- Not now:\n  - Apple Pay works', ac);
+  const acAdded = ['- AC03: Checkout completes on Safari 17', '- AC04: A failed payment says why', '## Decisions', '- Which Safari versions? — 17 and later', '- Not now:', '  - Apple Pay works'];
+  check('…every line of the item is kept byte for byte; only these lines were added', eq(addedLines(ac, acItem), acAdded), addedLines(ac, acItem));
+  check('…written twice, the same text', D.refinedDescription(ac, decided) === ac);
+
+  const dwItem = 'Customers on Safari cannot pay.\n\n### Done when\n- [ ] The card form shows on Safari\n\n## Notes\nKeep the old flow.';
+  const dw = D.refinedDescription(dwItem, { ...decided, rejected: [] });
+  check('an item with a Done when section: the additions join its checklist, in its style',
+    dw === 'Customers on Safari cannot pay.\n\n### Done when\n- [ ] The card form shows on Safari\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Notes\nKeep the old flow.\n\n## Decisions\n- Which Safari versions? — 17 and later', dw);
+  check('…every line of the item is kept byte for byte; only these lines were added',
+    eq(addedLines(dw, dwItem), ['- [ ] Checkout completes on Safari 17', '- [ ] A failed payment says why', '', '## Decisions', '- Which Safari versions? — 17 and later']), addedLines(dw, dwItem));
+
+  const plainItem = 'Customers on Safari cannot pay.\n\nKeep the old flow.';
+  const plain = D.refinedDescription(plainItem, decided);
+  check('an item with neither: a Done when section with only the additions, then Decisions, after the text',
+    plain === `${plainItem}\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later\n- Not now:\n  - Apple Pay works`, plain);
+  check('…it starts with the item byte for byte', plain.startsWith(plainItem));
+  check('…parseCriteria reads the added lines back', eq(D.parseCriteria(plain), decided.additions), D.parseCriteria(plain));
+  check('a line the item already states is not added again', D.refinedDescription('## Done when\n- [ ] Checkout completes on Safari 17', { additions: ['Checkout completes on Safari 17'], answered: [], rejected: [] }) === '## Done when\n- [ ] Checkout completes on Safari 17');
+  check('nothing decided: the item unchanged', D.refinedDescription(acItem, { additions: [], answered: [], rejected: [] }) === acItem);
+  check('an empty description gets only the sections', D.refinedDescription('', { additions: ['A'], answered: [], rejected: [] }) === '## Done when\n- [ ] A');
+  const bold = D.refinedDescription('## Acceptance criteria\n1. **AC-7** — First\n', { additions: ['Second'], answered: [], rejected: [] });
+  check('a numbered, bold, dashed id scheme is continued as written', bold === '## Acceptance criteria\n1. **AC-7** — First\n2. **AC-8** — Second\n', bold);
   const line = D.refinedActivityLine({ by: 'Ana', criteria: 2, answered: 1, from: 'Draft', to: 'Open' });
   check('refinedActivityLine: Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.',
     line === 'Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.', line);
@@ -465,11 +498,11 @@ section('refine a draft (#135): the refined description, the activity line, and 
   const Y = await import('@tandemise/integration-youtrack');
   const ytFake = await startFakeYouTrack({ project: 'GAR', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
   try {
-    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: original, state: 'Draft' });
+    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: acItem, state: 'Draft' });
     const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'GAR', token: 'perm:test' });
     const ref = D.trackerRef('youtrack', 'GAR-7');
-    await yt.updateDescription(ref, refined);
-    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === refined
+    await yt.updateDescription(ref, plain);
+    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === plain
       && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/GAR-7'), ytFake.issues.get('GAR-7')?.description);
     check('…and leaves the summary and state alone', ytFake.issues.get('GAR-7')?.summary === 'Pay on Safari' && ytFake.issues.get('GAR-7')?.state === 'Draft');
   } catch (e) {
@@ -484,16 +517,16 @@ section('refine a draft (#135): the refined description, the activity line, and 
   try {
     const gt = new G.GhPrimaryTracker(exec, { repo: 'acme/refine', stateLabels: G.githubStateLabels(draftStates) });
     putLabels(GH, 'acme/refine', ['draft', 'status: in progress']);
-    const made = await gt.create({ title: 'Pay on Safari', description: original });
+    const made = await gt.create({ title: 'Pay on Safari', description: acItem });
     await gt.transition(made.ref, 'draft');
     check('github: an open issue carrying the draft label reads as draft', (await gt.get(made.ref)).state === 'draft');
-    await gt.updateDescription(made.ref, refined);
+    await gt.updateDescription(made.ref, plain);
     const editCall = calls(GH).findLast((c) => c.args[0] === 'issue' && c.args[1] === 'edit' && c.args.includes('--body'));
-    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === refined
+    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === plain
       && editCall.args[editCall.args.indexOf('--repo') + 1] === 'acme/refine', editCall?.args);
     await gt.transition(made.ref, 'open');
     const after = await gt.get(made.ref);
-    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === refined, after);
+    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === plain, after);
   } catch (e) {
     check('the github refine section ran', false, String(e?.stack ?? e));
   }

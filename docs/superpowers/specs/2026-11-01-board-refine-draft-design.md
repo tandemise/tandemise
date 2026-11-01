@@ -50,11 +50,15 @@ see no change. Settings → Intake has a **Draft** field next to Ready.
    It reads the item fresh and refuses if it is no longer a draft, if the
    refinement is not ready, or if no refinement mission exists. Then it writes,
    in order:
-   1. the **description**: the item's own text, with a `## Done when` checklist
-      of the accepted lines (replacing any Done-when section already there) and
-      a `## Decisions` section listing each answered question with its answer
-      (replacing one already there). Anything else the person wrote is kept
-      as it was;
+   1. the **description**, which only ever gains lines (#185): every line the
+      item already has is kept exactly as written. The Done-when lines
+      accepted in Tandemise (not the item's own, which read "From GAR-71" on
+      the mission) are appended to the item's own criteria section
+      (`Done when` or `Acceptance criteria`) in its style, continuing its id
+      scheme (`AC05`, `AC06`, …); with no such section, a `## Done when`
+      section holds only the additions. `## Decisions` lists each answered
+      question with its answer, and the rejected proposals under "Not now:".
+      A line the item already states is not added again;
    2. the **state**: the first mapped ready state;
    3. the **activity comment** (`tandemise:activity`, the one Tandemise
       comment per item), saying who refined it and what was written:
