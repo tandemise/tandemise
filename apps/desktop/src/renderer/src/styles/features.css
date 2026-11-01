@@ -2172,6 +2172,20 @@
   background: var(--surface-sunken);
 }
 
+/* A repository path typed or pasted, beside the folder picker (#108). */
+.path-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.path-input .input {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+
 /* The mission header for a tracker item (#105): one line, a short summary, the task behind a disclosure. */
 .topbar__subtitle:has(.mission-subtitle) {
   white-space: normal;
