@@ -17,6 +17,7 @@ import { NO_SKILLS, type InstalledSkills, type SkillInstaller } from './skill-in
 import { LIVE_RUN_STATUSES } from '../support/downstream.js';
 import { liveArtifacts, upstreamTaskIds } from '../support/lineage.js';
 import { githubSlug } from '../support/repository-slug.js';
+import { STEP_CAPABILITIES_LABEL } from '../support/tool-policy.js';
 import { capDraft, renderRoundBrief, roundRequest, type RoundBrief } from '../support/feedback-rules.js';
 import type { ContextCompiler, ExpectedArtifact } from '@tandemise/context';
 import type { ExecutionTarget, ExecutionTargetManager } from '@tandemise/execution-core';
@@ -2182,6 +2183,8 @@ export class TaskExecutor {
         repositoryPath,
         baseBranch: upstreamBranch ?? mission.baseBranch ?? repository?.defaultBranch,
         missionSlug: slugify(mission.title),
+        // #138: built on an upstream step's work, so it runs on that work as it is now.
+        syncToBase: upstreamBranch !== null,
       });
       const record = target.describe();
       this.deps.targets.update(id, {
@@ -2344,6 +2347,12 @@ export class TaskExecutor {
       evidence: [
         { kind: 'text', label: 'Objective', value: summarize(task.objective, 600) },
         { kind: 'text', label: 'Mission goal', value: summarize(mission.goal, 400) },
+        // The exact list this yes covers: the step's tool calls for these are
+        // not asked about again (#141). Never summarised - a cut list would
+        // bind a capability the person never saw.
+        ...(task.executionPolicy.capabilities.length === 0 ? [] : [{
+          kind: 'text' as const, label: STEP_CAPABILITIES_LABEL, value: task.executionPolicy.capabilities.join(', '),
+        }]),
       ],
       ...this.deps.reviews.addressFor(task, workspace.id),
     });

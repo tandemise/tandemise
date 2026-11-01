@@ -187,6 +187,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       workspaces: r.resolve(t.WORKSPACE_REPOSITORY),
       recorder: r.resolve(t.EVENT_RECORDER),
       log: log(r).child({ component: 'tool-policy' }),
+      approvals: r.resolve(t.APPROVAL_REPOSITORY),
     }), { source: SOURCE });
 
     bind(APPROVAL_GATE, (r) => createApprovalGate({
@@ -201,6 +202,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       // Resolved per card: the pipeline reads the team as it is when the tool asks.
       clock: clock(r),
       address: (task, workspaceId) => r.resolve(t.REVIEW_PIPELINE).addressFor(task, workspaceId),
+      deadlines: r.resolve(t.RUN_DEADLINES),
     }), { source: SOURCE });
 
     // Asking the supervising human a question is a capability every worker has,

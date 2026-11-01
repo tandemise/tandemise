@@ -1,5 +1,5 @@
 import type {
-  ApprovalRepositoryPort, MissionTask,
+  Approval, ApprovalRepositoryPort, MissionTask,
   ExecutionTargetRepositoryPort, LeaseRepositoryPort, MissionRepositoryPort, Run,
   RunRepositoryPort, RunStatus, RuntimeProfileRepositoryPort, TaskHoldRepositoryPort, TaskRepositoryPort,
 } from '@tandemise/domain';
@@ -222,7 +222,9 @@ export class RecoveryService {
 
   #withdrawQuestions(taskId: MissionTask['id']): void {
     for (const approval of this.approvals.list({ statuses: ['PENDING'] })) {
-      if (approval.taskId !== taskId || approval.kind !== 'choice') continue;
+      // A question, or a tool waiting on its approval (#141): both park the
+      // task, and both were asked by a run that is gone now.
+      if (approval.taskId !== taskId || !PARKED_CARD_KINDS.includes(approval.kind)) continue;
       withdrawApproval(
         { approvals: this.approvals, recorder: this.recorder, clock: this.clock },
         approval,
@@ -283,3 +285,6 @@ export class RecoveryService {
     return failed;
   }
 }
+
+/** The cards a run parked on: a worker's question and a tool call waiting on its approval. */
+const PARKED_CARD_KINDS: readonly Approval['kind'][] = ['choice', 'action', 'release'];

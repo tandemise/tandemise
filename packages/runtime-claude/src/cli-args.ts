@@ -58,6 +58,29 @@ export function disallowedTools(grants: readonly Capability[]): string[] {
   return artifactOnly(grants) ? disallowed.filter((tool) => !ARTIFACT_ONLY_TOOLS.includes(tool)) : disallowed;
 }
 
+/**
+ * Shell commands that do what a Tandemise tool does, withheld from a run that
+ * was granted the tool (#141).
+ *
+ * The tool goes through the broker: policy, the step's approval, a card when
+ * one is needed, the audit trail. The same action typed into the shell goes
+ * through none of it, so a worker whose tool call was refused or cut off could
+ * open the pull request from Bash on its next try, and one attempt asked while
+ * the next did not. With the tool granted there is a gated way to do it, and
+ * it is the only way offered. Like the guards above this is defence in depth,
+ * not the boundary - a determined agent has other ways to reach an API.
+ */
+export const GATED_SHELL_COPIES: ReadonlyArray<{ capability: Capability; rules: readonly string[] }> = [
+  { capability: 'github.pr.create', rules: ['Bash(gh pr create:*)'] },
+  { capability: 'github.pr.comment', rules: ['Bash(gh pr comment:*)'] },
+  { capability: 'github.issue.create', rules: ['Bash(gh issue create:*)'] },
+];
+
+export function gatedShellCopies(grants: readonly Capability[]): string[] {
+  if (!anyCapabilityMatches(grants, CORE_CAPABILITIES.shell)) return [];
+  return GATED_SHELL_COPIES.filter((copy) => anyCapabilityMatches(grants, copy.capability)).flatMap((copy) => copy.rules);
+}
+
 /** The shell tools, allowed outright for a run granted shell that is not already bypassing prompts. */
 export const SHELL_TOOLS: readonly string[] = CAPABILITY_TOOL_GUARDS[0]!.tools;
 
@@ -198,7 +221,12 @@ function sharedFlags(request: RunRequest, interactive = false): string[] {
   ])];
   if (allowed.length > 0) args.push('--allowed-tools', allowed.join(','));
 
-  const disallowed = [...new Set([...disallowedTools(request.grants), ...stringList(settings['disallowedTools'])])];
+  const disallowed = [...new Set([
+    ...disallowedTools(request.grants),
+    // Only with the tool surface: it is where the gated copy of the action lives.
+    ...(request.mcpConfigPath !== null ? gatedShellCopies(request.grants) : []),
+    ...stringList(settings['disallowedTools']),
+  ])];
   if (disallowed.length > 0) args.push('--disallowed-tools', disallowed.join(','));
 
   // The working directory is implicit (it is the child's cwd); only additional

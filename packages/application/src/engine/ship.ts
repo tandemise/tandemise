@@ -176,6 +176,17 @@ export class ShipService {
       ? integrated.integrationBranch
       : this.#codeBranch(mission));
     if (branch === null) return { kind: 'skipped', reason: 'No step changed any code, so there is nothing to ship.' };
+    // #138: what ships must hold every step's final work. A round that redid
+    // a step leaves its new commit on that step's branch only; shipping a
+    // branch cut before it would ship code without the fix that was reviewed.
+    if (fixed === undefined) {
+      const missing = await this.missingUpstreamWork(mission, repository, branch);
+      if (missing.length > 0) {
+        const reason = `The branch ${branch} is missing the final work of ${missing.map((m) => `'${m.taskKey}' (${m.commit.slice(0, 7)})`).join(', ')}, so it was not pushed.`;
+        this.#missingWorkCard(mission, task, reason);
+        return { kind: 'blocked', reason };
+      }
+    }
 
     const repo = githubRepoFromRemote(repository.remoteUrl);
     if (repo === null) {
@@ -596,6 +607,42 @@ export class ShipService {
   }
 
   /** The code step's branch: an implement or conflict step's, else the first that succeeded. */
+  /**
+   * The steps whose final commit `branch` does not contain (#138). A step's
+   * final commit is the tip of its own branch now, not what its ChangeSet
+   * recorded: a round can commit again without the report changing.
+   */
+  async missingUpstreamWork(mission: Mission, repository: Repository, branch: string): Promise<ReadonlyArray<{ taskKey: string; commit: string }>> {
+    const missing: { taskKey: string; commit: string }[] = [];
+    for (const step of this.deps.integration.branchesFor(mission)) {
+      if (step.branch === branch) continue;
+      const tip = await this.#git(repository, ['rev-parse', '--verify', `refs/heads/${step.branch}^{commit}`], false);
+      if (tip.exitCode !== 0) continue;
+      const commit = tip.stdout.trim();
+      const held = await this.#git(repository, ['merge-base', '--is-ancestor', commit, `refs/heads/${branch}`], false);
+      if (held.exitCode !== 0) missing.push({ taskKey: step.taskKey, commit });
+    }
+    return missing;
+  }
+
+  /** A card on the ship step: retry once the branch holds the work, or leave it. */
+  #missingWorkCard(mission: Mission, task: MissionTask, reason: string): void {
+    const d = this.deps.decide;
+    if (d === undefined || d.approvals.pendingForTask(task.id).length > 0) return;
+    const card = d.approvalFactory.createOrThrow({
+      workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'intervention', risk: 'read',
+      title: `${this.title(mission)}: the branch to ship is missing work`,
+      rationale: reason,
+      effect: 'Retry opens the pull request again once the branch holds every step\'s final commit. Leaving it blocked stops here.',
+      evidence: [{ kind: 'text', label: 'Why it stopped', value: reason }],
+      options: [{ id: APPROVE_OPTION, label: 'Retry' }, { id: REJECT_OPTION, label: 'Leave blocked' }],
+      recommendedOptionId: null,
+      addressees: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+    });
+    d.approvals.create(card);
+    this.deps.recorder.invalidate('approvals', mission.id);
+  }
+
   #codeBranch(mission: Mission): string | null {
     const branches = this.deps.integration.branchesFor(mission);
     const tasks = this.deps.tasks.listByMission(mission.id);
