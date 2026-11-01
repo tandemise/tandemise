@@ -57,6 +57,14 @@
       "observed": {
         "criteria": [
           [
+            "U1",
+            "accepted"
+          ],
+          [
+            "U2",
+            "accepted"
+          ],
+          [
             "P1",
             "proposed"
           ],
@@ -86,11 +94,16 @@
       }
     },
     {
+      "label": "the item's own criteria read \"From GAR-50\" on the mission, not \"Added by you\"",
+      "ok": true,
+      "observed": "Done when\n4 criteria\nU1\nAC01: The page loads in under two seconds\nFrom GAR-50\nAccepted\nU2\nAC02: The page works without JavaScript\nFrom GAR-50\nAccepted\nU3\nVisiting the home page shows \"Hello, <name>\" for a signed-in visitor\nProposed by the product agent; accepted by you\nAccepted\nU4\nA visitor who is not signed in sees \"Hello, friend\" instead of an empty name\nProposed by the product agent; accepted by you\nAccepted\nAdd"
+    },
+    {
       "label": "two accepted, one rejected, the question answered: ready",
       "ok": true,
       "observed": {
         "ready": true,
-        "criteria": 2,
+        "criteria": 4,
         "openQuestions": 0,
         "proposedPending": 0,
         "label": "Plan",
@@ -104,16 +117,27 @@
     {
       "label": "the card says it is ready to write, with Open refinement and the write button",
       "ok": true,
-      "observed": "GAR-50\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 2 Done-when lines.\nOpen refinement\nfor GAR-50\nWrite to YouTrack and mark ready\nGAR-50"
+      "observed": "GAR-50\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 4 Done-when lines.\nOpen refinement\nfor GAR-50\nWrite to YouTrack and mark ready\nGAR-50"
     },
     {
       "label": "…and the write button is enabled",
       "ok": true
     },
     {
-      "label": "proof (fake YouTrack): the description keeps its text and gains the Done-when and Decisions sections",
+      "label": "proof (fake YouTrack): the item is kept byte for byte; only AC03, AC04 and the Decisions (with Not now) were added",
       "ok": true,
-      "observed": "Visitors see a generic page. Make it feel personal.\n\n## Done when\n- [ ] Visiting the home page shows \"Hello, <name>\" for a signed-in visitor\n- [ ] A visitor who is not signed in sees \"Hello, friend\" instead of an empty name\n\n## Decisions\n- Which pages should greet the visitor by name? — Only the home page"
+      "observed": {
+        "extra": [
+          "- AC03: Visiting the home page shows \"Hello, <name>\" for a signed-in visitor",
+          "- AC04: A visitor who is not signed in sees \"Hello, friend\" instead of an empty name",
+          "",
+          "## Decisions",
+          "- Which pages should greet the visitor by name? — Only the home page",
+          "- Not now:",
+          "  - The greeting is readable on a 375px wide phone screen without scrolling sideways"
+        ],
+        "description": "Visitors see a generic page. Make it feel personal.\n\n## Acceptance criteria\n- AC01: The page loads in under two seconds\n- AC02: The page works without JavaScript\n- AC03: Visiting the home page shows \"Hello, <name>\" for a signed-in visitor\n- AC04: A visitor who is not signed in sees \"Hello, friend\" instead of an empty name\n\n## Notes\nKeep the current colours.\n\n## Decisions\n- Which pages should greet the visitor by name? — Only the home page\n- Not now:\n  - The greeting is readable on a 375px wide phone screen without scrolling sideways"
+      }
     },
     {
       "label": "proof (fake YouTrack): GAR-50 moved from Draft to Open",
@@ -138,7 +162,7 @@
     {
       "label": "Start opens the same mission, not a second one",
       "ok": true,
-      "observed": "#/missions/msn_01m6b64r47gank10k2zz"
+      "observed": "#/missions/msn_01m6c1wqrvr5dkefve55"
     },
     {
       "label": "proof (fake YouTrack): Start moved GAR-50 to In Progress",
@@ -164,7 +188,7 @@
     }
   ],
   "notes": [
-    "mission msn_01m6b64r47gank10k2zz"
+    "mission msn_01m6c1wqrvr5dkefve55"
   ],
   "shots": [
     "I15-draft-group.png",
