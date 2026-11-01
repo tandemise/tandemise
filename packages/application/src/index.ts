@@ -50,7 +50,7 @@ export type { DownstreamImpact, FeedbackRoundsDeps, RecordFeedbackInput, ReviewR
 export { LIVE_RUN_STATUSES, downstreamConsumers, reviewedTaskOf } from './support/downstream.js';
 export type { Consumer, ConsumerFacts } from './support/downstream.js';
 export { BranchIntegrationService } from './engine/branch-integration.js';
-export { ShipService } from './engine/ship.js';
+export { ShipService, MERGE_TRIES } from './engine/ship.js';
 export { measureMergeFacts, MeasureError } from './engine/ship-measure.js';
 export { OutcomeRecorder } from './engine/outcomes.js';
 export { MergeWatch, MAIN_WATCH_MS, CLEAN_AFTER_MS } from './engine/merge-watch.js';

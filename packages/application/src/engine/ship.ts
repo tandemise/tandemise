@@ -5,7 +5,7 @@ import type {
   TaskRepositoryPort, TaskStatus, TaskType, UnitOfWork,
 } from '@tandemise/domain';
 import {
-  APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
+  APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, canTransition, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
   closingLine, githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
 } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
@@ -54,6 +54,14 @@ export const PR_CHANGED = 'The pull request changed after it was checked; checki
 export const PR_CLOSED = 'The pull request was closed without merging.';
 export const WAITING_FOR_GITHUB_MERGE = 'Waiting for you to merge it in GitHub.';
 const DECISION_LABEL = 'Decision';
+/** The evidence on a "the merge failed" card (#184) naming the decision it was for. */
+const MERGE_FAILED_LABEL = 'Merge failed';
+/** A merge GitHub refuses for a passing reason is tried this many times before a person is asked (#184). */
+export const MERGE_TRIES = 3;
+/** GitHub answering that the merge is under way: pending, not a failure. */
+const IN_PROGRESS = /already in progress|merge in progress|is being merged/i;
+/** GitHub or the network failing for a while, not a refusal that a retry can't change. */
+const TRANSIENT = /HTTP 5\d\d|\b50[234]\b|something went wrong|timed? ?out|timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|ENOTFOUND|socket hang up|rate limit|try again later/i;
 
 export interface ShipDeps {
   readonly tasks: TaskRepositoryPort;
@@ -134,6 +142,10 @@ export interface ShipDecideDeps {
 export class ShipService {
   /** Ship steps whose decision must ask whatever the policy says, with why. */
   readonly #mustAsk = new Map<string, string>();
+  /** Failed merge calls per decision since its last success or retry, and when the next may run (#184). */
+  readonly #mergeTries = new Map<string, { tries: number; nextAt: number }>();
+  /** Decisions whose merge call is under way: a person's Merge and the next look never both call it. */
+  readonly #merging = new Set<string>();
 
   constructor(protected readonly deps: ShipDeps) {}
 
@@ -358,8 +370,15 @@ export class ShipService {
       this.#status(mission, task, 'AWAITING_EXTERNAL', 'Queued to merge on GitHub once its required checks pass.');
       return { kind: 'waiting' };
     }
-    if (decision.verdict === 'merge') return this.mergeDecided(mission, task, repository, decision, 'auto');
     const d = this.deps.decide!;
+    // The merge failed and a person was asked (#184): nothing is merged again until they say Retry merge.
+    const failed = this.#failedCard(mission, task, decision);
+    if (failed !== undefined && failed.status === 'PENDING') return { kind: 'blocked', reason: failed.rationale };
+    if (failed !== undefined && failed.status === 'REJECTED') {
+      this.#status(mission, task, 'AWAITING_EXTERNAL', WAITING_FOR_GITHUB_MERGE);
+      return { kind: 'waiting' };
+    }
+    if (decision.verdict === 'merge') return this.mergeDecided(mission, task, repository, decision, 'auto');
     const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
     const forDecision = d.approvals.list({ missionId: mission.id }).filter((a) => a.taskId === task.id && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
     // You already said Merge for this exact decision and it didn't go through: try again.
@@ -578,6 +597,32 @@ export class ShipService {
       if (approval.selectedOptionId === APPROVE_OPTION) await this.deps.revert?.(broke, approval.decidedBy ?? 'a person');
       return;
     }
+    // The merge failed (#184): Retry merge tries it again now; otherwise the person merges it in GitHub.
+    const failedFor = approval.evidence.find((e) => e.label === MERGE_FAILED_LABEL)?.value;
+    if (failedFor !== undefined) {
+      const decision = d.mergeDecisions.get(failedFor);
+      const repository = mission.repositoryId === null ? undefined : this.deps.repositories.get(mission.repositoryId);
+      if (decision === undefined || repository === undefined) return;
+      // The step goes on either way, so the mission its block stopped goes on too.
+      const current = d.missions.get(mission.id) ?? mission;
+      if (current.status === 'BLOCKED' && canTransition('BLOCKED', 'EXECUTING')) {
+        const reason = `'${task.key}' goes on: ${approval.selectedOptionId === APPROVE_OPTION ? 'the merge is tried again' : 'you merge it in GitHub'}.`;
+        d.missions.update(mission.id, { status: 'EXECUTING', statusReason: reason });
+        this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id }, { type: 'mission.status', from: 'BLOCKED', to: 'EXECUTING', reason });
+        this.deps.recorder.invalidate('missions', mission.id);
+      }
+      if (approval.selectedOptionId !== APPROVE_OPTION) {
+        this.#status(mission, task, 'AWAITING_EXTERNAL', WAITING_FOR_GITHUB_MERGE);
+        return;
+      }
+      this.#mergeTries.delete(decision.id);
+      const merge = d.approvals.list({ missionId: mission.id }).find((a) => a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
+      this.#status(mission, task, 'AWAITING_EXTERNAL', 'Trying the merge again.');
+      const outcome = await this.mergeDecided(mission, task, repository, decision, decision.verdict === 'merge' && merge === undefined ? 'auto' : 'person', merge?.decidedBy ?? approval.decidedBy ?? 'a person');
+      if (outcome.kind === 'merged') this.#status(mission, this.deps.tasks.get(task.id) ?? task, 'SUCCEEDED', outcome.reason, true);
+      else if (outcome.kind === 'blocked') this.#status(mission, this.deps.tasks.get(task.id) ?? task, 'BLOCKED', outcome.reason);
+      return;
+    }
     const decisionId = approval.evidence.find((e) => e.label === DECISION_LABEL)?.value;
     const decision = decisionId === undefined ? undefined : d.mergeDecisions.get(decisionId);
     const repository = mission.repositoryId === null ? undefined : this.deps.repositories.get(mission.repositoryId);
@@ -620,24 +665,57 @@ export class ShipService {
         return { kind: 'waiting' };
       }
     }
+    // A merge that failed for a passing reason waits out its backoff before the next try (#184).
+    const tried = this.#mergeTries.get(decision.id);
+    if (tried !== undefined && this.deps.clock.epochMs() < tried.nextAt) return { kind: 'waiting' };
     const settings = await this.deps.pullRequests.repoSettings(repository.path, pr.repo);
     const method = 'error' in factory.merge ? 'squash' : factory.merge.method;
     // GitHub's auto-merge waits only for required checks; with none it would merge at once, so it isn't used.
     const auto = settings.allowAutoMerge && protection.requiredChecks === true;
-    const result = await this.deps.pullRequests.merge(repository.path, pr.repo, pr.number, {
-      method, matchHeadCommit: decision.headSha, auto,
-      subject: `${pr.title} (#${pr.number})`,
-      body: squashTrailers(decision, { policyRef: decision.policyRef, mission: mission.issueLinkId ?? mission.id, by }),
-    });
+    let result: Awaited<ReturnType<PullRequestPort['merge']>>;
+    // Under way already, or failed and asked about while this look waited on GitHub: not called again.
+    // Checked and claimed with no await in between, so two looks never both call it.
+    // Merged meanwhile by another look (the decision says so): nothing to call.
+    if (this.#merging.has(decision.id) || this.#failedCard(mission, task, decision)?.status === 'PENDING' || (d.mergeDecisions.get(decision.id)?.mergedAt ?? null) !== null) return { kind: 'waiting' };
+    this.#merging.add(decision.id);
+    try {
+      result = await this.deps.pullRequests.merge(repository.path, pr.repo, pr.number, {
+        method, matchHeadCommit: decision.headSha, auto,
+        subject: `${pr.title} (#${pr.number})`,
+        body: squashTrailers(decision, { policyRef: decision.policyRef, mission: mission.issueLinkId ?? mission.id, by }),
+      });
+    } catch (e) {
+      result = { merged: false, queued: false, refused: errorMessage(e) };
+    }
+    // Held until what the call did is recorded: a look meanwhile must not call it again.
+    try {
+      return await this.#afterMerge(mission, task, repository, pr, decision, result, by, member);
+    } finally {
+      this.#merging.delete(decision.id);
+    }
+  }
+
+  async #afterMerge(
+    mission: Mission, task: MissionTask, repository: Repository, pr: PullRequestRef, decision: MergeDecisionRecord,
+    result: Awaited<ReturnType<PullRequestPort['merge']>>, by: 'auto' | 'person', member: string | undefined,
+  ): Promise<ShipOutcome> {
+    const d = this.deps.decide!;
+    if (result.refused === null) this.#mergeTries.delete(decision.id);
     if (result.refused !== null) {
       if (/head branch was modified|head commit/i.test(result.refused)) {
         this.#void(mission, task, decision);
         this.#status(mission, task, 'AWAITING_EXTERNAL', 'Waiting for CI on the new commit.');
         return { kind: 'waiting' };
       }
-      // Watched, not blocked: GitHub may take it on a later look, or a person merges it there.
-      this.#status(mission, task, 'AWAITING_EXTERNAL', `GitHub refused the merge (${result.refused}); Tandemise tries again, or you can merge it in GitHub.`);
-      return { kind: 'waiting' };
+      // The call can fail and the merge still happen (#184): "Merge already in progress" while GitHub merges it.
+      // What GitHub says now decides, before anything is called a refusal.
+      const now = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number).catch(() => null);
+      if (now !== null && now.state !== 'OPEN') return this.#closedOrMerged(mission, task, now, d.mergeDecisions.get(decision.id) ?? decision);
+      if (IN_PROGRESS.test(result.refused)) {
+        this.#status(mission, task, 'AWAITING_EXTERNAL', 'GitHub is merging it; Tandemise looks again shortly.');
+        return { kind: 'waiting' };
+      }
+      return this.#mergeFailed(mission, task, pr, decision, result.refused);
     }
     const mergedBy = by === 'auto' ? 'tandemise' : (member ?? 'a person');
     if (result.queued) {
@@ -649,6 +727,59 @@ export class ShipService {
     }
     const after = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
     return this.#recordMerged(mission, task, decision, after.mergeSha, mergedBy);
+  }
+
+  /** The latest "the merge failed" card for this decision (#184), if one was filed. */
+  #failedCard(mission: Mission, task: MissionTask, decision: MergeDecisionRecord): Approval | undefined {
+    return this.deps.decide!.approvals.list({ missionId: mission.id })
+      .filter((a) => a.taskId === task.id && a.evidence.some((e) => e.label === MERGE_FAILED_LABEL && e.value === decision.id)).at(-1);
+  }
+
+  /**
+   * A merge GitHub didn't take (#184). A passing failure (GitHub down, a
+   * timeout, a rate limit) is tried again, backing off, up to MERGE_TRIES
+   * times. Anything else, or the last try, blocks the step with a card that
+   * names GitHub's reason and how many tries were made: Retry merge, or
+   * "I'll merge it in GitHub". It is never left waiting in silence.
+   */
+  #mergeFailed(mission: Mission, task: MissionTask, pr: PullRequestRef, decision: MergeDecisionRecord, refused: string): ShipOutcome {
+    const d = this.deps.decide!;
+    const tries = (this.#mergeTries.get(decision.id)?.tries ?? 0) + 1;
+    const message = refused.split('\n').find((l) => l.trim().length > 0)?.trim() ?? 'GitHub gave no reason';
+    if (TRANSIENT.test(message) && tries < MERGE_TRIES) {
+      const waitMs = d.pollMs * 2 ** (tries - 1);
+      this.#mergeTries.set(decision.id, { tries, nextAt: this.deps.clock.epochMs() + waitMs });
+      this.#status(mission, task, 'AWAITING_EXTERNAL', `GitHub didn't take the merge (${message}); Tandemise tries again (${tries} of ${MERGE_TRIES} tries made).`);
+      return { kind: 'waiting' };
+    }
+    this.#mergeTries.delete(decision.id);
+    const reason = `The merge failed: ${message}${tries > 1 ? ` (${tries} tries made)` : ''}.`;
+    const open = d.approvals.list({ missionId: mission.id, statuses: ['PENDING'] }).some((a) => a.evidence.some((e) => e.label === MERGE_FAILED_LABEL && e.value === decision.id));
+    if (!open) {
+      const card = d.approvalFactory.createOrThrow({
+        workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'release', risk: 'release',
+        title: `Merge failed: #${pr.number} ${pr.title}`,
+        rationale: `GitHub didn't take the merge${tries > 1 ? ` after ${tries} tries` : ''}: ${message}`,
+        effect: 'Retry merge tries the same commit again. "I\'ll merge it in GitHub" leaves it to you; Tandemise finishes when GitHub says it merged.',
+        evidence: [
+          { kind: 'text', label: 'Why it failed', value: message },
+          { kind: 'text', label: 'Tries', value: `${tries} of ${MERGE_TRIES}` },
+          { kind: 'link', label: 'Open the pull request', value: pr.url },
+          { kind: 'text', label: MERGE_FAILED_LABEL, value: decision.id },
+        ],
+        options: [
+          { id: APPROVE_OPTION, label: 'Retry merge', recommended: true },
+          { id: REJECT_OPTION, label: 'I\'ll merge it in GitHub' },
+        ],
+        addressees: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+        escalateAfterMs: DEFAULT_ESCALATE_AFTER_MS,
+      });
+      d.approvals.create(card);
+      this.deps.recorder.record({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, { type: 'approval.requested', approvalId: card.id });
+      this.deps.recorder.invalidate('approvals', mission.id);
+    }
+    this.#status(mission, task, 'BLOCKED', reason);
+    return { kind: 'blocked', reason };
   }
 
   #recordMerged(mission: Mission, task: MissionTask, decision: MergeDecisionRecord, mergeSha: string | null, mergedBy: string): ShipOutcome {
