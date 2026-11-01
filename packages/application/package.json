@@ -27,7 +27,7 @@
     "@tandemise/context": "*",
     "@tandemise/evaluation": "*",
     "@tandemise/coordination": "*",
-    "zod": "^3.24.1",
+    "zod": "^4.6.7",
     "yaml": "^2.9.1"
   }
 }
