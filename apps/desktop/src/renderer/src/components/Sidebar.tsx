@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Icon, type IconName } from './Icon.js';
 import { Logo } from './Logo.js';
@@ -50,6 +51,9 @@ export function Sidebar({ pendingApprovals, stream }: { pendingApprovals: number
   const [location] = useLocation();
   const { status, reconnect, reconnecting } = useConnection();
   const projectName = useWorkspace().current?.workspace.name ?? null;
+  // Only at narrow widths (zoomed in, WCAG 1.4.10) is the navigation folded behind Menu; reflow.css shows the button.
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [location]);
 
   const connectionTone: Tone =
     status.phase !== 'connected' ? 'failed' : stream === 'open' ? 'succeeded' : stream === 'idle' ? 'pending' : 'blocked';
@@ -63,17 +67,28 @@ export function Sidebar({ pendingApprovals, stream }: { pendingApprovals: number
           : 'Connecting…';
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" data-open={open} aria-label="Tandemise">
       <div className="sidebar__brand">
         <span className="sidebar__mark">
           <Logo size={20} />
         </span>
         <span className="sidebar__name">Tandemise</span>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm sidebar__menu"
+          aria-expanded={open}
+          aria-controls="sidebar-panel"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Icon name={open ? 'x' : 'layers'} size={14} />
+          Menu
+        </button>
       </div>
+      <div className="sidebar__panel" id="sidebar-panel">
 
       <WorkspaceSwitcher />
 
-      <nav className="sidebar__nav">
+      <nav className="sidebar__nav" aria-label="Main">
         {PRIMARY.map((entry) => (
           <NavLink
             key={entry.href}
@@ -107,6 +122,7 @@ export function Sidebar({ pendingApprovals, stream }: { pendingApprovals: number
             <Icon name="refresh" size={12} />
           </button>
         </Tooltip>
+      </div>
       </div>
     </aside>
   );

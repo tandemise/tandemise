@@ -1,6 +1,6 @@
 {
   "name": "@tandemise/design",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "The Tandemise design system: brand palette, light/dark semantic roles, type, spacing, radius, motion, focus, stacking and density tokens as CSS, TypeScript and a Tailwind theme; the logo and icon set; and accessible React components over a component stylesheet.",
   "license": "Apache-2.0",
   "repository": {

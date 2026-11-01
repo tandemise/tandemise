@@ -11,12 +11,12 @@
     {
       "label": "the session reports the file written",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m683k4hn2g22fmd5mc\nhello from the panel\n> hello from the panel\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69vsfhyz3376hty9d\nhello from the panel\n> hello from the panel\n\n>\n^[escprobe\n> scprobe\nwrite d.txt\n> write d.txt\nwrote d.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (disk): d.txt is in the step's worktree",
       "ok": true,
-      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m683jx1kvrs3wj5c7q/missions/msn_01m683k1ervfvq7vaxj6/worktrees/onboarding-hold-slow-now-mvvwl5zk-design-ra6excpx/d.txt"
+      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69vscemfxdwwt5xs5/worktrees/onboarding-hold-slow-now-mvwvo77p-design-pec9gaq4/d.txt"
     },
     {
       "label": "proof (disk): with what the session wrote",
@@ -25,6 +25,6 @@
   ],
   "notes": [],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H2-wrote-file.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H2-wrote-file.png"
   ]
 }

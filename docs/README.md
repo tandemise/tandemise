@@ -15,6 +15,7 @@ install it, and what a normal day looks like.
 | Document | What it covers |
 |---|---|
 | [FACTORY.md](FACTORY.md) | Lanes, steps, model routing and merge by risk: `planner.yaml`, `routing.yaml`, `merge.yaml` |
+| [FACTORY-DOGFOOD.md](FACTORY-DOGFOOD.md) | How Tandemise is built with Tandemise: the local factory instance, `scripts/factory.sh`, issue → Start → hold → pull request → review |
 | [intake/README.md](intake/README.md) | Writing an intake runner: the `tandemise.intake/v1` contract, tokens, the `tandemise` CLI, closures |
 | [intake/signal.v1.schema.json](intake/signal.v1.schema.json) | The JSON Schema of an intake signal |
 | [../apps/relay/README.md](../apps/relay/README.md) | Running the optional team relay: Docker Compose, invites, TLS, backup and upgrade |
@@ -81,3 +82,6 @@ Each feature is designed, then planned, then proven in the real app:
 - [superpowers/evidence/](superpowers/evidence/): acceptance reports and
   screenshots from the real app. The pivot end to end is
   [2026-10-31-integrated/REPORT.md](superpowers/evidence/2026-10-31-integrated/REPORT.md).
+- [accessibility/](accessibility/): the WCAG 2.1 AA audit of the desktop app
+  ([AUDIT-2026-10-31.md](accessibility/AUDIT-2026-10-31.md)), with its evidence in
+  [2026-10-31-wcag/](superpowers/evidence/2026-10-31-wcag/).

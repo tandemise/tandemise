@@ -108,7 +108,7 @@ function RunDetail({ id }: { id: string }): JSX.Element {
   return (
     <div className="stack" aria-label="Run" style={{ gap: 'var(--s5)' }}>
       <header className="reader__head">
-        <h1 className="reader__title">{candidateLabel(run.candidate)}</h1>
+        <h2 className="reader__title">{candidateLabel(run.candidate)}</h2>
         <div className="reader__meta">
           <StatusBadge status={run.status} tone={RUN_TONES[run.status]} />
           <span>Started {dateTime(run.startedAt ?? run.createdAt)}</span>
@@ -132,17 +132,17 @@ function RunDetail({ id }: { id: string }): JSX.Element {
       ) : null}
 
       <div className="grid grid--2">
-        <div className="stat" aria-label="Progress">
+        <div className="stat" role="group" aria-label="Progress">
           <span className="stat__label">Progress</span>
           <span className="stat__value">
             {run.progress.done} / {run.progress.total} trials{run.progress.cancelled > 0 ? ` · ${run.progress.cancelled} cancelled` : ''}
           </span>
-          <div className="meter" style={{ marginTop: 'var(--s1)' }}>
+          <div className="meter" style={{ marginTop: 'var(--s1)' }} aria-hidden="true">
             <div className="meter__fill" style={{ width: `${run.progress.total === 0 ? 0 : (run.progress.done / run.progress.total) * 100}%` }} />
           </div>
           <span className="stat__note">{run.repeats} {run.repeats === 1 ? 'repeat' : 'repeats'} of each case, with the setup you have now and with the change</span>
         </div>
-        <div className="stat" aria-label="Spend">
+        <div className="stat" role="group" aria-label="Spend">
           <span className="stat__label">Spend</span>
           <span className={`stat__value${run.spentUsd === null ? ' stat__value--muted' : ''}`}>
             {run.spentUsd === null ? 'not reported' : `Spent ${usd(run.spentUsd)} of ${usd(run.spendCapUsd)}`}

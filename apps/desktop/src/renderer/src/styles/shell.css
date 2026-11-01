@@ -43,6 +43,24 @@
   letter-spacing: -0.01em;
 }
 
+/* Everything under the brand: folded behind Menu only at narrow widths (reflow.css). */
+.sidebar__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar__menu {
+  display: none;
+  -webkit-app-region: no-drag;
+}
+
+/* The skip link lands here; the landing is announced, not outlined. */
+.main:focus {
+  outline: none;
+}
+
 .sidebar__nav {
   display: flex;
   flex-direction: column;

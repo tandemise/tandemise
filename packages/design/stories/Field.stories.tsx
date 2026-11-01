@@ -43,6 +43,16 @@ export const WithHint: Story = {
   },
 };
 
+/** Keyboard focus draws the 2px focus ring around the control (WCAG 2.4.7, 1.4.11), not just a border hue change. */
+export const FocusRing: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.tab();
+    const input = canvas.getByRole('textbox', { name: 'Mission title' });
+    await expect(input).toHaveFocus();
+    await expect(getComputedStyle(input).boxShadow).not.toBe('none');
+  },
+};
+
 /** The error replaces the hint, marks the control invalid and describes it. */
 export const WithError: Story = {
   args: { label: 'Done when', required: true, error: 'Say what done means.' },

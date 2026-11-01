@@ -114,7 +114,7 @@ function RoleEditor({ role, workspaceId }: { role: RoleTemplate; workspaceId: st
   return (
     <div className="stack" style={{ gap: 'var(--s5)' }}>
       <header className="reader__head">
-        <h1 className="reader__title">{role.name}</h1>
+        <h2 className="reader__title">{role.name}</h2>
         <div className="reader__meta">
           <Chip muted>{role.defaultIsolation} isolation</Chip>
           <span>{role.summary}</span>

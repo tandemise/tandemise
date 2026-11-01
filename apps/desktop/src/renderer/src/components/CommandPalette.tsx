@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogLayer } from '@tandemise/design/react';
 import { useLocation } from 'wouter';
 import { Icon, type IconName } from './Icon.js';
 import { useMissions } from '../lib/queries.js';
@@ -23,6 +24,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  // The same layer stack as every dialog: Escape closes it, Tab stays inside, focus goes back to where it was.
+  useDialogLayer(panel, onClose, { initialFocus: '.palette__input' });
   const missions = useMissions();
 
   const commands = useMemo<readonly Command[]>(() => {
@@ -65,10 +69,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      } else if (event.key === 'ArrowDown') {
+      if (event.key === 'ArrowDown') {
         event.preventDefault();
         setActive((current) => Math.min(current + 1, matches.length - 1));
       } else if (event.key === 'ArrowUp') {
@@ -91,17 +92,23 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
 
   return (
     <div className="overlay overlay--top" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <div ref={panel} className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
         <input
           className="palette__input"
+          role="combobox"
+          aria-label="Jump to a mission, or type a command"
+          aria-expanded={true}
+          aria-controls="palette-list"
+          aria-autocomplete="list"
+          aria-activedescendant={matches[active] ? `palette-option-${matches[active].id}` : undefined}
           placeholder="Jump to a mission, or type a command…"
           value={query}
           autoFocus
           onChange={(event) => setQuery(event.target.value)}
         />
-        <div className="palette__list" ref={listRef}>
+        <div className="palette__list" ref={listRef} id="palette-list" role="listbox" aria-label="Commands and missions">
           {matches.length === 0 ? (
-            <div style={{ padding: '20px 16px', color: 'var(--text-tertiary)', fontSize: 'var(--fs-sm)' }}>
+            <div role="presentation" style={{ padding: '20px 16px', color: 'var(--text-tertiary)', fontSize: 'var(--fs-sm)' }}>
               Nothing matches “{query}”.
             </div>
           ) : (
@@ -109,10 +116,14 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
               const header = command.group !== lastGroup ? command.group : null;
               lastGroup = command.group;
               return (
-                <div key={command.id}>
-                  {header ? <div className="palette__group">{header}</div> : null}
+                <div key={command.id} role="presentation">
+                  {header ? <div className="palette__group" aria-hidden="true">{header}</div> : null}
                   <button
                     type="button"
+                    tabIndex={-1}
+                    role="option"
+                    id={`palette-option-${command.id}`}
+                    aria-selected={index === active}
                     className="palette__item"
                     data-active={index === active}
                     onMouseEnter={() => setActive(index)}

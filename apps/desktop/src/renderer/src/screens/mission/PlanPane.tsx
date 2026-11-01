@@ -175,7 +175,9 @@ export function PlanPane({ detail }: { detail: MissionDetail }): JSX.Element {
       ) : null}
 
       <div className="dag" data-overflow-start={overflow.start} data-overflow-end={overflow.end}>
-        <div className="dag__scroll" ref={scroller} onScroll={syncOverflow}>
+        {/* A diagram may scroll both ways (1.4.10). Its edges are drawn only; each card says in words what it waits for,
+            and the stages are named groups, so the plan reads in order without the picture (1.1.1, 1.3.1). */}
+        <div className="dag__scroll" ref={scroller} onScroll={syncOverflow} data-scroll-2d>
           <div className="dag__canvas" ref={canvas}>
             <svg className="dag__edges" aria-hidden="true">
               {edges.map((edge) => (
@@ -184,8 +186,8 @@ export function PlanPane({ detail }: { detail: MissionDetail }): JSX.Element {
             </svg>
 
             {columns.map(([level, tasks]) => (
-              <div key={level} className="dag__col">
-                <div className="dag__colhead">
+              <div key={level} className="dag__col" role="group" aria-label={`Stage ${level + 1}, ${pluralize(tasks.length, 'task')}`}>
+                <div className="dag__colhead" aria-hidden="true">
                   <span>Stage {level + 1}</span>
                   <span style={{ opacity: 0.7 }}>{pluralize(tasks.length, 'task')}</span>
                 </div>
@@ -194,6 +196,7 @@ export function PlanPane({ detail }: { detail: MissionDetail }): JSX.Element {
                     key={task.id}
                     task={task}
                     actors={actors}
+                    after={task.dependsOn.map((key) => detail.tasks.find((t) => t.key === key)?.title ?? key)}
                     pendingApproval={task.pendingApprovalId ? approvalsById.get(task.pendingApprovalId) : undefined}
                     selected={task.id === selected}
                     onSelect={() => setSelected(task.id)}
@@ -217,6 +220,7 @@ export function PlanPane({ detail }: { detail: MissionDetail }): JSX.Element {
 function TaskCard({
   task,
   actors,
+  after,
   pendingApproval,
   selected,
   onSelect,
@@ -224,6 +228,8 @@ function TaskCard({
 }: {
   task: TaskView;
   actors: Actors;
+  /** The titles of the steps this one waits for: the diagram's edges, in words. */
+  after: readonly string[];
   pendingApproval: Approval | undefined;
   selected: boolean;
   onSelect: () => void;
@@ -257,6 +263,7 @@ function TaskCard({
       </div>
 
       <div className="taskcard__title">{task.title}</div>
+      {after.length > 0 ? <span className="visually-hidden">After {after.join(', ')}.</span> : null}
       {/* The key is the plan's name for the task; its raw id is behind Details in the task drawer this card opens. */}
       <div className="taskcard__ids">
         <span className="dim">{task.key}</span>
