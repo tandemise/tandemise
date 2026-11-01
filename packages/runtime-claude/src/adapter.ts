@@ -241,7 +241,7 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
     const configDir = resolveConfigDir(request.profile.settings);
     const plan = this.#plan(request);
     const childEnv = this.#env(request, configDir, plan);
-    log.info('agent environment', { tandemiseHome: plan.env['TANDEMISE_HOME'], display: plan.display });
+    log.info('agent environment', { tandemiseHome: plan.env['TANDEMISE_HOME'], display: plan.display, codeHost: plan.forge });
     log.debug('spawning claude code', {
       executablePath,
       argc: args.length,
@@ -315,12 +315,12 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
 
   /** The run's own TANDEMISE_HOME and, when its profile asks, a display (#107). */
   #plan(request: RunRequest): AgentEnvPlan {
-    return agentEnvPlan({ runId: request.runId, display: agentDisplaySetting(request.profile.settings) });
+    return agentEnvPlan({ runId: request.runId, display: agentDisplaySetting(request.profile.settings), grants: request.grants });
   }
 
   /** The environment a Claude Code child runs under, headless or interactive. */
   #env(request: RunRequest, configDir: string | null, plan: AgentEnvPlan): NodeJS.ProcessEnv {
-    return buildRuntimeEnv({
+    const env = buildRuntimeEnv({
       allowedPrefixes: ['ANTHROPIC_', 'CLAUDE_'],
       allowedNames: ['SSH_AUTH_SOCK', 'GIT_ASKPASS', 'COLORTERM'],
       deniedNames: PARENT_SESSION_ENV,
@@ -335,6 +335,9 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
         ...(request.maxWallTimeMs > 0 ? { MCP_TOOL_TIMEOUT: String(request.maxWallTimeMs) } : {}),
       },
     });
+    // The person's code-host credentials stay out of the worker's shell (#147).
+    for (const name of plan.unset) delete env[name];
+    return env;
   }
 
   #handleLine(line: string, sink: NormalizingEventSink, mapper: ClaudeEventMapper): void {
