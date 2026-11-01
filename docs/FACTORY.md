@@ -182,3 +182,22 @@ on `tandemise/promote/<id>`. It never loosens a rule: that is your edit.
 The `item.*` and `profile.*` facts (planning rules) and the `change.*`,
 `ci.*`, `criteria.*`, `process.*` and `history.*` facts (merge rules) are listed
 in [Workflows](WORKFLOWS.md) under "Facts for factory rules".
+
+## What an agent's environment holds
+
+Each agent run (and each held session) gets an empty `TANDEMISE_HOME` of its
+own under the system temp directory, so an agent that starts a dev daemon or
+desktop, for example while working on Tandemise itself, never touches your
+`~/.tandemise`. Other homes agents inherit are unchanged: a Claude Code run
+uses the config directory its profile names, or the one the daemon inherited.
+
+Agents get no display by default. To let a code step prove a UI change in the
+real app, set **Display for agents** on the Claude Code runtime profile:
+
+- **A virtual display**: the agent runs under `xvfb-run -a` (Linux, with
+  `xvfb-run` installed; without it the run goes on with no display and its log
+  says so). Nobody sees its windows.
+- **This computer's display**: `DISPLAY`, `WAYLAND_DISPLAY` and
+  `XDG_RUNTIME_DIR` pass through, so agents can open windows on your screen.
+
+The run's log line `agent environment` names its `TANDEMISE_HOME` and display.

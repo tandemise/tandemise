@@ -33,3 +33,5 @@ export type { TandemiseModule } from '@tandemise/kernel';
 export { withDeclaredCapabilities } from './capabilities.js';
 export { BASE_RUNTIME_ENV, buildRuntimeEnv, withheldEnvNames } from './runtime-env.js';
 export type { RuntimeEnvOptions } from './runtime-env.js';
+export { DISPLAY_ENV, agentDisplaySetting, agentEnvPlan, agentHome, onPath } from './agent-env.js';
+export type { AgentDisplay, AgentEnvPlan } from './agent-env.js';
