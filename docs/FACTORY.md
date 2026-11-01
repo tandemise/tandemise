@@ -273,3 +273,19 @@ stay as a second layer.
 
 The run's log line `agent environment` says which of the two cases a run had
 (`codeHost`).
+
+### Your own window is not the agent's to drive
+
+A Tandemise window started with `--remote-debugging-port` listens for DevTools
+connections, which have no authentication (#162). Nothing a worker inherits
+points at it. Every worker's environment loses Electron's and an AppImage's
+launch variables (`ELECTRON_RUN_AS_NODE`, `APPIMAGE`, ...), `TANDEMISE_PORT`,
+any variable naming a CDP, DevTools or remote-debugging port, and inspector
+flags in `NODE_OPTIONS`. An agent that proves a UI change starts its own
+window, with its own `TANDEMISE_HOME` and a port of its own choosing.
+
+This is not a block either. An agent runs as you and can list this computer's
+listening ports, so a window with its DevTools port open can still be found.
+The packaged app opens none, and `scripts/factory.sh` opens one only with
+`start --cdp`, on a random port. See
+[Known limitations](KNOWN_LIMITATIONS.md#an-agent-can-reach-a-windows-devtools-port-if-one-is-open).
