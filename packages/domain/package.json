@@ -1,6 +1,6 @@
 {
   "name": "@tandemise/domain",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,17 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./tracker-goal": {
+      "types": "./dist/tracker-goal.d.ts",
+      "default": "./dist/tracker-goal.js"
+    },
     "./staffing-presets": {
       "types": "./dist/staffing-presets.d.ts",
       "default": "./dist/staffing-presets.js"
+    },
+    "./claude-prompts": {
+      "types": "./dist/claude-prompts.d.ts",
+      "default": "./dist/claude-prompts.js"
     }
   },
   "scripts": {

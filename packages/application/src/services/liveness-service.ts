@@ -3,7 +3,7 @@ import type {
   RunRepositoryPort, TaskRepositoryPort, WatchThresholds,
 } from '@tandemise/domain';
 import {
-  LIVE_RUN_STATUSES, TERMINAL_MISSION_STATUSES, classifyLiveness, isTrialMission, livenessFacts, quietNote, watchLevel, watchThresholds,
+  LIVE_RUN_STATUSES, TERMINAL_MISSION_STATUSES, classifyLiveness, isTrialMission, isWaitOverdue, livenessFacts, quietNote, watchLevel, watchThresholds,
 } from '@tandemise/domain';
 import type { InboxSilentRunView, InboxStalledView, TaskWatchView } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, RunId, WorkspaceId } from '@tandemise/shared';
@@ -33,6 +33,8 @@ export interface LivenessDeps {
   readonly log: Logger;
   /** Quiet after this long without an agent event (TANDEMISE_QUIET_MS). */
   readonly quietAfterMs: number;
+  /** The mission's pull request, opened by its ship step or found by its CI wait (#145); optional for older harnesses. */
+  readonly pullRequestOf?: (missionId: MissionId) => string | null;
 }
 
 /**
@@ -68,8 +70,13 @@ export class LivenessService {
       cardsByMission.set(card.missionId, list);
     }
     return this.deps.missions.list({ workspaceId, statuses: OPEN_MISSION_STATUSES }).flatMap((mission): InboxStalledView[] => {
-      const verdict = this.#classify(mission, this.deps.tasks.listByMission(mission.id), cardsByMission.get(mission.id) ?? []);
+      const tasks = this.deps.tasks.listByMission(mission.id);
+      const verdict = this.#classify(mission, tasks, cardsByMission.get(mission.id) ?? []);
       if (verdict.kind !== 'stalled' || verdict.action === null) return [];
+      // A stuck wait or ship step is about the pull request: the row links it and can end the mission too (#145).
+      const cause = verdict.action.taskId === null ? undefined : tasks.find((t) => t.id === verdict.action!.taskId);
+      const aboutPr = cause !== undefined && (cause.executor === 'wait' || cause.executor === 'ship');
+      const pullRequestUrl = aboutPr ? this.deps.pullRequestOf?.(mission.id) ?? null : null;
       return [{
         missionId: mission.id,
         missionTitle: mission.title,
@@ -79,6 +86,7 @@ export class LivenessService {
         action: verdict.action,
         forIds: mission.createdBy == null ? [] : [mission.createdBy],
         since: mission.updatedAt,
+        ...(aboutPr ? { pullRequestUrl, cancellable: true } : {}),
       }];
     });
   }
@@ -180,6 +188,22 @@ export class LivenessService {
         }
         this.deps.recorder.invalidate('tasks', mission.id);
       }
+      // A wait turning overdue (#145) produces no event of its own either: said once, and the Inbox refreshed.
+      for (const task of this.deps.tasks.listByStatus(['AWAITING_EXTERNAL'])) {
+        if (!isWaitOverdue(task, nowMs)) continue;
+        const mission = this.deps.missions.get(task.missionId);
+        if (mission === undefined || TERMINAL_MISSION_STATUSES.includes(mission.status) || isTrialMission(mission)) continue;
+        live.add(task.id);
+        const key = `${task.id}|overdue|${task.startedAt ?? ''}`;
+        if (this.#said.has(key)) continue;
+        this.#said.add(key);
+        this.deps.recorder.note(
+          { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id },
+          `'${task.key}' is still waiting: ${(task.statusReason ?? 'it has not ended').replace(/\.$/, '')}. It is in your inbox to open, retry or cancel.`,
+          'warn',
+        );
+        this.deps.recorder.invalidate('tasks', mission.id);
+      }
       for (const key of this.#said) if (!live.has(key.split('|')[0] ?? '')) this.#said.delete(key);
     } catch (e) {
       // A courtesy to the person watching; it must never stop the pass that dispatches work.
@@ -200,6 +224,7 @@ export class LivenessService {
   // ------------------------------------------------------------------ internals
 
   #classify(mission: Mission, tasks: readonly MissionTask[], cards: readonly { readonly taskId: string | null; readonly kind: ApprovalKind }[]): LivenessVerdict {
+    const nowMs = this.deps.clock.epochMs();
     const draft = mission.status === 'DRAFT' && this.deps.readiness !== undefined ? this.#draft(mission.id) : null;
     return classifyLiveness({
       status: mission.status,
@@ -207,6 +232,7 @@ export class LivenessService {
       tasks: tasks.map((t) => ({
         id: t.id, key: t.key, title: t.title, status: t.status, statusReason: t.statusReason,
         dependsOn: t.dependsOn, attempts: t.attempts, orderHint: t.orderHint, executor: t.executor,
+        overdue: isWaitOverdue(t, nowMs),
       })),
       cards: cards.map((c) => ({ taskId: c.taskId, kind: c.kind })),
       planning: mission.status === 'PLANNING' && this.deps.planning(mission.id),

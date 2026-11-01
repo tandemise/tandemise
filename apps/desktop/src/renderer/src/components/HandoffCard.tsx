@@ -368,7 +368,9 @@ const STATUS_LABELS: Readonly<Record<TaskStatus, string>> = {
   PENDING: 'Planned',
   READY: 'Queued',
   RUNNING: 'Running',
-  AWAITING_INPUT: 'Question',
+  // A live run parked on a person: a question it asked, or a tool call waiting
+  // on its approval (#141). Either way it is your move, not "Running".
+  AWAITING_INPUT: 'Waiting on you',
   AWAITING_HUMAN: 'Person step',
   AWAITING_EXTERNAL: 'Waiting',
   AWAITING_APPROVAL: 'In review',

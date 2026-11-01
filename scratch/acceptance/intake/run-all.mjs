@@ -199,7 +199,7 @@ keepPainting([PORT]);
 
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
-const all = ['i01-board.mjs', 'i02-sentry.mjs', 'i03-slack-same-error.mjs', 'i04-held-back.mjs', 'i05-unsure.mjs', 'i06-start.mjs', 'i07-complete.mjs', 'i08-close-the-loop.mjs', 'i09-cli.mjs', 'i10-brain-sources-and-moved-tracker.mjs'];
+const all = ['i01-board.mjs', 'i02-sentry.mjs', 'i03-slack-same-error.mjs', 'i04-held-back.mjs', 'i05-unsure.mjs', 'i06-start.mjs', 'i07-complete.mjs', 'i08-close-the-loop.mjs', 'i09-cli.mjs', 'i10-brain-sources-and-moved-tracker.mjs', 'i11-factory-ux.mjs', 'i12-setup-papercuts.mjs'];
 const scenarios = all
   .filter((file) => !REAL || ['i01', 'i02', 'i06'].some((id) => file.startsWith(id)))
   .filter((file) => !only || only.some((o) => file.includes(o)));

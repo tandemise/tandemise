@@ -140,6 +140,7 @@ export async function measureMergeFacts(deps: MeasureDeps, input: MeasureInput):
       personCommits,
       // Set by the daemon when it opens a revert of its own merge (#53 §8.7), never by a person's text.
       revertOfAuto: input.mission.workflowInputs['revertOfAuto'] === 'true',
+      retryOutOfScope: agentTasks.some((t) => deps.evaluations.latestChecksForTask(t.id).some((c) => c.name === SCOPE_RETRY_CHECK && c.outcome === 'FAIL')),
     },
     history: touched.length === 0 ? { areaReverts90d: 0, areaRecentRevert: false } : {
       areaReverts90d: touched.reduce((n, a) => n + a.reverts90d, 0),
@@ -147,6 +148,9 @@ export async function measureMergeFacts(deps: MeasureDeps, input: MeasureInput):
     },
   };
 }
+
+/** The check a retry records about the files it added to its step's change (#117). */
+export const SCOPE_RETRY_CHECK = 'scope.retry';
 
 /** Every identity Tandemise commits as (agents' roles, ship, factory) is at this domain. */
 const TANDEMISE_DOMAIN = '@tandemise.local';

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { workerEnv } from '@tandemise/runtimes-core';
 import { isAbsolute, resolve } from 'node:path';
 import type {
   AgentEvent, RuntimeCapability, RuntimeDiscovery, RuntimeHealth, RuntimeProfile,
@@ -156,7 +157,7 @@ export class CodexAdapter implements AgentRuntimeAdapter {
         cwd,
         // Codex authenticates through ~/.codex under the user's own account;
         // Tandemise never holds that credential (MVP.md §10.3, §P8).
-        env: process.env,
+        env: workerEnv(request),
         stdio: [stdin === null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
         windowsHide: true,
       }),

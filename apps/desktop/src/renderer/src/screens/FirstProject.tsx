@@ -108,6 +108,7 @@ export function ProjectForm({ onCreated }: { onCreated?: (id: string) => void })
             <Icon name="plus" size={13} />
             {paths.length === 0 ? 'Add a repository' : 'Add another'}
           </Button>
+          <PathInput onAdd={(path) => { if (!paths.includes(path)) setPaths((current) => [...current, path]); }} />
         </div>
       </Field>
 
@@ -122,6 +123,34 @@ export function ProjectForm({ onCreated }: { onCreated?: (id: string) => void })
       >
         {create.isPending ? 'Creating…' : 'Create project'}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * A repository path typed or pasted (#108): a path copied from a terminal is
+ * the common case on Linux, and a native picker cannot be driven by a script.
+ */
+export function PathInput({ onAdd, disabled = false }: { onAdd: (path: string) => void; disabled?: boolean }): JSX.Element {
+  const [value, setValue] = useState('');
+  const add = (): void => {
+    const path = value.trim();
+    if (path === '') return;
+    onAdd(path);
+    setValue('');
+  };
+  return (
+    <div className="path-input">
+      <input
+        className="input mono"
+        aria-label="Repository path"
+        placeholder="or paste a path, e.g. ~/code/web"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); add(); } }}
+      />
+      <Button disabled={disabled || value.trim() === ''} onClick={add}>Add path</Button>
     </div>
   );
 }

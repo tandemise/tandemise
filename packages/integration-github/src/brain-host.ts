@@ -6,6 +6,7 @@ import { gh, ghJson } from './gh.js';
 
 const prStateSchema = z.object({ state: z.string() });
 const prListSchema = z.array(z.object({ url: z.string(), state: z.string() }));
+const repoEmptySchema = z.object({ isEmpty: z.boolean() });
 
 function stateOf(raw: string): BrainPrState | null {
   const s = raw.toUpperCase();
@@ -30,9 +31,24 @@ export class GhBrainHost implements BrainHostPort {
     }
   }
 
+  /**
+   * A new private repository - or one that already exists and is empty, which
+   * is how a team that made the repository first (to choose its owner and
+   * visibility themselves) shares a brain into it. One with commits is refused
+   * in words: pushing a brain over someone's history is never what was meant.
+   */
   async createRepo(owner: string, name: string): Promise<{ remote: string }> {
-    await gh({ exec: this.exec }, ['repo', 'create', `${owner}/${name}`, '--private'], { timeoutMs: 60_000 });
-    return { remote: `https://github.com/${owner}/${name}.git` };
+    const remote = `https://github.com/${owner}/${name}.git`;
+    const created = await gh({ exec: this.exec }, ['repo', 'create', `${owner}/${name}`, '--private'], { timeoutMs: 60_000, tolerateExitCodes: [1] });
+    if (created.exitCode === 0) return { remote };
+    if (!/already exists/i.test(`${created.stderr}\n${created.stdout}`)) {
+      throw new TandemiseError('INTEGRATION_FAILED', `Couldn't create ${owner}/${name}: ${(created.stderr.trim() || created.stdout.trim()).split('\n').pop() ?? ''}`);
+    }
+    const existing = await ghJson({ exec: this.exec }, ['repo', 'view', `${owner}/${name}`, '--json', 'isEmpty'], repoEmptySchema, { timeoutMs: 60_000 });
+    if (!existing.isEmpty) {
+      throw new TandemiseError('CONFLICT', `${owner}/${name} already exists and has commits. To link a brain that is already there, choose Use an existing brain.`);
+    }
+    return { remote };
   }
 
   async openPr(input: { clone: string; head: string; base: string; title: string; body: string; draft: boolean }): Promise<{ url: string }> {

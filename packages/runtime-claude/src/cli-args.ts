@@ -58,6 +58,29 @@ export function disallowedTools(grants: readonly Capability[]): string[] {
   return artifactOnly(grants) ? disallowed.filter((tool) => !ARTIFACT_ONLY_TOOLS.includes(tool)) : disallowed;
 }
 
+/**
+ * Shell commands that do what a Tandemise tool does, withheld from a run that
+ * was granted the tool (#141).
+ *
+ * The tool goes through the broker: policy, the step's approval, a card when
+ * one is needed, the audit trail. The same action typed into the shell goes
+ * through none of it, so a worker whose tool call was refused or cut off could
+ * open the pull request from Bash on its next try, and one attempt asked while
+ * the next did not. With the tool granted there is a gated way to do it, and
+ * it is the only way offered. Like the guards above this is defence in depth,
+ * not the boundary - a determined agent has other ways to reach an API.
+ */
+export const GATED_SHELL_COPIES: ReadonlyArray<{ capability: Capability; rules: readonly string[] }> = [
+  { capability: 'github.pr.create', rules: ['Bash(gh pr create:*)'] },
+  { capability: 'github.pr.comment', rules: ['Bash(gh pr comment:*)'] },
+  { capability: 'github.issue.create', rules: ['Bash(gh issue create:*)'] },
+];
+
+export function gatedShellCopies(grants: readonly Capability[]): string[] {
+  if (!anyCapabilityMatches(grants, CORE_CAPABILITIES.shell)) return [];
+  return GATED_SHELL_COPIES.filter((copy) => anyCapabilityMatches(grants, copy.capability)).flatMap((copy) => copy.rules);
+}
+
 /** The shell tools, allowed outright for a run granted shell that is not already bypassing prompts. */
 export const SHELL_TOOLS: readonly string[] = CAPABILITY_TOOL_GUARDS[0]!.tools;
 
@@ -75,13 +98,35 @@ export const SHELL_TOOLS: readonly string[] = CAPABILITY_TOOL_GUARDS[0]!.tools;
 export function allowedToolRules(
   grants: readonly Capability[],
   settings: Readonly<Record<string, unknown>> = {},
+  mode: PermissionMode = permissionMode(grants, settings),
 ): string[] {
   const rules = artifactOnly(grants) ? [ARTIFACT_WRITE_RULE] : [];
-  const pinned = typeof settings['permissionMode'] === 'string' && (PERMISSION_MODES as readonly string[]).includes(settings['permissionMode']);
-  if (!pinned && anyCapabilityMatches(grants, CORE_CAPABILITIES.shell) && permissionMode(grants, settings) !== 'bypassPermissions') {
+  if (!pinnedMode(settings) && anyCapabilityMatches(grants, CORE_CAPABILITIES.shell) && mode !== 'bypassPermissions') {
     rules.push(...SHELL_TOOLS);
   }
   return rules;
+}
+
+function pinnedMode(settings: Readonly<Record<string, unknown>>): boolean {
+  return typeof settings['permissionMode'] === 'string' && (PERMISSION_MODES as readonly string[]).includes(settings['permissionMode']);
+}
+
+/**
+ * The mode of a held (interactive) session. Interactive Claude Code opens
+ * `bypassPermissions` on a "Bypass Permissions mode" warning whose default
+ * answer is "No, exit" (#102): a person pressing Enter to get past it ends the
+ * session they meant to steer. A person is at the keyboard during a hold, so
+ * the grants' bypass becomes `acceptEdits` with the granted shell tools
+ * allowed by rule: the same reach, and anything else asks the person present.
+ * A profile that pins its mode keeps it (`interactiveSettings` then
+ * acknowledges the warning for that session only).
+ */
+export function interactivePermissionMode(
+  grants: readonly Capability[],
+  settings: Readonly<Record<string, unknown>>,
+): PermissionMode {
+  const mode = permissionMode(grants, settings);
+  return mode === 'bypassPermissions' && !pinnedMode(settings) ? 'acceptEdits' : mode;
 }
 
 /**
@@ -145,15 +190,16 @@ export interface ClaudeInvocation {
  * the strict MCP config. Headless and interactive each add their own framing
  * around this one list, so the two cannot drift apart.
  */
-function sharedFlags(request: RunRequest): string[] {
+function sharedFlags(request: RunRequest, interactive = false): string[] {
   const settings = request.profile.settings;
   const args: string[] = [];
+  const mode = interactive ? interactivePermissionMode(request.grants, settings) : permissionMode(request.grants, settings);
 
   // The engine resolves the model per run (P12); an older caller leaves it to the profile.
   const model = request.model !== undefined ? request.model : settings['model'];
   if (typeof model === 'string' && model.length > 0) args.push('--model', model);
 
-  args.push('--permission-mode', permissionMode(request.grants, settings));
+  args.push('--permission-mode', mode);
 
   // The user's own settings stay out unless the profile says otherwise. Loaded
   // by default, a worker ran the user's PreToolUse hooks (rewriting its shell
@@ -164,7 +210,7 @@ function sharedFlags(request: RunRequest): string[] {
   if (settings['userSettings'] !== 'inherit') args.push('--setting-sources', 'project,local');
 
   const allowed = [...new Set([
-    ...allowedToolRules(request.grants, settings),
+    ...allowedToolRules(request.grants, settings, mode),
     // The run-scoped gateway only publishes tools this assignment was granted,
     // and every call through it is decided by Tandemise's policy engine - with
     // an approval card when the grant says ask. Without an allow rule headless
@@ -175,7 +221,12 @@ function sharedFlags(request: RunRequest): string[] {
   ])];
   if (allowed.length > 0) args.push('--allowed-tools', allowed.join(','));
 
-  const disallowed = [...new Set([...disallowedTools(request.grants), ...stringList(settings['disallowedTools'])])];
+  const disallowed = [...new Set([
+    ...disallowedTools(request.grants),
+    // Only with the tool surface: it is where the gated copy of the action lives.
+    ...(request.mcpConfigPath !== null ? gatedShellCopies(request.grants) : []),
+    ...stringList(settings['disallowedTools']),
+  ])];
   if (disallowed.length > 0) args.push('--disallowed-tools', disallowed.join(','));
 
   // The working directory is implicit (it is the child's cwd); only additional
@@ -245,6 +296,17 @@ function sessionHookCommand(sessionFile: string): string {
   return `ELECTRON_RUN_AS_NODE=1 ${shellQuote(process.execPath)} -e ${shellQuote(script)}`;
 }
 
+/**
+ * The script a UserPromptSubmit hook runs: append the person's message, with
+ * the time, as one JSON line to the prompts file. Same runtime and quoting
+ * rules as {@link sessionHookCommand}; it prints nothing, so it adds nothing to
+ * the conversation.
+ */
+function promptHookCommand(promptsFile: string): string {
+  const script = `let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const p=JSON.parse(d).prompt;if(typeof p==="string"&&p.trim()){require("fs").appendFileSync(${JSON.stringify(promptsFile)},JSON.stringify({at:new Date().toISOString(),prompt:p})+"\\n")}}catch{}})`;
+  return `ELECTRON_RUN_AS_NODE=1 ${shellQuote(process.execPath)} -e ${shellQuote(script)}`;
+}
+
 /** One word for a POSIX shell: single-quoted, with each single quote closed, escaped and reopened. */
 function shellQuote(word: string): string {
   return `'${word.replaceAll("'", "'\\''")}'`;
@@ -259,11 +321,23 @@ function shellQuote(word: string): string {
 export function buildInteractiveInvocation(
   request: RunRequest,
   sessionRef: string | null,
-  opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+  opts: { readonly sessionFile: string; readonly initialPrompt: string | null; readonly promptsFile?: string },
 ): Pick<InteractiveInvocation, 'args' | 'sessionFile'> {
-  const args = sharedFlags(request);
+  const args = sharedFlags(request, true);
   args.push('--settings', JSON.stringify({
-    hooks: { SessionStart: [{ hooks: [{ type: 'command', command: sessionHookCommand(opts.sessionFile) }] }] },
+    hooks: {
+      SessionStart: [{ hooks: [{ type: 'command', command: sessionHookCommand(opts.sessionFile) }] }],
+      // What the person types is kept for the step's later attempts (#117).
+      ...(opts.promptsFile === undefined ? {} : {
+        UserPromptSubmit: [{ hooks: [{ type: 'command', command: promptHookCommand(opts.promptsFile) }] }],
+      }),
+    },
+    // A profile that pinned bypassPermissions chose it for Tandemise's own
+    // worktree: the warning is acknowledged in this session's flag settings,
+    // never in the person's Claude Code config. Verified on Claude Code 2.1.316.
+    ...(interactivePermissionMode(request.grants, request.profile.settings) === 'bypassPermissions'
+      ? { skipDangerousModePermissionPrompt: true }
+      : {}),
   }));
   if (sessionRef !== null) args.push('--resume', sessionRef);
   args.push(...stringList(request.profile.args));

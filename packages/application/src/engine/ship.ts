@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
-  githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
+  closingLine, githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
 } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
 import type { CommandExecutor } from '@tandemise/integrations-core';
@@ -70,10 +70,38 @@ export interface ShipDeps {
   readonly escalate?: (mission: Mission, paths: readonly string[]) => Promise<readonly string[]>;
   /** The head Tandemise last pushed for a pull request, from its `ship.pr_opened` events. */
   readonly pushedSha?: (mission: Mission, pr: PullRequestRef) => string | null;
+  /** The mission's `ship.pr_opened` events, oldest first: the pull requests it opened, or its CI wait found (#143). */
+  readonly opened?: (mission: Mission) => readonly OpenedPullRequest[];
   /** Reverts a merge (#53 §8.7). */
   readonly revert?: (decisionId: string, by: string) => Promise<unknown>;
   /** The decision (#53 §8). Optional so the open-only harnesses still compose. */
   readonly decide?: ShipDecideDeps;
+  /**
+   * What the pull request's body says beyond the plan (#113): the change set's
+   * headline and points, the tracker item, the holds, and whether QA reported.
+   * Optional so the open-only harnesses still compose; absent, the body says
+   * only what the plan knows.
+   */
+  readonly prFacts?: (mission: Mission) => PrFacts;
+}
+
+/** One `ship.pr_opened` event. */
+export interface OpenedPullRequest {
+  readonly repo: string;
+  readonly number: number;
+  readonly headSha: string;
+  readonly foundBy: 'wait' | null;
+}
+
+export const MERGED_BEFORE_DECISION = 'Merged in GitHub by a person before Tandemise decided.';
+
+/** What `ShipDeps.prFacts` reads for one mission. */
+export interface PrFacts {
+  readonly summary: { readonly headline: string; readonly points: readonly string[] } | null;
+  readonly issue: { readonly label: string; readonly key: string; readonly url: string } | null;
+  readonly holds: readonly string[];
+  /** A QA report exists on the mission: its Done-when results are QA's, not the agent's. */
+  readonly qaReported: boolean;
 }
 
 export interface ShipDecideDeps {
@@ -113,6 +141,13 @@ export class ShipService {
     if (d !== undefined && (task.status === 'AWAITING_APPROVAL' || task.status === 'AWAITING_EXTERNAL')) {
       const latest = d.mergeDecisions.listByMission(mission.id).at(-1);
       if (latest !== undefined) return this.#watch(mission, task, repository, latest, signal);
+    }
+    // A pull request a step opened, found by the mission's CI wait (#143): decided on as it is, not pushed and opened again.
+    const found = this.#found(mission);
+    if (d !== undefined && found !== null) {
+      const pr = await this.deps.pullRequests.view(repository.path, found.repo, found.number);
+      if (pr.state === 'MERGED') return this.mergedOnGitHub(mission, task, pr);
+      if (pr.state === 'OPEN') return this.#afterOpen(mission, task, repository, pr, signal);
     }
     const opened = await this.open(mission, task, repository, signal);
     if (opened.kind !== 'opened' || d === undefined) return opened;
@@ -160,6 +195,17 @@ export class ShipService {
       ? integrated.integrationBranch
       : this.#codeBranch(mission));
     if (branch === null) return { kind: 'skipped', reason: 'No step changed any code, so there is nothing to ship.' };
+    // #138: what ships must hold every step's final work. A round that redid
+    // a step leaves its new commit on that step's branch only; shipping a
+    // branch cut before it would ship code without the fix that was reviewed.
+    if (fixed === undefined) {
+      const missing = await this.missingUpstreamWork(mission, repository, branch);
+      if (missing.length > 0) {
+        const reason = `The branch ${branch} is missing the final work of ${missing.map((m) => `'${m.taskKey}' (${m.commit.slice(0, 7)})`).join(', ')}, so it was not pushed.`;
+        this.#missingWorkCard(mission, task, reason);
+        return { kind: 'blocked', reason };
+      }
+    }
 
     const repo = githubRepoFromRemote(repository.remoteUrl);
     if (repo === null) {
@@ -178,7 +224,7 @@ export class ShipService {
         head: branch,
         base: mission.baseBranch ?? repository.defaultBranch,
         title: this.title(mission),
-        body: this.body(mission),
+        body: this.body(mission, repo),
       });
     } catch (e) {
       return { kind: 'blocked', reason: `Couldn't open the pull request: ${errorMessage(e)}` };
@@ -424,10 +470,72 @@ export class ShipService {
     this.deps.recorder.invalidate('approvals', mission.id);
   }
 
+  /**
+   * A mission's CI wait found the pull request a step opened (#143): recorded
+   * once per head, so the mission shows it while the wait runs and the ship
+   * step decides on it.
+   */
+  found(mission: Mission, task: MissionTask, pr: PullRequestRef): void {
+    const seen = (this.deps.opened?.(mission) ?? []).some((o) => o.repo === pr.repo && o.number === pr.number && o.headSha === pr.headSha);
+    if (seen) return;
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
+    this.deps.recorder.record(scope, { type: 'ship.pr_opened', repo: pr.repo, number: pr.number, url: pr.url, headSha: pr.headSha, foundBy: 'wait' });
+    this.deps.recorder.invalidate('ship', mission.id);
+  }
+
+  /**
+   * A person merged the mission's pull request on GitHub before Tandemise
+   * decided on it (#143): a decision is recorded as merged by them, so the
+   * outcome is `merged_by_person` and main is watched after it, as for any
+   * merge. Recorded once per pull request.
+   */
+  async mergedOnGitHub(mission: Mission, task: MissionTask | null, pr: PullRequestRef): Promise<ShipOutcome> {
+    const d = this.deps.decide;
+    const by = pr.mergedBy ?? 'a person';
+    const reason = `Merged in GitHub by ${by}: ${pr.url}`;
+    if (d === undefined) return { kind: 'merged', reason };
+    const existing = d.mergeDecisions.listByMission(mission.id).filter((x) => x.repo === pr.repo && x.prNumber === pr.number).at(-1);
+    if (existing !== undefined && task !== null) {
+      // Decided already: the usual path records it, once.
+      return this.#closedOrMerged(mission, task, pr, existing.mergedAt === null ? existing : null);
+    }
+    const factory = await d.factory(mission.workspaceId);
+    const record: MergeDecisionRecord = {
+      id: ids.mergeDecision(), workspaceId: mission.workspaceId, missionId: mission.id, repo: pr.repo, prNumber: pr.number, headSha: pr.headSha,
+      policyRef: factory.policyRef, verdict: 'ask', score: 0, allowed: null, wouldMerge: false, factors: [], reasons: [MERGED_BEFORE_DECISION], facts: {},
+      decidedAt: this.deps.clock.now() as Timestamp, voidedAt: null, commentId: null,
+      mergedAt: this.deps.clock.now() as Timestamp, mergedBy: by, mergeSha: pr.mergeSha,
+    };
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, ...(task === null ? {} : { taskId: task.id }) };
+    this.deps.recorder.deferred(() => d.unitOfWork.transaction(() => {
+      d.mergeDecisions.create(record);
+      this.deps.recorder.record(scope, { type: 'merge.merged', decisionId: record.id, mergeSha: pr.mergeSha ?? '', by });
+    }));
+    d.outcomes()?.merged(record, 'person');
+    if (task !== null) this.#cancelCards(mission, task);
+    this.deps.recorder.invalidate('ship', mission.id);
+    return { kind: 'merged', reason };
+  }
+
+  /** CI failed on a pull request a wait step watched (#143): the same path as the ship step's own CI. */
+  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
+    if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing.name}.` };
+    return this.#ciFailed(mission, task, failing);
+  }
+
+  /** The pull request the mission's CI wait found, when that is how the mission got its pull request. */
+  #found(mission: Mission): OpenedPullRequest | null {
+    const opened = this.deps.opened?.(mission) ?? [];
+    if (opened.some((o) => o.foundBy === null)) return null;
+    return opened.at(-1) ?? null;
+  }
+
   /** CI failed: the code step gets another round with the log tail, up to its attempts (§8.1 step 3). */
   #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
     const d = this.deps.decide!;
-    const code = [...this.deps.tasks.listByMission(mission.id)].reverse().find((t) => stepClassFor(t) === 'implement' || stepClassFor(t) === 'resolve_conflicts');
+    // An agent's step: a wait or a person's step reads as `implement` by its role, but has no code to redo.
+    const code = [...this.deps.tasks.listByMission(mission.id)].reverse()
+      .find((t) => t.executor === 'agent' && (stepClassFor(t) === 'implement' || stepClassFor(t) === 'resolve_conflicts'));
     if (code === undefined || (code.round ?? 1) >= code.retryPolicy.maxAttempts) {
       return { kind: 'blocked', reason: `CI kept failing on ${failing.name}.` };
     }
@@ -556,21 +664,66 @@ export class ShipService {
     return prTitle({ type: decision?.profile.type ?? 'chore' }, mission.title);
   }
 
-  /** The tracker link, the Done-when table and the plan's why. No agent-written text. */
-  body(mission: Mission): string {
+  /**
+   * What changed (the change set's headline and points), the issue it closes,
+   * the Done-when table with a status that claims no more than happened, any
+   * holds, and the plan's why (#113). `repo` is the pull request's `owner/repo`.
+   */
+  body(mission: Mission, repo: string | null = null): string {
     const decision = this.deps.planDecisions.latest(mission.id);
     const why = decision === undefined ? [] : [
       `${profileLine(decision.profile)}; ${decision.lane} lane.`,
       ...decision.modules.map((m) => `Added by the ${m} rule.`),
       ...decision.skipped,
     ];
+    const facts = this.deps.prFacts?.(mission) ?? { summary: null, issue: null, holds: [], qaReported: false };
+    const status = facts.qaReported
+      ? 'Checked by QA: see its report on the mission'
+      : facts.summary !== null ? 'Claimed by the agent, not independently verified' : 'Not verified';
     const criteria = this.deps.criteria.listActive(mission.id)
       .filter((c) => c.source !== 'spec' && c.status === 'accepted')
-      .map((c) => ({ key: c.key, statement: c.statement, verified: c.source === 'implicit' ? 'Not independently verified' : 'See the QA report' }));
-    return prBody({ link: null, criteria, why, missionId: mission.id });
+      .map((c) => ({ key: c.key, statement: c.statement, verified: c.source === 'implicit' ? 'Not independently verified' : status }));
+    const issue = facts.issue === null ? null : { ...facts.issue, closes: repo === null ? null : closingLine(facts.issue.url, repo) };
+    return prBody({ summary: facts.summary, issue, criteria, holds: facts.holds, why, missionId: mission.id });
   }
 
   /** The code step's branch: an implement or conflict step's, else the first that succeeded. */
+  /**
+   * The steps whose final commit `branch` does not contain (#138). A step's
+   * final commit is the tip of its own branch now, not what its ChangeSet
+   * recorded: a round can commit again without the report changing.
+   */
+  async missingUpstreamWork(mission: Mission, repository: Repository, branch: string): Promise<ReadonlyArray<{ taskKey: string; commit: string }>> {
+    const missing: { taskKey: string; commit: string }[] = [];
+    for (const step of this.deps.integration.branchesFor(mission)) {
+      if (step.branch === branch) continue;
+      const tip = await this.#git(repository, ['rev-parse', '--verify', `refs/heads/${step.branch}^{commit}`], false);
+      if (tip.exitCode !== 0) continue;
+      const commit = tip.stdout.trim();
+      const held = await this.#git(repository, ['merge-base', '--is-ancestor', commit, `refs/heads/${branch}`], false);
+      if (held.exitCode !== 0) missing.push({ taskKey: step.taskKey, commit });
+    }
+    return missing;
+  }
+
+  /** A card on the ship step: retry once the branch holds the work, or leave it. */
+  #missingWorkCard(mission: Mission, task: MissionTask, reason: string): void {
+    const d = this.deps.decide;
+    if (d === undefined || d.approvals.pendingForTask(task.id).length > 0) return;
+    const card = d.approvalFactory.createOrThrow({
+      workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'intervention', risk: 'read',
+      title: `${this.title(mission)}: the branch to ship is missing work`,
+      rationale: reason,
+      effect: 'Retry opens the pull request again once the branch holds every step\'s final commit. Leaving it blocked stops here.',
+      evidence: [{ kind: 'text', label: 'Why it stopped', value: reason }],
+      options: [{ id: APPROVE_OPTION, label: 'Retry' }, { id: REJECT_OPTION, label: 'Leave blocked' }],
+      recommendedOptionId: null,
+      addressees: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+    });
+    d.approvals.create(card);
+    this.deps.recorder.invalidate('approvals', mission.id);
+  }
+
   #codeBranch(mission: Mission): string | null {
     const branches = this.deps.integration.branchesFor(mission);
     const tasks = this.deps.tasks.listByMission(mission.id);

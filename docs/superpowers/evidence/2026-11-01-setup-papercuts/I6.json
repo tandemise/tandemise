@@ -1,0 +1,62 @@
+{
+  "id": "I6",
+  "title": "Start opens a mission with the item's criteria and the tracker follows",
+  "ok": true,
+  "checks": [
+    {
+      "label": "GAR-5 is Ready with Start enabled",
+      "ok": true,
+      "observed": "GAR-5\nTypeError: basket is null\nSentry · 132 events\nStart"
+    },
+    {
+      "label": "Start opens the mission",
+      "ok": true,
+      "observed": "msn_01m6abtjp7p48n925491"
+    },
+    {
+      "label": "the mission's Done when is the item's criterion",
+      "ok": true,
+      "observed": "Done when\n0 of 1 verified\nU1\nCheckout no longer throws when the basket is empty\nThe spec will cover this\nNot verified"
+    },
+    {
+      "label": "the mission was planned, never queued",
+      "ok": true,
+      "observed": {
+        "status": "AWAITING_PLAN_APPROVAL"
+      }
+    },
+    {
+      "label": "proof (fake YouTrack): GAR-5 is In Progress",
+      "ok": true,
+      "observed": "In Progress"
+    },
+    {
+      "label": "proof (fake YouTrack): one comment starting <!-- tandemise:activity -->",
+      "ok": true,
+      "observed": [
+        "<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: TypeError: basket is null."
+      ]
+    },
+    {
+      "label": "GAR-5 moved under In progress, with its mission's status in words",
+      "ok": true,
+      "observed": "GAR-5\nTypeError: basket is null\nSentry · 132 events\nMission: Awaiting plan approval\nOpen mission\nfor GAR-5"
+    },
+    {
+      "label": "…and offers Open mission instead of Start",
+      "ok": true,
+      "observed": {
+        "start": false,
+        "open": {
+          "text": "Open mission\nfor GAR-5",
+          "href": "#/missions/msn_01m6abtjp7p48n925491"
+        }
+      }
+    }
+  ],
+  "notes": [],
+  "shots": [
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I6-mission.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I6-board-started.png"
+  ]
+}

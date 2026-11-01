@@ -104,6 +104,35 @@ export interface RepositoryChecks {
   /** Command that serves the app for browser QA, plus the URL it listens on. */
   readonly devServer: string | null;
   readonly devServerUrl: string | null;
+  /**
+   * Time budget per check, in minutes (#111). Absent means the factory's
+   * `planner.yaml` `checks.budgets`, then {@link DEFAULT_CHECK_BUDGET_MINUTES}.
+   * Optional so rows written before it read as "no override".
+   */
+  readonly budgets?: CheckBudgets;
+}
+
+/** The checks a repository can configure, by the short name the gate facts use (`checks.tests`). */
+export const CHECK_NAMES = ['install', 'typecheck', 'lint', 'tests', 'build'] as const;
+export type CheckName = (typeof CHECK_NAMES)[number];
+export type CheckBudgets = Readonly<Partial<Record<CheckName, number>>>;
+
+/** A check's time budget when neither the repository nor the factory sets one. */
+export const DEFAULT_CHECK_BUDGET_MINUTES = 10;
+/** The longest budget anyone may set: a check longer than this belongs in CI. */
+export const MAX_CHECK_BUDGET_MINUTES = 240;
+
+/** The repository's command field for a check name (`tests` is stored as `test`). */
+export function checkCommandField(name: CheckName): 'install' | 'typecheck' | 'lint' | 'test' | 'build' {
+  return name === 'tests' ? 'test' : name;
+}
+
+/**
+ * A check's budget in minutes: the repository's own setting, then the
+ * factory's, then the default. The most specific place a person said wins.
+ */
+export function checkBudgetMinutes(name: CheckName, repository: CheckBudgets | undefined, factory: CheckBudgets | undefined): number {
+  return repository?.[name] ?? factory?.[name] ?? DEFAULT_CHECK_BUDGET_MINUTES;
 }
 
 export const NO_CHECKS: RepositoryChecks = {

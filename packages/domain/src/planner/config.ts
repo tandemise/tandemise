@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { lintGate, lintRule } from '../gate-lint.js';
 import { ARTIFACT_TYPES } from '../entities/artifact.js';
+import { CHECK_NAMES, MAX_CHECK_BUDGET_MINUTES } from '../entities/workspace.js';
 import { LANES, RISK_LEVELS, SENSITIVITIES, STEP_CLASSES, TASK_SIZES, TASK_TYPES } from './types.js';
 
 /**
@@ -13,11 +14,27 @@ const onOff = z.preprocess((v) => (v === true ? 'on' : v === false ? 'off' : v),
 const name = z.string().trim().min(1);
 const when = z.string().trim().min(1);
 
+/**
+ * What a check runs when every changed file is in this area (#106): a command,
+ * or `none` (or null) for "this change needs no such check". A check an area
+ * does not name runs the repository's own command.
+ */
+const areaCommand = z.preprocess(
+  (v) => (typeof v === 'string' && ['none', 'off', ''].includes(v.trim().toLowerCase()) ? null : v),
+  z.string().trim().min(1).nullable(),
+);
+
 const area = z.object({
   name,
   paths: z.array(name).min(1),
   sensitivity: z.enum(SENSITIVITIES).default('none'),
   skills: z.array(name).default([]),
+  checks: z.record(z.enum(CHECK_NAMES), areaCommand).optional(),
+});
+
+/** Each check's time budget in minutes (#111); a repository's own setting overrides it. */
+const checkSettings = z.object({
+  budgets: z.record(z.enum(CHECK_NAMES), z.number().int().min(1).max(MAX_CHECK_BUDGET_MINUTES)).default({}),
 });
 
 const profileRule = z.object({
@@ -72,6 +89,7 @@ export const plannerConfigSchema = z.object({
     rate: z.number().min(0).max(1).default(0.4),
   }).default({ minTasks: 5, rate: 0.4 }),
   tiebreak: onOff.default('on'),
+  checks: checkSettings.default({ budgets: {} }),
 });
 
 export type PlannerConfig = z.infer<typeof plannerConfigSchema>;

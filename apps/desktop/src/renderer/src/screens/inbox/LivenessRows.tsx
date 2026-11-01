@@ -13,35 +13,38 @@ import { Button, Chip, Tooltip, Truncate } from '@tandemise/design/react';
  * A mission nothing moves and nothing asks about (P9): what is stuck, and the
  * one thing that moves it. The action goes through the route that already does
  * it - retry the step, re-plan, refine, or (last) cancel - and the row is gone
- * as soon as the daemon derives the mission as moving again.
+ * as soon as the daemon derives the mission as moving again. A stuck CI wait
+ * or ship step (#145) also links its pull request and offers to cancel.
  */
 export function StalledRow({ stalled, bordered = false }: { stalled: InboxStalledView; bordered?: boolean }): JSX.Element {
   const [confirming, setConfirming] = useState(false);
   const act = useDaemonMutation(
-    async (daemon): Promise<unknown> => {
-      switch (stalled.action.kind) {
-        case 'retry': return daemon.retryTask(stalled.action.taskId);
-        case 'replan': return daemon.missionAction(stalled.missionId, 'plan');
-        case 'refine': return daemon.refineMission(stalled.missionId);
-        case 'cancel': return daemon.missionAction(stalled.missionId, 'cancel', { reason: 'Cancelled from the Inbox: nothing could move it.' });
-      }
+    async (daemon, kind: InboxStalledView['action']['kind']): Promise<unknown> => {
+      const action = stalled.action;
+      if (kind === 'retry' && action.kind === 'retry') return daemon.retryTask(action.taskId);
+      if (kind === 'replan') return daemon.missionAction(stalled.missionId, 'plan');
+      if (kind === 'refine') return daemon.refineMission(stalled.missionId);
+      return daemon.missionAction(stalled.missionId, 'cancel', { reason: 'Cancelled from the Inbox: nothing could move it.' });
     },
     ['tasks', 'missions', 'approvals', 'refinement'],
     stalled.missionId,
   );
-  const done = (): void => {
+  const done = (kind: InboxStalledView['action']['kind']): void => {
     setConfirming(false);
     showFlash(
-      stalled.action.kind === 'retry' ? `Retrying ${stalled.action.taskKey}.`
-        : stalled.action.kind === 'replan' ? `Planning “${stalled.missionTitle}” again.`
-          : stalled.action.kind === 'refine' ? `Refining “${stalled.missionTitle}”.`
+      kind === 'retry' && stalled.action.kind === 'retry' ? `Retrying ${stalled.action.taskKey}.`
+        : kind === 'replan' ? `Planning “${stalled.missionTitle}” again.`
+          : kind === 'refine' ? `Refining “${stalled.missionTitle}”.`
             : `Cancelled “${stalled.missionTitle}”.`,
     );
   };
+  const run = (kind: InboxStalledView['action']['kind']): void => act.mutate(kind, { onSuccess: () => done(kind) });
   const press = (): void => {
     if (stalled.action.kind === 'cancel') setConfirming(true);
-    else act.mutate(undefined, { onSuccess: done });
+    else run(stalled.action.kind);
   };
+  const pullRequestUrl = stalled.pullRequestUrl ?? null;
+  const alsoCancel = stalled.cancellable === true && stalled.action.kind !== 'cancel';
 
   return (
     <div className={`list__row inbox__row${bordered ? ' list__row--bordered' : ''}`} aria-label={`Stalled: ${stalled.missionTitle}`}>
@@ -56,9 +59,13 @@ export function StalledRow({ stalled, bordered = false }: { stalled: InboxStalle
       <div className="list__aside">
         <Chip muted>Stalled</Chip>
         <span className="dim" style={{ fontSize: 'var(--fs-xs)', minWidth: 56, textAlign: 'right' }}>{relativeTime(stalled.since)}</span>
+        {pullRequestUrl === null ? null : (
+          <Button variant="ghost" onClick={() => void window.tandemise.openExternal(pullRequestUrl)}>Open the pull request</Button>
+        )}
         <Button disabled={act.isPending} onClick={press}>
           {act.isPending ? 'Working…' : stalled.action.label}
         </Button>
+        {alsoCancel ? <Button variant="ghost" disabled={act.isPending} onClick={() => setConfirming(true)}>Cancel mission</Button> : null}
       </div>
       {confirming ? (
         <ConfirmDialog
@@ -67,7 +74,7 @@ export function StalledRow({ stalled, bordered = false }: { stalled: InboxStalle
           confirmLabel="Cancel mission"
           destructive
           busy={act.isPending}
-          onConfirm={() => act.mutate(undefined, { onSuccess: done })}
+          onConfirm={() => run('cancel')}
           onCancel={() => setConfirming(false)}
         />
       ) : null}

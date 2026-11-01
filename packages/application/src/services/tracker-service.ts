@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   FACTORY_WORKFLOW_ID, activityCommentBody, activityMilestone, activityMilestoneOf, activityStepState, decideTrackerWriteBack, isTerminalMissionStatus, parseCriteria,
-  parseSourcesSection, sourceLabel, trackerGoal, trackerLabel, trackerRef,
+  parseSourcesSection, runtimeSlotWait, sourceLabel, trackerGoal, trackerLabel, trackerRef,
 } from '@tandemise/domain';
 import type { BoardItemView, BoardView, CreateMissionRequest } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, TrackerItemId, WorkspaceId } from '@tandemise/shared';
@@ -358,6 +358,20 @@ export class TrackerService {
     return { url, title: `Merged from ${item.key}`, context: item.title };
   }
 
+  /**
+   * "Waiting for a free slot on Claude Code" when a step that could start is
+   * held back because its runtimes are full (#101): without it the Board says
+   * only "Mission: Executing" while nothing runs.
+   */
+  #slotWait(mission: Mission): string | null {
+    for (const task of this.deps.tasks.listByMission(mission.id)) {
+      if (task.status !== 'READY') continue;
+      const sentence = runtimeSlotWait(task.statusReason);
+      if (sentence !== null) return sentence;
+    }
+    return null;
+  }
+
   #itemView(workspaceId: WorkspaceId, item: TrackedItem, config: TrackerConfig, missions: readonly Mission[]): BoardItemView {
     const mission = missions.find((m) => !isTerminalMissionStatus(m.status)) ?? missions[0] ?? null;
     const active = mission !== null && !isTerminalMissionStatus(mission.status);
@@ -374,7 +388,7 @@ export class TrackerService {
       state: item.state,
       assignee: item.assignee,
       sources,
-      mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title },
+      mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title, waiting: active ? this.#slotWait(mission) : null },
       // The Start refusals, read from the cache without asking the tracker.
       startable: active ? { ok: false, reason: 'Has a mission' }
         : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : { ok: true },
@@ -388,16 +402,16 @@ export class TrackerService {
    * moves to in progress in the tracker. Refusals are `CONFLICT` with the
    * sentence to show.
    */
-  async start(caller: Caller, workspaceId: WorkspaceId, key: string): Promise<Mission> {
+  async start(caller: Caller, workspaceId: WorkspaceId, key: string, lane?: 'quick' | 'careful'): Promise<Mission> {
     this.#requireWorkspace(workspaceId);
     const seat = requireSeat(this.deps, workspaceId, caller);
     const starter = this.deps.people.get(caller.personId)?.displayName ?? seat.name;
     // In the project's queue: a second Start of the same item waits for the
     // first, and then finds its mission (Review Focus 4).
-    return this.#serial(workspaceId, () => this.#start(caller, starter, workspaceId, key.trim()));
+    return this.#serial(workspaceId, () => this.#start(caller, starter, workspaceId, key.trim(), lane));
   }
 
-  async #start(caller: Caller, starter: string, workspaceId: WorkspaceId, key: string): Promise<Mission> {
+  async #start(caller: Caller, starter: string, workspaceId: WorkspaceId, key: string, lane?: 'quick' | 'careful'): Promise<Mission> {
     const { tracker, config } = await this.deps.trackers.for(workspaceId);
     const cached = this.deps.items.byKey(workspaceId, key);
     if (cached !== undefined) this.#refuseIfStarted(workspaceId, cached);
@@ -433,6 +447,8 @@ export class TrackerService {
       // `queued`: a started item is the person's work, not the backlog's.
       ...(criteria.length > 0 ? { planNow: true } : {}),
       workflowPreset: workflow,
+      // A lane the person chose on the Board (#103); only the factory plans by lane.
+      ...(lane !== undefined && workflow === FACTORY_WORKFLOW_ID ? { lane } : {}),
     };
     let mission: Mission;
     try {

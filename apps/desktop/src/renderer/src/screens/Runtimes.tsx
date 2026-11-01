@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RuntimeDiscoveryView, RuntimeView } from '@tandemise/api-contract';
 import type { RuntimeSettingField } from '@tandemise/domain';
 import { PageHeader } from '../components/PageHeader.js';
 import { Icon } from '../components/Icon.js';
 import { ConfirmDialog, Modal } from '../components/Modal.js';
 import { Empty, ErrorState, Field, SkeletonList, StatusDot, Switch } from '../components/primitives.js';
-import { useDaemonMutation, useRuntimes } from '../lib/queries.js';
+import { describeError } from '../lib/daemon.js';
+import { useDaemonMutation, useRuntimes, useSettings } from '../lib/queries.js';
 import { useWorkspaceId } from '../lib/workspace.js';
 import { dateTime, healthTone, pluralize, shortenPath, titleCase } from '../lib/format.js';
 import { Badge, Banner, Button, Card, Chip, Tooltip } from '@tandemise/design/react';
@@ -117,7 +118,7 @@ function RuntimeCard({
 }): JSX.Element {
   const { profile, health } = view;
   const tone = healthTone(health.state);
-  const update = useDaemonMutation((daemon, body: { enabled?: boolean; maxConcurrent?: number }) => daemon.updateRuntime(profile.id, body), ['runtimes']);
+  const update = useDaemonMutation((daemon, body: { enabled?: boolean }) => daemon.updateRuntime(profile.id, body), ['runtimes']);
   // A daemon older than this renderer does not send the schema at all.
   const schema = view.settingsSchema ?? [];
   const check = useDaemonMutation((daemon) => daemon.checkRuntimeHealth(profile.id), ['runtimes']);
@@ -176,24 +177,7 @@ function RuntimeCard({
             )}
           </Detail>
           <Detail label="Concurrency">
-            <div className="row">
-              <input
-                className="input"
-                type="number"
-                min={1}
-                max={8}
-                aria-label={`Concurrency of ${profile.name}`}
-                style={{ width: 72 }}
-                defaultValue={profile.maxConcurrent}
-                onBlur={(event) => {
-                  const next = Number(event.target.value);
-                  if (Number.isFinite(next) && next !== profile.maxConcurrent) update.mutate({ maxConcurrent: next });
-                }}
-              />
-              <span className="dim" style={{ fontSize: 'var(--fs-xs)' }}>
-                {view.activeRuns} running now
-              </span>
-            </div>
+            <ConcurrencyField view={view} />
           </Detail>
         </div>
 
@@ -245,6 +229,94 @@ function RuntimeCard({
   );
 }
 
+/** How long a pause in typing waits before a changed concurrency is saved. */
+const CONCURRENCY_SAVE_DELAY_MS = 600;
+
+/**
+ * How many runs a runtime may take at once, saved as it changes (#101): after
+ * a pause in typing, on Enter, and on leaving the field. Saving only on blur
+ * lost a value typed just before pressing the Configure panel's Save. Says
+ * "Saved", or the daemon's own words when it refuses.
+ */
+function ConcurrencyField({ view }: { view: RuntimeView }): JSX.Element {
+  const { profile } = view;
+  const save = useDaemonMutation((daemon, maxConcurrent: number) => daemon.updateRuntime(profile.id, { maxConcurrent }), ['runtimes']);
+  const [draft, setDraft] = useState(String(profile.maxConcurrent));
+  const [editing, setEditing] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Follows a value saved elsewhere - the Configure panel - while nobody is typing here.
+  useEffect(() => {
+    if (!editing) setDraft(String(profile.maxConcurrent));
+  }, [profile.maxConcurrent, editing]);
+  useEffect(() => () => {
+    if (timer.current !== null) clearTimeout(timer.current);
+  }, []);
+
+  const commit = (value: string): void => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    const next = Number(value);
+    if (value.trim() === '' || !Number.isFinite(next)) return;
+    if (save.isPending ? save.variables === next : next === profile.maxConcurrent && !save.isError) return;
+    save.mutate(next);
+  };
+  // The pause's timer runs the latest commit, not the one from the render that started it.
+  const latestCommit = useRef(commit);
+  latestCommit.current = commit;
+
+  const status = save.isPending
+    ? 'Saving…'
+    : save.isError
+      ? describeError(save.error).detail
+      : save.isSuccess && draft === String(save.variables)
+        ? 'Saved'
+        : '';
+
+  return (
+    <div className="row">
+      <input
+        className="input"
+        type="number"
+        min={1}
+        max={8}
+        aria-label={`Concurrency of ${profile.name}`}
+        aria-invalid={save.isError || undefined}
+        style={{ width: 72 }}
+        value={draft}
+        onFocus={() => setEditing(true)}
+        onChange={(event) => {
+          const value = event.target.value;
+          // Typing is editing, even when no focus event was seen first.
+          setEditing(true);
+          setDraft(value);
+          if (timer.current !== null) clearTimeout(timer.current);
+          timer.current = setTimeout(() => latestCommit.current(value), CONCURRENCY_SAVE_DELAY_MS);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit(event.currentTarget.value);
+        }}
+        onBlur={(event) => {
+          commit(event.target.value);
+          setEditing(false);
+        }}
+      />
+      <span className="dim" style={{ fontSize: 'var(--fs-xs)' }}>
+        {view.activeRuns} running now
+      </span>
+      <span
+        role="status"
+        data-concurrency-status={save.isError ? 'error' : status === 'Saved' ? 'saved' : status === '' ? 'idle' : 'saving'}
+        style={{ fontSize: 'var(--fs-xs)', color: save.isError ? 'var(--status-failed)' : 'var(--text-secondary)' }}
+      >
+        {status}
+      </span>
+    </div>
+  );
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
   return (
     <div>
@@ -261,7 +333,10 @@ function versionLabel(version: string): string {
   return /^\d/.test(version) ? `v${version}` : version;
 }
 
-function DiscoveryModal({ results, onClose }: { results: readonly RuntimeDiscoveryView[]; onClose: () => void }): JSX.Element {
+function DiscoveryModal({ results: found, onClose }: { results: readonly RuntimeDiscoveryView[]; onClose: () => void }): JSX.Element {
+  // The fake runtime is for tests and demos: offered only with developer mode on (#108).
+  const developer = useSettings().data?.developerMode === true;
+  const results = developer ? found : found.filter((d) => d.adapterId !== 'fake');
   // A runtime belongs to the project. Two projects frequently want the same CLI
   // under different logins - a different `configDir` is the whole point of a
   // second profile - so a runtime configured here is this project's, not the
@@ -348,6 +423,8 @@ function ProfileModal({ view, mode, onClose }: { view: RuntimeView; mode: Profil
   const duplicating = mode === 'duplicate';
   const [name, setName] = useState(duplicating ? `${profile.name} (copy)` : profile.name);
   const [executablePath, setExecutablePath] = useState(profile.executablePath ?? '');
+  // Saved with the panel's Save (#101): the panel is where people look for it.
+  const [concurrency, setConcurrency] = useState(String(profile.maxConcurrent));
   const [settings, setSettings] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       schema.map((field) => {
@@ -363,6 +440,8 @@ function ProfileModal({ view, mode, onClose }: { view: RuntimeView; mode: Profil
     // Blank means "not set", which must reach the daemon as an absent key
     // rather than as an empty string the adapter would then try to honour.
     settings: Object.fromEntries(Object.entries(settings).filter(([, value]) => value.trim() !== '')),
+    // Sent as typed: an out-of-range number is the daemon's to refuse, in its own words.
+    maxConcurrent: concurrency.trim() === '' || !Number.isFinite(Number(concurrency)) ? profile.maxConcurrent : Number(concurrency),
   };
 
   const save = useDaemonMutation(
@@ -374,7 +453,6 @@ function ProfileModal({ view, mode, onClose }: { view: RuntimeView; mode: Profil
             ...body,
             args: [...profile.args],
             capabilities: [...profile.capabilities],
-            maxConcurrent: profile.maxConcurrent,
             enabled: true,
           })
         : daemon.updateRuntime(profile.id, body),
@@ -418,6 +496,18 @@ function ProfileModal({ view, mode, onClose }: { view: RuntimeView; mode: Profil
             value={executablePath}
             onChange={(event) => setExecutablePath(event.target.value)}
             placeholder="resolved from PATH"
+          />
+        </Field>
+
+        <Field label="Concurrency" hint="How many runs this runtime may take at once (1 to 8). The project's worker limit still caps the total.">
+          <input
+            className="input"
+            type="number"
+            min={1}
+            max={8}
+            style={{ width: 96 }}
+            value={concurrency}
+            onChange={(event) => setConcurrency(event.target.value)}
           />
         </Field>
 

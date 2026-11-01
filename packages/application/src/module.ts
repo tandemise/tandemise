@@ -10,6 +10,7 @@ import { ProposalService } from './services/proposal-service.js';
 import { MergePolicyService, autoMergeAuthorized } from './services/merge-policy-service.js';
 import { actorFor } from './support/identity.js';
 import type { PullRequestPort } from '@tandemise/domain';
+import { describeHoldEnd } from '@tandemise/domain';
 
 /** Until the daemon binds the `gh` flow: every pull request call says there is no GitHub here. */
 const NO_PULL_REQUESTS: PullRequestPort = new Proxy({} as PullRequestPort, {
@@ -64,6 +65,7 @@ import { ReviewPipeline } from './engine/reviews.js';
 import { ArtifactServiceImpl } from './services/artifact-service.js';
 import { WorkflowServiceImpl } from './services/workflow-service.js';
 import { Waiter } from './engine/waiter.js';
+import { PullRequestWait } from './engine/pr-wait.js';
 import { IntegrationServiceImpl } from './services/integration-service.js';
 import { MissionServiceImpl } from './services/mission-service.js';
 import { HoldServiceImpl } from './services/hold-service.js';
@@ -186,6 +188,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       workspaces: r.resolve(t.WORKSPACE_REPOSITORY),
       recorder: r.resolve(t.EVENT_RECORDER),
       log: log(r).child({ component: 'tool-policy' }),
+      approvals: r.resolve(t.APPROVAL_REPOSITORY),
     }), { source: SOURCE });
 
     bind(APPROVAL_GATE, (r) => createApprovalGate({
@@ -200,6 +203,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       // Resolved per card: the pipeline reads the team as it is when the tool asks.
       clock: clock(r),
       address: (task, workspaceId) => r.resolve(t.REVIEW_PIPELINE).addressFor(task, workspaceId),
+      deadlines: r.resolve(t.RUN_DEADLINES),
     }), { source: SOURCE });
 
     // Asking the supervising human a question is a capability every worker has,
@@ -259,6 +263,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       r.resolve(t.EVALUATION_REPOSITORY),
       r.resolve(t.EVENT_RECORDER),
       clock(r),
+      r.resolve(t.FACTORY_CONFIG_SOURCE),
     ), { source: SOURCE });
 
     bind(t.ARTIFACT_HARVESTER, (r) => new ArtifactHarvester(
@@ -437,12 +442,14 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       log: log(r).child({ component: 'ship' }),
       escalate: (mission, paths) => r.resolve(t.PLANNER_SERVICE).escalate(mission, paths, { fromShip: true }),
       revert: (decisionId, by) => r.resolve(t.SHIP_REVERT).revert(decisionId, by),
+      prFacts: (mission) => shipPrFacts(r, mission),
       pushedSha: (mission, pr) => {
         const opened = r.resolve(t.EVENT_REPOSITORY).listByMission(mission.id)
           .filter((e) => e.body.type === 'ship.pr_opened' && e.body.repo === pr.repo && e.body.number === pr.number);
         const last = opened.at(-1)?.body;
         return last !== undefined && last.type === 'ship.pr_opened' ? last.headSha : null;
       },
+      opened: (mission) => openedPullRequests(r, mission.id),
       decide: {
         missions: r.resolve(t.MISSION_REPOSITORY),
         mergeDecisions: r.resolve(t.MERGE_DECISION_REPOSITORY),
@@ -477,6 +484,11 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
         exec: () => r.resolve(INTEGRATION_COMMAND_EXECUTOR),
         clock: clock(r),
         log: log(r).child({ component: 'waiter' }),
+      }),
+      prWait: new PullRequestWait({
+        pullRequests: r.resolve(t.PULL_REQUEST_FLOW),
+        known: (mission) => openedPullRequests(r, mission.id),
+        graceMs: options.shipCiGraceMs ?? SHIP_CI_GRACE_MS,
       }),
       remediation: r.resolve(t.REMEDIATION_PLANNER),
       integration: r.resolve(t.BRANCH_INTEGRATION_SERVICE),
@@ -1010,6 +1022,10 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       clock: clock(r),
       log: log(r).child({ component: 'liveness' }),
       quietAfterMs: options.quietAfterMs ?? DEFAULT_QUIET_AFTER_MS,
+      pullRequestOf: (missionId) => {
+        const last = openedPullRequests(r, missionId).at(-1);
+        return last === undefined ? null : last.url;
+      },
     }), { source: SOURCE });
 
     bind(t.DESK_SERVICE, (r) => new DeskService({
@@ -1400,6 +1416,39 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
 
 /** Convenience binding for composition roots with no scheduler override. */
 export const applicationModule: TandemiseModule = createApplicationModule();
+
+/** The mission's `ship.pr_opened` events, oldest first: the pull requests it opened, or its CI wait found (#143). */
+function openedPullRequests(r: Resolver, missionId: string): readonly (import('./engine/ship.js').OpenedPullRequest & { readonly url: string })[] {
+  return r.resolve(t.EVENT_REPOSITORY).listByMission(asId<'MissionId'>(missionId), { semanticOnly: true }).flatMap((e) => (e.body.type === 'ship.pr_opened'
+    ? [{ repo: e.body.repo, number: e.body.number, url: e.body.url, headSha: e.body.headSha, foundBy: e.body.foundBy ?? null }]
+    : []));
+}
+
+/**
+ * What the ship step's pull request says beyond the plan (#113): the latest
+ * change set's headline and points, the tracker item the mission came from,
+ * one sentence per hold, and whether QA reported.
+ */
+function shipPrFacts(r: Resolver, mission: import('@tandemise/domain').Mission): import('./engine/ship.js').PrFacts {
+  const artifacts = r.resolve(t.ARTIFACT_REPOSITORY);
+  const change = artifacts.latest(mission.id, 'ChangeSet');
+  const summary = change === undefined ? null
+    : change.handoff != null ? { headline: change.handoff.headline, points: change.handoff.points }
+      : change.summary !== null ? { headline: change.summary, points: [] } : null;
+  const item = mission.trackerItemId == null ? undefined : r.tryResolve(it.TRACKER_ITEM_REPOSITORY)?.get(mission.trackerItemId);
+  const label = item === undefined ? '' : /^https:\/\/github\.com\//.test(item.url) ? 'GitHub' : /youtrack/i.test(item.url) ? 'YouTrack' : 'Tracker item';
+  const tasks = new Map(r.resolve(t.TASK_REPOSITORY).listByMission(mission.id).map((task) => [task.id, task.title]));
+  const members = r.resolve(t.MEMBER_REPOSITORY);
+  const holds = (r.tryResolve(t.TASK_HOLD_REPOSITORY)?.listByMission(mission.id) ?? [])
+    .filter((h) => h.endedAt !== null)
+    .map((h) => `${members.get(h.heldBy)?.name ?? 'A person'} held ${tasks.get(h.taskId) ?? 'a step'}: ${describeHoldEnd(h)}`);
+  return {
+    summary,
+    issue: item === undefined ? null : { label, key: item.key, url: item.url },
+    holds,
+    qaReported: artifacts.latest(mission.id, 'QAReport') !== undefined,
+  };
+}
 
 /**
  * The application's public surface, assembled.

@@ -33,8 +33,10 @@ ev.check('proof (DB): the Claude run ended RESUMABLE and the hold starts from it
 const painted = await until(async () => { const t = await screenText(c); return t.trim().length > 40 && t; }, { label: 'Claude on screen', timeoutMs: 60_000 }).catch(() => '');
 const hint = 'Claude Code may ask whether to trust this folder';
 if (/trust this folder|Quick safety check/i.test(painted)) {
-  const shown = await panelText(c);
-  ev.check('while Claude asks to trust the folder, the panel says how to answer', shown.includes(hint), shown.slice(0, 300));
+  // Since #122 the panel names the question and answers it in one click, rather than a hint to type.
+  const shown = await until(async () => { const t = await panelText(c); return t.includes('Answer: Yes, I trust this folder') && t; }, { label: 'the trust question', timeoutMs: 15_000 }).catch(() => panelText(c));
+  ev.check('while Claude asks to trust the folder, the panel says how to answer',
+    shown.includes('Claude Code asks whether to trust this folder.') && shown.includes('Answer: Yes, I trust this folder'), shown.slice(0, 300));
   await shoot(c, ev, 'claude-trust');
   // First the easy mistake: Enter on the default, "No, exit". Claude ends, and the panel says what happened and how to go on.
   await c.sleep(1500);

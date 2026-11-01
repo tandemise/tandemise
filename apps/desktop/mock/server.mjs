@@ -521,7 +521,7 @@ route('POST', '/runtimes', (_p, body) => {
     settings: body.settings ?? {},
     capabilities: ['reasoning', 'shell', 'filesystem'],
     enabled: body.enabled ?? true,
-    maxConcurrent: body.maxConcurrent ?? 1,
+    maxConcurrent: body.maxConcurrent ?? 3,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };

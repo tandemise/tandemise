@@ -40,7 +40,7 @@ export type OrchestrationEvent =
   | { readonly type: 'task.status'; readonly from: string; readonly to: string; readonly reason?: string }
   | { readonly type: 'run.started'; readonly attempt: number; readonly runtime: string; readonly target: string }
   | { readonly type: 'run.finished'; readonly status: string; readonly durationMs: number }
-  | { readonly type: 'check.result'; readonly name: string; readonly outcome: 'PASS' | 'FAIL' | 'SKIP'; readonly detail?: string }
+  | { readonly type: 'check.result'; readonly name: string; readonly outcome: 'PASS' | 'FAIL' | 'SKIP' | 'TIMEOUT'; readonly detail?: string }
   | { readonly type: 'gate.evaluated'; readonly gate: string; readonly passed: boolean; readonly detail?: string }
   | { readonly type: 'approval.resolved'; readonly approvalId: ApprovalId; readonly status: string; readonly option?: string }
   | { readonly type: 'policy.denied'; readonly capability: string; readonly reason: string }
@@ -112,7 +112,11 @@ export type OrchestrationEvent =
   /** The factory planned the mission (#53 §5.5): its lane, workflow, the modules it applied and the files' refs. */
   | { readonly type: 'plan.decided'; readonly lane: string; readonly workflowId: string; readonly modules: readonly string[]; readonly policyRef: string }
   /** The ship step opened (or found) the pull request (#53 §8.1). */
-  | { readonly type: 'ship.pr_opened'; readonly repo: string; readonly number: number; readonly url: string; readonly headSha: string }
+  | {
+    readonly type: 'ship.pr_opened'; readonly repo: string; readonly number: number; readonly url: string; readonly headSha: string;
+    /** Set when a step opened it and the mission's CI wait found it (#143): the ship step decides on it rather than opening its own. */
+    readonly foundBy?: 'wait';
+  }
   /** An outcome was recorded for routing and learning (#53 §9.1). */
   | { readonly type: 'task.outcome'; readonly outcomeId: string; readonly kind: string; readonly stepClass: string | null; readonly model: string | null }
   /** The merge decision for one head commit (#53 §8.6). */

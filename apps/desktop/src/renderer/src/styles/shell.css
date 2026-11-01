@@ -189,17 +189,23 @@
 .topbar {
   display: flex;
   align-items: center;
-  height: 74px;
-  padding: 0 var(--s7);
+  /* Grows with a subtitle of several lines (a tracker item's header, #105) instead of clipping it. */
+  min-height: 74px;
+  padding: var(--s3) var(--s7);
   flex: none;
   -webkit-app-region: drag;
   border-bottom: 1px solid var(--border);
 }
 
+/*
+ * A grid, so the actions sit on the title's own row however tall the crumbs above it are, and stay
+ * there, top-aligned, when a subtitle grows (a task's disclosure, #105). Rows: crumbs, title, subtitle.
+ */
 .topbar__inner {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: flex-start;
+  column-gap: var(--s3);
   width: 100%;
 }
 
@@ -210,13 +216,31 @@
   margin: 0 auto;
 }
 
-.topbar__inner > * {
+/* The titles have no box of their own here, so their children opt out of the window's drag region themselves. */
+.topbar__inner > *,
+.topbar__titles > * {
   -webkit-app-region: no-drag;
 }
 
 .topbar__titles {
-  flex: 1;
+  display: contents;
+}
+
+.topbar__titles > * {
+  grid-column: 1;
   min-width: 0;
+}
+
+.topbar__eyebrow {
+  grid-row: 1;
+}
+
+.topbar__title {
+  grid-row: 2;
+}
+
+.topbar__subtitle {
+  grid-row: 3;
 }
 
 .topbar__eyebrow {
@@ -250,8 +274,13 @@
 .topbar__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s2);
-  flex: none;
+  /* Shrinks and wraps rather than pushing an action out of the window. */
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  min-width: 0;
 }
 
 .page {

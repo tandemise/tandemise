@@ -425,7 +425,17 @@ export interface BoardItemView {
   readonly state: string;
   readonly assignee: string | null;
   readonly sources: readonly { readonly label: string; readonly detail: string }[];
-  readonly mission: { readonly id: string; readonly status: string; readonly title: string } | null;
+  readonly mission: {
+    readonly id: string;
+    readonly status: string;
+    readonly title: string;
+    /**
+     * Set when the mission's next step is queued on a saturated runtime:
+     * "Waiting for a free slot on Claude Code" (#101). Null otherwise; absent
+     * from a daemon older than this field.
+     */
+    readonly waiting?: string | null;
+  } | null;
   readonly startable: { readonly ok: true } | { readonly ok: false; readonly reason: string };
 }
 
@@ -534,7 +544,11 @@ export type DecideIntakeSignalRequest = z.infer<typeof decideIntakeSignalRequest
  * body, since a GitHub ref holds `/` and `#`.
  */
 export const startBoardItemRequest = z
-  .object({ key: z.string().trim().min(1, 'Name the item to start.').max(200) })
+  .object({
+    key: z.string().trim().min(1, 'Name the item to start.').max(200),
+    /** Quick or Careful, chosen on the Board before Start (#103); absent, the factory decides. */
+    lane: z.enum(['quick', 'careful']).optional(),
+  })
   .strict();
 export type StartBoardItemRequest = z.infer<typeof startBoardItemRequest>;
 

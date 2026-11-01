@@ -31,6 +31,7 @@ interface CheckRow {
   duration_ms: number;
   output_ref: string | null;
   created_at: string;
+  tree_sha: string | null;
 }
 
 function evaluationToRow(e: Evaluation): EvaluationRow {
@@ -77,6 +78,7 @@ function checkToRow(c: CheckResult): CheckRow {
     duration_ms: c.durationMs,
     output_ref: c.outputRef,
     created_at: c.createdAt,
+    tree_sha: c.treeSha ?? null,
   };
 }
 
@@ -94,13 +96,14 @@ function checkFromRow(r: CheckRow): CheckResult {
     durationMs: r.duration_ms,
     outputRef: r.output_ref,
     createdAt: r.created_at,
+    treeSha: r.tree_sha,
   };
 }
 
 const EVALUATION_COLUMNS = `id, mission_id, task_id, run_id, evaluator_role_id, verdict,
   summary, findings, criteria_coverage, created_at`;
 const CHECK_COLUMNS = `id, mission_id, task_id, run_id, name, outcome, detail, command,
-  exit_code, duration_ms, output_ref, created_at`;
+  exit_code, duration_ms, output_ref, created_at, tree_sha`;
 
 /**
  * Both tables are append-only. A check result is a measurement taken at a point
@@ -114,6 +117,7 @@ export class SqliteEvaluationRepository implements EvaluationRepositoryPort {
   readonly #selectChecks;
   readonly #selectLatestChecksForTask;
   readonly #selectLatestChecks;
+  readonly #selectReusable;
 
   constructor(db: TandemiseDatabase) {
     this.#insertEvaluation = db.handle.prepare<EvaluationRow>(
@@ -127,7 +131,12 @@ export class SqliteEvaluationRepository implements EvaluationRepositoryPort {
     this.#insertCheck = db.handle.prepare<CheckRow>(
       `INSERT INTO check_results (${CHECK_COLUMNS}) VALUES (
         :id, :mission_id, :task_id, :run_id, :name, :outcome, :detail, :command,
-        :exit_code, :duration_ms, :output_ref, :created_at)`,
+        :exit_code, :duration_ms, :output_ref, :created_at, :tree_sha)`,
+    );
+    this.#selectReusable = db.handle.prepare<{ treeSha: string; name: string; command: string }, CheckRow>(
+      `SELECT ${CHECK_COLUMNS} FROM check_results
+        WHERE tree_sha = :treeSha AND name = :name AND command = :command AND outcome IN ('PASS','FAIL')
+        ORDER BY created_at DESC, id DESC LIMIT 1`,
     );
     this.#selectChecks = db.handle.prepare<{ taskId: string }, CheckRow>(
       `SELECT ${CHECK_COLUMNS} FROM check_results WHERE task_id = :taskId ORDER BY created_at, id`,
@@ -184,5 +193,10 @@ export class SqliteEvaluationRepository implements EvaluationRepositoryPort {
 
   latestChecks(missionId: MissionId): readonly CheckResult[] {
     return this.#selectLatestChecks.all({ missionId }).map(checkFromRow);
+  }
+
+  reusableCheck(treeSha: string, name: string, command: string): CheckResult | undefined {
+    const row = this.#selectReusable.get({ treeSha, name, command });
+    return row === undefined ? undefined : checkFromRow(row);
   }
 }

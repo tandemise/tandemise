@@ -25,6 +25,45 @@ export interface RuntimeProfile {
 }
 
 /**
+ * How many runs at once a runtime added without a concurrency of its own may
+ * take (#101). A subscription CLI - Claude Code, Codex - is happy running a
+ * few sessions side by side, and starting it at 1 made the factory slower
+ * than the three terminals it replaces. Never above the project's own worker
+ * limit, which the scheduler enforces anyway: a default above it would only
+ * read as a promise the project does not keep.
+ */
+export const DEFAULT_RUNTIME_CONCURRENCY = 3;
+
+/** The concurrency a new runtime starts at, given its project's `maxTotalWorkers` (null: no project to read). */
+export function defaultRuntimeConcurrency(maxTotalWorkers: number | null): number {
+  if (maxTotalWorkers === null || !Number.isFinite(maxTotalWorkers)) return DEFAULT_RUNTIME_CONCURRENCY;
+  return Math.max(1, Math.min(DEFAULT_RUNTIME_CONCURRENCY, Math.floor(maxTotalWorkers)));
+}
+
+/** How the executor opens a step's reason when every capable runtime is out of slots. */
+export const RUNTIME_SLOT_WAIT_PREFIX = 'Waiting for a runtime slot.';
+
+/**
+ * The Board's sentence for a step deferred on saturated runtimes (#101):
+ * "Waiting for a free slot on Claude Code", or null when the reason is
+ * anything else. Read from the step's reason, which names each runtime the
+ * way the runtime manager describes a rejection - `'<name>': saturated: …`,
+ * joined by "; ".
+ */
+export function runtimeSlotWait(statusReason: string | null | undefined): string | null {
+  if (typeof statusReason !== 'string' || !statusReason.startsWith(RUNTIME_SLOT_WAIT_PREFIX)) return null;
+  const names: string[] = [];
+  for (const part of statusReason.slice(RUNTIME_SLOT_WAIT_PREFIX.length).split(/; (?=')/)) {
+    const match = /^\s*'(.*)': saturated: /.exec(part);
+    const name = match?.[1];
+    if (name !== undefined && name !== '' && !names.includes(name)) names.push(name);
+  }
+  if (names.length === 0) return 'Waiting for a free runtime slot';
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+  return `Waiting for a free slot on ${list}`;
+}
+
+/**
  * One setting an adapter understands, described so a UI can offer it.
  *
  * Without this the desktop would have to know that `claude-code` takes a

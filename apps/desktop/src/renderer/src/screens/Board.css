@@ -103,6 +103,14 @@
   color: var(--text);
 }
 
+/* A mission queued on a full runtime (#101): said beside its status, in words. */
+.board__waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--text-secondary);
+}
+
 .board__row[data-startable='false'] .board__start {
   cursor: not-allowed;
 }
