@@ -7,6 +7,7 @@ import type { SkillFile } from '@tandemise/domain';
 import { MAX_SKILL_BYTES, MAX_SKILL_FILES, SKILL_FILE, SKILL_IGNORED_NAMES, formatSkillSize, hashSkillFiles } from '@tandemise/domain';
 import type { DiscoveredSkillFolder, ScannedSkillFolder, SkillFilesPort } from '@tandemise/application';
 import { errorMessage, isPathInside, type Logger } from '@tandemise/shared';
+import { installedPlugins } from '@tandemise/runtime-claude';
 
 const run = promisify(execFile);
 
@@ -52,7 +53,7 @@ export class DaemonSkillFiles implements SkillFilesPort {
     const personal = await skillFolders(this.root);
     const folders: DiscoveredSkillFolder[] = personal.folders.map((f) => ({ ...f, origin: 'personal', root: this.root }));
     // Claude Code's own record of what it installed; an unreadable one lists none.
-    for (const plugin of await installedPlugins(this.claudeConfigDir, this.log)) {
+    for (const plugin of await installedPlugins(this.claudeConfigDir, (e) => this.log.warn('skills.plugins_unreadable', { error: errorMessage(e) }))) {
       const skillsRoot = join(plugin.installPath, 'skills');
       for (const f of (await skillFolders(skillsRoot)).folders) {
         folders.push({ ...f, origin: 'plugin', root: skillsRoot, plugin: { name: plugin.name, marketplace: plugin.marketplace, version: plugin.version } });
@@ -217,52 +218,6 @@ export class DaemonSkillFiles implements SkillFilesPort {
     if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error('Not a skill content hash.');
     return join(this.storeRoot, hash);
   }
-}
-
-/** A plugin install as Claude Code records it. */
-export interface InstalledPlugin {
-  readonly name: string;
-  readonly marketplace: string;
-  readonly version: string;
-  readonly installPath: string;
-  readonly scope: string;
-}
-
-/**
- * Reads `<config>/plugins/installed_plugins.json` (version 2:
- * `{ plugins: { "name@marketplace": [{ scope, installPath, version }] } }`).
- * Installs whose folder is the same are listed once; a missing or malformed
- * record is an empty list.
- */
-export async function installedPlugins(configDir: string, log?: Logger): Promise<readonly InstalledPlugin[]> {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(await readFile(join(configDir, 'plugins', 'installed_plugins.json'), 'utf8'));
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log?.warn('skills.plugins_unreadable', { configDir, error: errorMessage(e) });
-    return [];
-  }
-  const plugins = (raw as { plugins?: unknown } | null)?.plugins;
-  if (typeof plugins !== 'object' || plugins === null) return [];
-  const out: InstalledPlugin[] = [];
-  const seen = new Set<string>();
-  for (const key of Object.keys(plugins).sort()) {
-    const at = key.lastIndexOf('@');
-    const name = at > 0 ? key.slice(0, at) : key;
-    const marketplace = at > 0 ? key.slice(at + 1) : '';
-    const installs = (plugins as Record<string, unknown>)[key];
-    for (const install of Array.isArray(installs) ? installs : []) {
-      const { installPath, version, scope } = (install ?? {}) as { installPath?: unknown; version?: unknown; scope?: unknown };
-      if (typeof installPath !== 'string' || installPath === '' || seen.has(installPath)) continue;
-      seen.add(installPath);
-      out.push({
-        name, marketplace, installPath,
-        version: typeof version === 'string' ? version : '',
-        scope: typeof scope === 'string' ? scope : 'user',
-      });
-    }
-  }
-  return out;
 }
 
 /**

@@ -9,7 +9,7 @@ import type {
   Workspace, WorkspaceRepositoryPort,
 } from '@tandemise/domain';
 import {
-  ACCEPT_RESULT_OPTION, ARTIFACT_OUT_DIR, CORE_CAPABILITIES, RUNTIME_ACTOR, anyCapabilityMatches, gateDependencies, indexTeam, isActiveMember, isTrialMission, missingSkillReason, resolveModel, responsibleFor,
+  ACCEPT_RESULT_OPTION, ARTIFACT_OUT_DIR, CORE_CAPABILITIES, RUNTIME_ACTOR, SKILL_NOT_LOADED, anyCapabilityMatches, stepSkillArgs, stepSkillInstructions, gateDependencies, indexTeam, isActiveMember, isTrialMission, missingSkillReason, resolveModel, responsibleFor,
 } from '@tandemise/domain';
 import { isDaemonStopping } from '../support/shutdown.js';
 import { isTaskHeld } from '../support/held.js';
@@ -25,7 +25,7 @@ import type { ApprovalFactory, GrantBuilder, PolicyEngine } from '@tandemise/pol
 import type { ToolBroker } from '@tandemise/integrations-core';
 import { McpGatewayProvisioner, NO_TOOL_SURFACE, type RunToolSurface } from './mcp-gateway.js';
 import { RUNTIME_SIGNED_OUT, SESSION_NOT_FOUND, describeRejections, onlyBusy, onlyWaiting } from '@tandemise/runtimes-core';
-import type { RunRequest, RuntimeManager, RuntimeSelection, SlotReservation, SlotRetention } from '@tandemise/runtimes-core';
+import type { RunRequest, RunSkillRequest, RuntimeManager, RuntimeSelection, SlotReservation, SlotRetention } from '@tandemise/runtimes-core';
 import type { ArtifactId, Clock, Logger, MissionId, RunId, TandemisePaths, TaskId } from '@tandemise/shared';
 import { TandemiseError, errorMessage, ids, slugify, summarize } from '@tandemise/shared';
 import type { ArtifactMeasurePort, ArtifactTemplatePort } from '../ports.js';
@@ -190,6 +190,8 @@ export interface TaskExecutorDeps {
    */
   readonly skills?: SkillSupply;
   readonly skillInstaller?: SkillInstaller;
+  /** The tracker item a mission came from, for a step skill's `{{item.key}}` (#131). Optional for older harnesses. */
+  readonly trackerItems?: { get(id: string): { readonly key: string; readonly url: string; readonly title: string } | undefined };
   /**
    * Where a run's measured facts are kept (P3b). Optional so harnesses built
    * before evals still compose; the module always passes it. Scoring never
@@ -537,6 +539,12 @@ export class TaskExecutor {
     // highest-value feedback loop in the system silently became a no-op.
     const feedback = attempt > 1 && !resuming && continuation === null ? task.retryFeedback ?? null : null;
 
+    // #131: a step that runs the team's own skill finds it for this runtime
+    // first. Not found stops the step with the reason and a card; it never
+    // falls back to the role's prompt, and no attempt is spent.
+    const stepSkill = await this.#stepSkill(task, mission, repository, profile, adapter);
+    if (!stepSkill.ok) return this.#refuseStepSkill(task, mission, workspace, scope, stepSkill.reason);
+
     const running = this.#setStatus(task, scope, 'RUNNING', null, {
       attempts: attempt,
       startedAt: task.startedAt ?? deps.clock.now(),
@@ -628,8 +636,13 @@ export class TaskExecutor {
       const delivered = continuation === null ? [] : deps.rounds.promoteQueued(running);
       const brief = await deps.rounds.openRound(running);
       const compiled = await this.#compilePrompt({
-        ...actx, task: running, workspace, role, grants, target, tools: toolSurface.toolNames, feedback, round: brief,
+        ...actx, task: running, workspace, grants, target, tools: toolSurface.toolNames, feedback, round: brief,
+        // #131: the skill's instructions replace the role's; the step's context stays.
+        role: running.runSkill == null ? role : { ...role, instructions: stepSkillInstructions(running.runSkill) },
       });
+      if (stepSkill.request !== undefined) {
+        deps.recorder.note(scope, `Runs the skill /${stepSkill.request.name}${stepSkill.request.args === '' ? '' : ` ${stepSkill.request.args}`} (${stepSkill.from}).`);
+      }
       const destinations = running.expectedOutputs.map((type) => `${outDirFor(running)}/${type}.md`);
       // Spec §5: a round continues the last settled session whenever the runtime can, whatever that run's status.
       const session = continuation !== null
@@ -662,6 +675,7 @@ export class TaskExecutor {
         ...(session === null ? {} : { continueSession: session, freshPrompt: compiled.prompt }),
         ...(continuation === null ? {} : { continuation }),
         purpose, round, inputs: compiled.includedArtifactIds, skills: installed.received, brain: compiled.brain ?? null,
+        ...(stepSkill.request === undefined ? {} : { stepSkill: stepSkill.request }),
       });
 
       const stopped = this.#stopped(outcome, running, scope);
@@ -672,6 +686,11 @@ export class TaskExecutor {
       // and not even a sign-out's READY may overwrite the reset.
       const overtaken = this.#overtaken(running, scope, signal);
       if (overtaken !== null) return overtaken;
+
+      if (outcome.failure?.code === SKILL_NOT_LOADED) {
+        // #131: the session started without the skill; nothing of the work ran.
+        return this.#refuseStepSkill(running, mission, workspace, scope, outcome.failure.message, { attempts: task.attempts });
+      }
 
       if (outcome.failure?.code === RUNTIME_SIGNED_OUT) {
         // Nothing about the work was tried, so nothing about it is judged: the
@@ -925,6 +944,7 @@ export class TaskExecutor {
       log: deps.log.child({ runId, taskId: task.id, missionId: mission.id, runtime: profile.adapterId }),
       reservation: input.reservation,
       retainSlot: retention,
+      ...(input.stepSkill === undefined ? {} : { skill: input.stepSkill }),
     };
 
     let usage: RunUsage = {};
@@ -1094,6 +1114,70 @@ export class TaskExecutor {
     const missing = await this.deps.skills.missing(pinned.task.skills ?? []);
     if (missing.length === 0) return null;
     return { reason: missingSkillReason(missing), named: missing.map((m) => `${m.name} v${m.version}`) };
+  }
+
+  /**
+   * The team's skill a step runs (#131), found for the routed runtime: its
+   * arguments filled, and the plugin folder a Claude Code run loads. A step
+   * without one is ok with no request.
+   */
+  async #stepSkill(
+    task: MissionTask, mission: Mission, repository: Repository | null, profile: RuntimeProfile,
+    adapter: { readonly displayName?: string; resolveSkill?: import('@tandemise/runtimes-core').AgentRuntimeAdapter['resolveSkill'] },
+  ): Promise<{ readonly ok: true; readonly request?: RunSkillRequest; readonly from: string } | { readonly ok: false; readonly reason: string }> {
+    const step = task.runSkill;
+    if (step == null) return { ok: true, from: '' };
+    if (adapter.resolveSkill === undefined) {
+      return {
+        ok: false,
+        reason: `‘${task.title}’ runs the skill /${step.name}, and only Claude Code can run a skill as a step. `
+          + `It was routed to ${profile.name}, a ${adapter.displayName ?? profile.adapterId} runtime. Route the step's role to Claude Code, then choose Retry.`,
+      };
+    }
+    const item = mission.trackerItemId == null ? undefined : this.deps.trackerItems?.get(mission.trackerItemId);
+    const args = stepSkillArgs(step.args, { item: item === undefined ? null : { key: item.key, url: item.url, title: item.title }, missionTitle: mission.title });
+    // A library skill pinned to the step is written to `.claude/skills/<name>` before the run.
+    if ((task.skills ?? []).some((pin) => pin.name === step.name)) {
+      return { ok: true, request: { name: step.name, args, pluginDirs: [] }, from: 'pinned from the skills library' };
+    }
+    const found = await adapter.resolveSkill(profile, step.name, repository === null ? [] : [repository.path]);
+    if (!found.ok) return { ok: false, reason: found.reason };
+    return { ok: true, request: { name: step.name, args, pluginDirs: found.pluginDirs }, from: found.from };
+  }
+
+  /**
+   * Stops a step whose skill can't be run (#131) with the reason, and asks the
+   * person on a card, as a missing library skill does. Never a fallback.
+   */
+  #refuseStepSkill(
+    task: MissionTask, mission: Mission, workspace: Workspace, scope: EventScope, reason: string, extra: Partial<MissionTask> = {},
+  ): TaskAttemptOutcome {
+    const name = task.runSkill?.name ?? '?';
+    if (!isTrialMission(mission) && !this.deps.approvals.pendingForTask(task.id).some((a) => a.kind === 'intervention')) {
+      const approval = this.deps.approvalFactory.createOrThrow({
+        workspaceId: workspace.id,
+        missionId: mission.id,
+        taskId: task.id,
+        kind: 'intervention',
+        risk: 'read',
+        title: `‘${task.title}’ needs a skill that isn’t installed`,
+        rationale: reason,
+        effect: 'Retry runs the step once the skill is there. Leave blocked stops here.',
+        evidence: [
+          { kind: 'text', label: 'Skill', value: `/${name}` },
+          { kind: 'text', label: 'Objective', value: summarize(task.objective, 600) },
+        ],
+        options: [
+          { id: 'approve', label: 'Retry' },
+          { id: 'reject', label: 'Leave blocked' },
+        ],
+        recommendedOptionId: null,
+        ...this.deps.reviews.addressFor(task, workspace.id),
+      });
+      this.deps.approvals.create(approval);
+      this.deps.recorder.invalidate('approvals', mission.id);
+    }
+    return this.#settle(task, scope, 'BLOCKED', reason, extra);
   }
 
   /**
@@ -2758,6 +2842,8 @@ interface DriveInput {
   readonly skills?: readonly RunSkill[] | null;
   /** What the run knew from the brain (#51); null without one. */
   readonly brain?: import('@tandemise/domain').RunBrain | null;
+  /** The team's skill the run invokes (#131); only a step's own pass, never a tighten or delivery. */
+  readonly stepSkill?: RunSkillRequest;
 }
 
 interface RunFailure {

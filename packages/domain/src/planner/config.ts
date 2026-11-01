@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { lintGate, lintRule } from '../gate-lint.js';
 import { ARTIFACT_TYPES } from '../entities/artifact.js';
 import { CHECK_NAMES, MAX_CHECK_BUDGET_MINUTES } from '../entities/workspace.js';
+import { stepSkillProblem } from '../entities/skill.js';
 import { LANES, RISK_LEVELS, SENSITIVITIES, STEP_CLASSES, TASK_SIZES, TASK_TYPES } from './types.js';
 
 /**
@@ -72,6 +73,17 @@ const plannerModule = z.object({
   }),
 });
 
+/**
+ * `stepSkills` (#131): the team's own skill a step of a class runs instead of
+ * its role's prompt, first match per class. `when` reads the plan facts.
+ */
+const stepSkillRule = z.object({
+  class: z.enum(STEP_CLASSES),
+  when: when.optional(),
+  skill: name.refine((n) => stepSkillProblem(n) === null, { message: 'a skill is written as name or plugin:name' }),
+  args: z.string().max(2000).default(''),
+});
+
 const laneMap = z.object({ quick: name, standard: name, careful: name });
 
 export const plannerConfigSchema = z.object({
@@ -84,6 +96,7 @@ export const plannerConfigSchema = z.object({
   laneWorkflows: laneMap.default({ quick: 'quick', standard: 'standard', careful: 'careful' }),
   byType: z.record(z.string(), z.record(z.string(), name)).default({}),
   modules: z.array(plannerModule).default([]),
+  stepSkills: z.array(stepSkillRule).default([]),
   holdApproval: z.object({
     minTasks: z.number().int().min(1).max(100).default(5),
     rate: z.number().min(0).max(1).default(0.4),
@@ -98,6 +111,7 @@ export type ProfileRule = PlannerConfig['profile']['rules'][number];
 export type LaneRule = PlannerConfig['lanes'][number];
 export type PlannerModule = PlannerConfig['modules'][number];
 export type ModuleStep = NonNullable<PlannerModule['add']['step']>;
+export type StepSkillRule = PlannerConfig['stepSkills'][number];
 
 export interface ConfigProblem {
   readonly path: string;
@@ -142,7 +156,8 @@ export function parsePlannerConfig(raw: unknown, fallback: PlannerConfig = EMPTY
     }
     return true;
   });
-  return { config: { ...c, profile: { rules }, lanes, modules }, problems };
+  const stepSkills = c.stepSkills.filter((r, i) => r.when === undefined || keep(`stepSkills.${i}.when`, r.when));
+  return { config: { ...c, profile: { rules }, lanes, modules, stepSkills }, problems };
 }
 
 /** What a step of a class writes when a module doesn't say. */

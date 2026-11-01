@@ -63,6 +63,7 @@ export const OFFLINE_CHECKS = [
   'p11-routines-check',
   'p12-models-check',
   'p13-skills-check',
+  'skill-steps-check',
   'p14-issues-check',
   'p16-notify-check',
   'p15-setup-check',
