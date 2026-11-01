@@ -70,6 +70,8 @@ export interface ShipDeps {
   readonly escalate?: (mission: Mission, paths: readonly string[]) => Promise<readonly string[]>;
   /** The head Tandemise last pushed for a pull request, from its `ship.pr_opened` events. */
   readonly pushedSha?: (mission: Mission, pr: PullRequestRef) => string | null;
+  /** The mission's `ship.pr_opened` events, oldest first: the pull requests it opened, or its CI wait found (#143). */
+  readonly opened?: (mission: Mission) => readonly OpenedPullRequest[];
   /** Reverts a merge (#53 §8.7). */
   readonly revert?: (decisionId: string, by: string) => Promise<unknown>;
   /** The decision (#53 §8). Optional so the open-only harnesses still compose. */
@@ -82,6 +84,16 @@ export interface ShipDeps {
    */
   readonly prFacts?: (mission: Mission) => PrFacts;
 }
+
+/** One `ship.pr_opened` event. */
+export interface OpenedPullRequest {
+  readonly repo: string;
+  readonly number: number;
+  readonly headSha: string;
+  readonly foundBy: 'wait' | null;
+}
+
+export const MERGED_BEFORE_DECISION = 'Merged in GitHub by a person before Tandemise decided.';
 
 /** What `ShipDeps.prFacts` reads for one mission. */
 export interface PrFacts {
@@ -129,6 +141,13 @@ export class ShipService {
     if (d !== undefined && (task.status === 'AWAITING_APPROVAL' || task.status === 'AWAITING_EXTERNAL')) {
       const latest = d.mergeDecisions.listByMission(mission.id).at(-1);
       if (latest !== undefined) return this.#watch(mission, task, repository, latest, signal);
+    }
+    // A pull request a step opened, found by the mission's CI wait (#143): decided on as it is, not pushed and opened again.
+    const found = this.#found(mission);
+    if (d !== undefined && found !== null) {
+      const pr = await this.deps.pullRequests.view(repository.path, found.repo, found.number);
+      if (pr.state === 'MERGED') return this.mergedOnGitHub(mission, task, pr);
+      if (pr.state === 'OPEN') return this.#afterOpen(mission, task, repository, pr, signal);
     }
     const opened = await this.open(mission, task, repository, signal);
     if (opened.kind !== 'opened' || d === undefined) return opened;
@@ -451,10 +470,72 @@ export class ShipService {
     this.deps.recorder.invalidate('approvals', mission.id);
   }
 
+  /**
+   * A mission's CI wait found the pull request a step opened (#143): recorded
+   * once per head, so the mission shows it while the wait runs and the ship
+   * step decides on it.
+   */
+  found(mission: Mission, task: MissionTask, pr: PullRequestRef): void {
+    const seen = (this.deps.opened?.(mission) ?? []).some((o) => o.repo === pr.repo && o.number === pr.number && o.headSha === pr.headSha);
+    if (seen) return;
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
+    this.deps.recorder.record(scope, { type: 'ship.pr_opened', repo: pr.repo, number: pr.number, url: pr.url, headSha: pr.headSha, foundBy: 'wait' });
+    this.deps.recorder.invalidate('ship', mission.id);
+  }
+
+  /**
+   * A person merged the mission's pull request on GitHub before Tandemise
+   * decided on it (#143): a decision is recorded as merged by them, so the
+   * outcome is `merged_by_person` and main is watched after it, as for any
+   * merge. Recorded once per pull request.
+   */
+  async mergedOnGitHub(mission: Mission, task: MissionTask | null, pr: PullRequestRef): Promise<ShipOutcome> {
+    const d = this.deps.decide;
+    const by = pr.mergedBy ?? 'a person';
+    const reason = `Merged in GitHub by ${by}: ${pr.url}`;
+    if (d === undefined) return { kind: 'merged', reason };
+    const existing = d.mergeDecisions.listByMission(mission.id).filter((x) => x.repo === pr.repo && x.prNumber === pr.number).at(-1);
+    if (existing !== undefined && task !== null) {
+      // Decided already: the usual path records it, once.
+      return this.#closedOrMerged(mission, task, pr, existing.mergedAt === null ? existing : null);
+    }
+    const factory = await d.factory(mission.workspaceId);
+    const record: MergeDecisionRecord = {
+      id: ids.mergeDecision(), workspaceId: mission.workspaceId, missionId: mission.id, repo: pr.repo, prNumber: pr.number, headSha: pr.headSha,
+      policyRef: factory.policyRef, verdict: 'ask', score: 0, allowed: null, wouldMerge: false, factors: [], reasons: [MERGED_BEFORE_DECISION], facts: {},
+      decidedAt: this.deps.clock.now() as Timestamp, voidedAt: null, commentId: null,
+      mergedAt: this.deps.clock.now() as Timestamp, mergedBy: by, mergeSha: pr.mergeSha,
+    };
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, ...(task === null ? {} : { taskId: task.id }) };
+    this.deps.recorder.deferred(() => d.unitOfWork.transaction(() => {
+      d.mergeDecisions.create(record);
+      this.deps.recorder.record(scope, { type: 'merge.merged', decisionId: record.id, mergeSha: pr.mergeSha ?? '', by });
+    }));
+    d.outcomes()?.merged(record, 'person');
+    if (task !== null) this.#cancelCards(mission, task);
+    this.deps.recorder.invalidate('ship', mission.id);
+    return { kind: 'merged', reason };
+  }
+
+  /** CI failed on a pull request a wait step watched (#143): the same path as the ship step's own CI. */
+  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
+    if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing.name}.` };
+    return this.#ciFailed(mission, task, failing);
+  }
+
+  /** The pull request the mission's CI wait found, when that is how the mission got its pull request. */
+  #found(mission: Mission): OpenedPullRequest | null {
+    const opened = this.deps.opened?.(mission) ?? [];
+    if (opened.some((o) => o.foundBy === null)) return null;
+    return opened.at(-1) ?? null;
+  }
+
   /** CI failed: the code step gets another round with the log tail, up to its attempts (§8.1 step 3). */
   #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }): ShipOutcome {
     const d = this.deps.decide!;
-    const code = [...this.deps.tasks.listByMission(mission.id)].reverse().find((t) => stepClassFor(t) === 'implement' || stepClassFor(t) === 'resolve_conflicts');
+    // An agent's step: a wait or a person's step reads as `implement` by its role, but has no code to redo.
+    const code = [...this.deps.tasks.listByMission(mission.id)].reverse()
+      .find((t) => t.executor === 'agent' && (stepClassFor(t) === 'implement' || stepClassFor(t) === 'resolve_conflicts'));
     if (code === undefined || (code.round ?? 1) >= code.retryPolicy.maxAttempts) {
       return { kind: 'blocked', reason: `CI kept failing on ${failing.name}.` };
     }

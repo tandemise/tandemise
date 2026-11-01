@@ -72,6 +72,7 @@ export const OFFLINE_CHECKS = [
   'planner-steps-check',
   'planner-check',
   'merge-check',
+  'ci-wait-check',
   'routing-check',
   'policy-eval-check',
   'relay-check',

@@ -398,7 +398,9 @@ export class MissionServiceImpl implements MissionService {
     // "Stop and retry" on a quiet run (P9): its live run is stopped and the step
     // queued again in this one decision, the path a widening retry already takes.
     const stopping = options.stopRun === true && (task.status === 'RUNNING' || task.status === 'AWAITING_INPUT');
-    const retryable = RETRYABLE_TASK_STATUSES.includes(task.status) || (widening && task.status === 'AWAITING_INPUT') || stopping;
+    // A wait that keeps looking can be told to start over (#145): its poll stops and it looks again from now.
+    const rewaiting = task.executor === 'wait' && task.status === 'AWAITING_EXTERNAL';
+    const retryable = RETRYABLE_TASK_STATUSES.includes(task.status) || (widening && task.status === 'AWAITING_INPUT') || stopping || rewaiting;
     if (!retryable) {
       throw new TandemiseError('PRECONDITION_FAILED', `A task in ${task.status} cannot be retried.`, {
         details: { taskId, status: task.status },
@@ -445,6 +447,7 @@ export class MissionServiceImpl implements MissionService {
     const reason = note
       || `${stopping ? 'Stopped and retried' : 'Retried'} by the user${options.runtimeProfileId === undefined ? '' : ' on a different runtime'}`
         + `${added.length > 0 ? ` with more access: ${added.join(', ')}` : ''}.`;
+    if (rewaiting) this.deps.scheduler.cancelTask(taskId);
     // The run ends after this decision; the executor finds the step READY and leaves it so.
     if (task.status === 'AWAITING_INPUT' || stopping) {
       this.deps.scheduler.cancelTask(taskId);

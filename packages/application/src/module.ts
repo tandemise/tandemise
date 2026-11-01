@@ -65,6 +65,7 @@ import { ReviewPipeline } from './engine/reviews.js';
 import { ArtifactServiceImpl } from './services/artifact-service.js';
 import { WorkflowServiceImpl } from './services/workflow-service.js';
 import { Waiter } from './engine/waiter.js';
+import { PullRequestWait } from './engine/pr-wait.js';
 import { IntegrationServiceImpl } from './services/integration-service.js';
 import { MissionServiceImpl } from './services/mission-service.js';
 import { HoldServiceImpl } from './services/hold-service.js';
@@ -447,6 +448,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
         const last = opened.at(-1)?.body;
         return last !== undefined && last.type === 'ship.pr_opened' ? last.headSha : null;
       },
+      opened: (mission) => openedPullRequests(r, mission.id),
       decide: {
         missions: r.resolve(t.MISSION_REPOSITORY),
         mergeDecisions: r.resolve(t.MERGE_DECISION_REPOSITORY),
@@ -481,6 +483,11 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
         exec: () => r.resolve(INTEGRATION_COMMAND_EXECUTOR),
         clock: clock(r),
         log: log(r).child({ component: 'waiter' }),
+      }),
+      prWait: new PullRequestWait({
+        pullRequests: r.resolve(t.PULL_REQUEST_FLOW),
+        known: (mission) => openedPullRequests(r, mission.id),
+        graceMs: options.shipCiGraceMs ?? SHIP_CI_GRACE_MS,
       }),
       remediation: r.resolve(t.REMEDIATION_PLANNER),
       integration: r.resolve(t.BRANCH_INTEGRATION_SERVICE),
@@ -1014,6 +1021,10 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       clock: clock(r),
       log: log(r).child({ component: 'liveness' }),
       quietAfterMs: options.quietAfterMs ?? DEFAULT_QUIET_AFTER_MS,
+      pullRequestOf: (missionId) => {
+        const last = openedPullRequests(r, missionId).at(-1);
+        return last === undefined ? null : last.url;
+      },
     }), { source: SOURCE });
 
     bind(t.DESK_SERVICE, (r) => new DeskService({
@@ -1404,6 +1415,13 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
 
 /** Convenience binding for composition roots with no scheduler override. */
 export const applicationModule: TandemiseModule = createApplicationModule();
+
+/** The mission's `ship.pr_opened` events, oldest first: the pull requests it opened, or its CI wait found (#143). */
+function openedPullRequests(r: Resolver, missionId: string): readonly (import('./engine/ship.js').OpenedPullRequest & { readonly url: string })[] {
+  return r.resolve(t.EVENT_REPOSITORY).listByMission(asId<'MissionId'>(missionId), { semanticOnly: true }).flatMap((e) => (e.body.type === 'ship.pr_opened'
+    ? [{ repo: e.body.repo, number: e.body.number, url: e.body.url, headSha: e.body.headSha, foundBy: e.body.foundBy ?? null }]
+    : []));
+}
 
 /**
  * What the ship step's pull request says beyond the plan (#113): the latest

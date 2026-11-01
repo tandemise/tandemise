@@ -297,7 +297,8 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
     case 'plan.decided':
       return { ...base, icon: 'sparkle', tone: 'pending', title: `The factory chose the ${body.lane} lane`, detail: null, link: null };
     case 'ship.pr_opened':
-      return { ...base, icon: 'externalLink', tone: 'succeeded', title: `Pull request #${body.number} opened`, detail: body.url, link: null };
+      // A pull request a step opened, found by the mission's CI wait (#143), is found, not opened.
+      return { ...base, icon: 'externalLink', tone: 'succeeded', title: `Pull request #${body.number} ${body.foundBy === 'wait' ? 'found' : 'opened'}`, detail: body.url, link: null };
     case 'task.outcome':
       return { ...base, icon: 'info', tone: 'pending', title: 'Outcome recorded', detail: null, link: null };
     case 'merge.decided':

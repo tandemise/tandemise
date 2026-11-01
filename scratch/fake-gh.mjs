@@ -25,6 +25,7 @@
 //   gh pr edit N --repo o/r --add-reviewer R…
 //   gh pr merge N --repo o/r --squash|--merge|--rebase --match-head-commit SHA [--auto] --subject S --body B
 //   gh pr update-branch N --repo o/r
+//   gh pr checks B|N [--required] [--repo o/r]   (a plan's CI wait step, with gh's exit codes)
 //   gh repo view o/r --json autoMergeAllowed
 //   gh api repos/o/r/commits/SHA/check-runs
 //   gh api repos/o/r/branches/B/protection
@@ -436,6 +437,7 @@ function main(argv) {
 
 function prCommand(dir, state, args, out) {
   const verb = args[1];
+  if (verb === 'checks') { prChecks(state, args); return; }
   const repo = flag(args, '--repo');
   if (repo === undefined) fail('fake gh: --repo is required');
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
@@ -514,6 +516,28 @@ function prCommand(dir, state, args, out) {
     return;
   }
   fail(`fake gh: unknown pr command ${verb}`);
+}
+
+/**
+ * `gh pr checks <branch|number> [--required] [--repo o/r]`, with gh's exit codes: 0 when every check passed,
+ * 8 while any is pending, 1 when one failed or there is nothing to report. With `--required`, a repository
+ * without `protection.required_status_checks` has no required checks, so it always answers 1, as gh does.
+ * Without --repo, the one repository in the state that has pull requests.
+ */
+function prChecks(state, args) {
+  const repo = flag(args, '--repo') ?? Object.keys(state.repos).find((k) => (state.repos[k].prs ?? []).length > 0);
+  const r = repo === undefined ? undefined : state.repos[repo];
+  const selector = args.slice(2).find((a, i, all) => !a.startsWith('-') && !['--repo', '-R'].includes(all[i - 1]));
+  const pr = (r?.prs ?? []).filter((p) => String(p.number) === selector || p.headRefName === selector).sort((a, b) => b.number - a.number)[0];
+  if (pr === undefined) fail(`no pull requests found for branch "${selector}"`);
+  if (args.includes('--required') && r.protection?.required_status_checks == null) {
+    fail(`no required checks reported on the '${pr.headRefName}' branch`);
+  }
+  const runs = (r.checks ?? {})[pr.headRefOid] ?? r.defaultChecks ?? [];
+  if (runs.length === 0) fail(`no checks reported on the '${pr.headRefName}' branch`);
+  for (const k of runs) process.stdout.write(`${k.name}\t${k.status === 'completed' || k.status === undefined ? (k.conclusion ?? 'pass') : 'pending'}\n`);
+  if (runs.some((k) => (k.status ?? 'completed') === 'completed' && !['success', 'neutral', 'skipped'].includes(k.conclusion ?? ''))) process.exit(1);
+  if (runs.some((k) => (k.status ?? 'completed') !== 'completed')) process.exit(8);
 }
 
 if (process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url) main(process.argv.slice(2));

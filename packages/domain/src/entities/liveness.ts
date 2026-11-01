@@ -59,6 +59,7 @@ export const LIVENESS_RULES: readonly LivenessRule[] = [
   { id: 'T8', subject: 'task', statuses: ['AWAITING_EXTERNAL'], condition: 'a wait step polls until its timeout', kind: 'moving' },
   { id: 'T8b', subject: 'task', statuses: ['AWAITING_EXTERNAL'], condition: 'a parked agent task: the person who took it elsewhere is who it waits on', kind: 'waiting' },
   { id: 'T8c', subject: 'task', statuses: ['HELD'], condition: 'a person has the keyboard on it', kind: 'waiting' },
+  { id: 'T8d', subject: 'task', statuses: ['AWAITING_EXTERNAL'], condition: 'a wait step past its stall threshold, or whose command can\'t run', kind: 'cause' },
   { id: 'T9', subject: 'task', statuses: ['AWAITING_APPROVAL'], condition: 'a pending card for it', kind: 'waiting' },
   { id: 'T10', subject: 'task', statuses: ['AWAITING_APPROVAL'], condition: 'no pending card', kind: 'cause' },
   { id: 'T11', subject: 'task', statuses: ['BLOCKED'], condition: 'a pending card for it', kind: 'waiting' },
@@ -79,6 +80,36 @@ export interface LivenessTaskInput {
   readonly orderHint: number;
   /** Who carries it out (plan.ts); absent is read as `agent`, which every caller from before P3 means. */
   readonly executor?: TaskExecutor;
+  /**
+   * A wait step that has waited past `waitStalledAfterMs`, or whose command
+   * can't run (#145): polling on is no longer a sign it moves. The service
+   * derives it from the clock; absent is read as false.
+   */
+  readonly overdue?: boolean;
+}
+
+/**
+ * How long a wait step may look before it counts as stalled (#145): half its
+ * timeout, and never more than 30 minutes. A wait polls on its own until its
+ * timeout, but a person should hear about one that is clearly not ending
+ * well before then.
+ */
+export function waitStalledAfterMs(timeoutMs: number): number {
+  return Math.min(Math.floor(timeoutMs / 2), 30 * 60_000);
+}
+
+/** The status line a wait writes once its command can't run at all (the waiter, #145). */
+export const WAIT_BROKEN_PREFIX = "The wait can't run its command: ";
+
+/** Whether a wait step that is AWAITING_EXTERNAL is overdue, from what it stores and the time. */
+export function isWaitOverdue(task: {
+  readonly executor?: TaskExecutor; readonly status: TaskStatus; readonly statusReason: string | null;
+  readonly startedAt: string | null; readonly waitPolicy: { readonly timeoutMs: number } | null;
+}, nowMs: number): boolean {
+  if (task.executor !== 'wait' || task.status !== 'AWAITING_EXTERNAL') return false;
+  if (task.statusReason?.startsWith(WAIT_BROKEN_PREFIX) === true) return true;
+  if (task.startedAt === null || task.waitPolicy === null) return false;
+  return nowMs - Date.parse(task.startedAt) >= waitStalledAfterMs(task.waitPolicy.timeoutMs);
 }
 
 export interface LivenessInput {
@@ -164,8 +195,10 @@ export function taskLiveness(
     case 'AWAITING_HUMAN': return { rule: 'T7', standing: 'waiting' };
     // A wait step polls until its own timeout and keeps moving; a parked agent
     // task went to a person, so it waits on them like AWAITING_HUMAN (T8b, spec A4).
+    // One past its stall threshold, or whose command can't run, is the cause (T8d, #145).
     case 'AWAITING_EXTERNAL':
-      return (task.executor ?? 'agent') === 'wait' ? { rule: 'T8', standing: movable('moving') } : { rule: 'T8b', standing: 'waiting' };
+      if ((task.executor ?? 'agent') !== 'wait') return { rule: 'T8b', standing: 'waiting' };
+      return task.overdue === true ? { rule: 'T8d', standing: 'cause' } : { rule: 'T8', standing: movable('moving') };
     case 'AWAITING_APPROVAL':
       return context.carded.has(task.id) ? { rule: 'T9', standing: 'waiting' } : { rule: 'T10', standing: 'cause' };
     // A person has the keyboard; the step is theirs until they continue or release it.
@@ -262,6 +295,7 @@ function classifyWork(
 function describeStatus(status: TaskStatus): string {
   switch (status) {
     case 'AWAITING_APPROVAL': return 'waiting for an approval that no longer exists';
+    case 'AWAITING_EXTERNAL': return 'still waiting';
     case 'BLOCKED': return 'blocked';
     case 'FAILED': return 'failed';
     case 'CANCELLED': return 'cancelled';

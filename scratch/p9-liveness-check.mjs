@@ -35,15 +35,16 @@ section('pure: the table names every status');
   const missionRows = D.LIVENESS_RULES.filter((r) => r.subject === 'mission');
   const taskRows = D.LIVENESS_RULES.filter((r) => r.subject === 'task');
   check('18 mission rows L1-L18', eq(missionRows.map((r) => r.id), Array.from({ length: 18 }, (_, i) => `L${i + 1}`)), missionRows.map((r) => r.id));
-  // P3 split T8 into T8 (a wait step) and T8b (a parked agent task), so the run stays 15 numbered ids plus T8b; a hold adds T8c.
-  check('17 task rows T1-T15 plus T8b and T8c', eq(taskRows.map((r) => r.id), [...Array.from({ length: 8 }, (_, i) => `T${i + 1}`), 'T8b', 'T8c', ...Array.from({ length: 7 }, (_, i) => `T${i + 9}`)]), taskRows.map((r) => r.id));
+  // P3 split T8 into T8 (a wait step) and T8b (a parked agent task), so the run stays 15 numbered ids plus T8b; a hold adds T8c;
+  // a wait past its stall threshold adds T8d (#145).
+  check('18 task rows T1-T15 plus T8b, T8c and T8d', eq(taskRows.map((r) => r.id), [...Array.from({ length: 8 }, (_, i) => `T${i + 1}`), 'T8b', 'T8c', 'T8d', ...Array.from({ length: 7 }, (_, i) => `T${i + 9}`)]), taskRows.map((r) => r.id));
   for (const status of D.MISSION_STATUSES) check(`mission status ${status} has a row`, missionRows.some((r) => r.statuses.includes(status)));
   for (const status of D.TASK_STATUSES) check(`task status ${status} has a row`, taskRows.some((r) => r.statuses.includes(status)));
   check('every mission row says its kind', missionRows.every((r) => ['moving', 'waiting', 'parked', 'finished', 'stalled'].includes(r.kind)), missionRows.map((r) => [r.id, r.kind]));
 }
 
 section('pure: one input per mission row');
-const t = (key, status, extra = {}) => ({ id: `tsk_${key}`, key, title: extra.title ?? `Step ${key}`, status, statusReason: extra.statusReason ?? null, dependsOn: extra.dependsOn ?? [], attempts: extra.attempts ?? 1, orderHint: extra.orderHint ?? 0, executor: extra.executor });
+const t = (key, status, extra = {}) => ({ id: `tsk_${key}`, key, title: extra.title ?? `Step ${key}`, status, statusReason: extra.statusReason ?? null, dependsOn: extra.dependsOn ?? [], attempts: extra.attempts ?? 1, orderHint: extra.orderHint ?? 0, executor: extra.executor, overdue: extra.overdue });
 const base = { statusReason: null, tasks: [], cards: [], planning: false, refining: false, queued: false, ready: false, readinessLabel: 'Plan', toDecide: 0 };
 {
   const cases = [
@@ -107,6 +108,8 @@ section('pure: one input per task row, and the action a stall gets');
     ['T8', [t('a', 'AWAITING_EXTERNAL', { executor: 'wait' })], 'a', 'moving'],
     ['T8b', [t('a', 'AWAITING_EXTERNAL', { executor: 'agent' })], 'a', 'waiting'],
     ['T8c', [t('a', 'HELD', { executor: 'agent' })], 'a', 'waiting'],
+    // #145: a wait that has looked past its stall threshold, or can't run its command, is what is stuck.
+    ['T8d', [t('a', 'AWAITING_EXTERNAL', { executor: 'wait', overdue: true, statusReason: 'Waiting for CI on #12 (1 of 2 checks done).' })], 'a', 'stalled'],
     ['T9', [t('a', 'AWAITING_APPROVAL')], 'a', 'waiting', [{ taskId: 'tsk_a', kind: 'action' }]],
     ['T10', [t('a', 'AWAITING_APPROVAL')], 'a', 'stalled'],
     ['T11', [t('a', 'BLOCKED', { statusReason: 'Gate not met' })], 'a', 'waiting', [{ taskId: 'tsk_a', kind: 'intervention' }]],
