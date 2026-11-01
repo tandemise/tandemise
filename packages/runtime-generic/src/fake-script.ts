@@ -25,6 +25,13 @@ export type FakeStep = (
   | { readonly kind: 'message'; readonly text: string }
   | { readonly kind: 'thinking'; readonly text: string }
   | { readonly kind: 'tool'; readonly tool: string; readonly input?: string; readonly outcome?: 'ok' | 'error' }
+  /**
+   * Calls a tool for real, through the run's MCP config: the same broker,
+   * policy gate and approval a worker's call goes through. Only the event is
+   * scripted for `tool`; this one can be refused, wait on a person, or die
+   * with the run.
+   */
+  | { readonly kind: 'call'; readonly tool: string; readonly input: Readonly<Record<string, unknown>> }
   | { readonly kind: 'write-file'; readonly path: string; readonly content: string }
   | { readonly kind: 'usage'; readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number | null }
   | { readonly kind: 'checkpoint'; readonly sessionId?: string; readonly label?: string }
@@ -57,7 +64,7 @@ export interface FakeScript {
 }
 
 const STEP_KINDS = new Set([
-  'message', 'thinking', 'tool', 'write-file', 'usage', 'checkpoint', 'rate-limit', 'delay', 'complete', 'fail',
+  'message', 'thinking', 'tool', 'call', 'write-file', 'usage', 'checkpoint', 'rate-limit', 'delay', 'complete', 'fail',
 ]);
 
 /**
@@ -182,6 +189,14 @@ function parseStepBody(step: Record<string, unknown>, index: number): Result<Fak
         outcome: outcome ?? 'ok',
       });
     }
+    case 'call': {
+      if (typeof step['tool'] !== 'string') return missing('tool');
+      const input = step['input'] ?? {};
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+        return Err(TandemiseError.validation(`Fake script step ${index} (call) input must be an object`));
+      }
+      return Ok({ kind, tool: step['tool'], input: input as Record<string, unknown> });
+    }
     case 'write-file':
       if (typeof step['path'] !== 'string') return missing('path');
       if (typeof step['content'] !== 'string') return missing('content');
@@ -220,6 +235,16 @@ function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+/** Fills every string inside a call's input, leaving its shape alone. */
+function fillDeep(value: unknown, fill: (text: string) => string): unknown {
+  if (typeof value === 'string') return fill(value);
+  if (Array.isArray(value)) return value.map((v) => fillDeep(v, fill));
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fillDeep(v, fill)]));
+  }
+  return value;
+}
+
 /** Substitutes `{{prompt}}`, `{{cwd}}` and `{{runId}}` into a step's free text. */
 export function substituteStep(step: FakeStep, values: Readonly<Record<string, string>>): FakeStep {
   const fill = (text: string): string => {
@@ -241,6 +266,8 @@ export function substituteStep(step: FakeStep, values: Readonly<Record<string, s
       return { ...step, message: fill(step.message) };
     case 'tool':
       return step.input === undefined ? step : { ...step, input: fill(step.input) };
+    case 'call':
+      return { ...step, input: fillDeep(step.input, fill) as Record<string, unknown> };
     default:
       return step;
   }

@@ -11,6 +11,7 @@ import type { EventRecorder, EventScope } from '../support/event-recorder.js';
 import type { ApprovalWaiter } from '../support/tool-policy.js';
 import { withdrawApproval } from '../support/withdraw.js';
 import { runActorOf } from '../support/run-actor.js';
+import { parkOnPerson, unparkFromPerson } from '../support/park.js';
 import type { RequestAddress } from '../engine/reviews.js';
 import { MAX_PARKED_MS, type RunDeadlines } from '../engine/run-deadline.js';
 
@@ -112,26 +113,9 @@ export interface AskHumanDeps {
  * places to look and one of them would be missed.
  */
 export function createAskHumanTool(deps: AskHumanDeps): IntegrationTool {
-  const park = (task: MissionTask, question: string): void => {
-    // Only a running task waits on its question (a second question refreshes
-    // the line). A held one has a person in its session already, and any other
-    // status is not this run's to change.
-    const status = deps.tasks.get(task.id)?.status;
-    if (status !== 'RUNNING' && status !== 'AWAITING_INPUT') return;
-    deps.tasks.update(task.id, {
-      status: 'AWAITING_INPUT',
-      statusReason: `Waiting for your answer: ${summarize(question, 160)}`,
-    });
-  };
-
-  const unpark = (taskId: MissionTask['id']): void => {
-    const current = deps.tasks.get(taskId);
-    // Only this tool's own park is undone. If the task moved on - the run was
-    // cancelled, the executor failed it - putting it back to RUNNING here would
-    // resurrect a task nothing is driving.
-    if (current?.status !== 'AWAITING_INPUT') return;
-    deps.tasks.update(taskId, { status: 'RUNNING', statusReason: null });
-  };
+  const park = (task: MissionTask, question: string): void =>
+    parkOnPerson(deps.tasks, task.id, `Waiting for your answer: ${summarize(question, 160)}`);
+  const unpark = (taskId: MissionTask['id']): void => unparkFromPerson(deps.tasks, taskId);
 
   return defineTool({
     name: ASK_HUMAN_TOOL,

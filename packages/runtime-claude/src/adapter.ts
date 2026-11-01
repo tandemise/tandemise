@@ -9,7 +9,7 @@ import {
   DEFAULT_TERMINATION_GRACE_MS, NormalizingEventSink, RUNTIME_SIGNED_OUT, SESSION_NOT_FOUND,
   relieveBackPressure, superviseProcessStream,
 } from '@tandemise/runtimes-core';
-import { buildRuntimeEnv, withDeclaredCapabilities, withheldEnvNames } from '@tandemise/runtimes-core';
+import { agentDisplaySetting, agentEnvPlan, buildRuntimeEnv, withDeclaredCapabilities, withheldEnvNames, type AgentEnvPlan } from '@tandemise/runtimes-core';
 import { CLAUDE_SETTINGS_SCHEMA, PARENT_SESSION_ENV, resolveConfigDir } from './settings.js';
 import type { AgentRuntimeAdapter, RunRequest, SupervisedChild } from '@tandemise/runtimes-core';
 import { TandemiseError, systemClock } from '@tandemise/shared';
@@ -184,14 +184,18 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
     opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
   ): InteractiveInvocation {
     const file = requireExecutable(request.profile.executablePath);
+    const plan = this.#plan(request);
     const env: Record<string, string> = {};
-    for (const [name, value] of Object.entries(this.#env(request, resolveConfigDir(request.profile.settings)))) {
+    for (const [name, value] of Object.entries(this.#env(request, resolveConfigDir(request.profile.settings), plan))) {
       if (value !== undefined) env[name] = value;
     }
     env['TERM'] = 'xterm-256color';
+    const invocation = buildInteractiveInvocation(request, sessionRef, opts);
     return {
-      file,
-      ...buildInteractiveInvocation(request, sessionRef, opts),
+      ...invocation,
+      // Under xvfb-run when the profile asks for a virtual display (#107).
+      file: plan.wrap === null ? file : plan.wrap[0]!,
+      args: plan.wrap === null ? invocation.args : [...plan.wrap.slice(1), file, ...invocation.args],
       env,
       cwd: absoluteWorkingDirectory(request.workingDirectory),
     };
@@ -235,7 +239,9 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
     // makes two Claude profiles two independent workers rather than one account
     // wearing two names. It is an override, so it wins over anything inherited.
     const configDir = resolveConfigDir(request.profile.settings);
-    const childEnv = this.#env(request, configDir);
+    const plan = this.#plan(request);
+    const childEnv = this.#env(request, configDir, plan);
+    log.info('agent environment', { tandemiseHome: plan.env['TANDEMISE_HOME'], display: plan.display });
     log.debug('spawning claude code', {
       executablePath,
       argc: args.length,
@@ -244,7 +250,7 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
       configDir: configDir ?? '(inherited)',
     });
     const stream = superviseProcessStream({
-      spawn: () => spawn(executablePath, args, {
+      spawn: () => spawn(plan.wrap === null ? executablePath : plan.wrap[0]!, plan.wrap === null ? args : [...plan.wrap.slice(1), executablePath, ...args], {
         cwd,
         // The CLI authenticates from the user's own environment and keychain
         // (MVP.md §10.3), so it needs more than an empty environment - but it
@@ -307,13 +313,19 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
     }
   }
 
+  /** The run's own TANDEMISE_HOME and, when its profile asks, a display (#107). */
+  #plan(request: RunRequest): AgentEnvPlan {
+    return agentEnvPlan({ runId: request.runId, display: agentDisplaySetting(request.profile.settings) });
+  }
+
   /** The environment a Claude Code child runs under, headless or interactive. */
-  #env(request: RunRequest, configDir: string | null): NodeJS.ProcessEnv {
+  #env(request: RunRequest, configDir: string | null, plan: AgentEnvPlan): NodeJS.ProcessEnv {
     return buildRuntimeEnv({
       allowedPrefixes: ['ANTHROPIC_', 'CLAUDE_'],
       allowedNames: ['SSH_AUTH_SOCK', 'GIT_ASKPASS', 'COLORTERM'],
       deniedNames: PARENT_SESSION_ENV,
       overrides: {
+        ...plan.env,
         ...(configDir === null ? {} : { CLAUDE_CONFIG_DIR: configDir }),
         // A tool call may legitimately block for as long as the run may live:
         // `ask_human` waits on a person. Claude Code's own MCP tool timeout is

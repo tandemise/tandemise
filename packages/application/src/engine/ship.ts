@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
-  githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
+  closingLine, githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
 } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
 import type { CommandExecutor } from '@tandemise/integrations-core';
@@ -74,6 +74,22 @@ export interface ShipDeps {
   readonly revert?: (decisionId: string, by: string) => Promise<unknown>;
   /** The decision (#53 §8). Optional so the open-only harnesses still compose. */
   readonly decide?: ShipDecideDeps;
+  /**
+   * What the pull request's body says beyond the plan (#113): the change set's
+   * headline and points, the tracker item, the holds, and whether QA reported.
+   * Optional so the open-only harnesses still compose; absent, the body says
+   * only what the plan knows.
+   */
+  readonly prFacts?: (mission: Mission) => PrFacts;
+}
+
+/** What `ShipDeps.prFacts` reads for one mission. */
+export interface PrFacts {
+  readonly summary: { readonly headline: string; readonly points: readonly string[] } | null;
+  readonly issue: { readonly label: string; readonly key: string; readonly url: string } | null;
+  readonly holds: readonly string[];
+  /** A QA report exists on the mission: its Done-when results are QA's, not the agent's. */
+  readonly qaReported: boolean;
 }
 
 export interface ShipDecideDeps {
@@ -189,7 +205,7 @@ export class ShipService {
         head: branch,
         base: mission.baseBranch ?? repository.defaultBranch,
         title: this.title(mission),
-        body: this.body(mission),
+        body: this.body(mission, repo),
       });
     } catch (e) {
       return { kind: 'blocked', reason: `Couldn't open the pull request: ${errorMessage(e)}` };
@@ -567,18 +583,27 @@ export class ShipService {
     return prTitle({ type: decision?.profile.type ?? 'chore' }, mission.title);
   }
 
-  /** The tracker link, the Done-when table and the plan's why. No agent-written text. */
-  body(mission: Mission): string {
+  /**
+   * What changed (the change set's headline and points), the issue it closes,
+   * the Done-when table with a status that claims no more than happened, any
+   * holds, and the plan's why (#113). `repo` is the pull request's `owner/repo`.
+   */
+  body(mission: Mission, repo: string | null = null): string {
     const decision = this.deps.planDecisions.latest(mission.id);
     const why = decision === undefined ? [] : [
       `${profileLine(decision.profile)}; ${decision.lane} lane.`,
       ...decision.modules.map((m) => `Added by the ${m} rule.`),
       ...decision.skipped,
     ];
+    const facts = this.deps.prFacts?.(mission) ?? { summary: null, issue: null, holds: [], qaReported: false };
+    const status = facts.qaReported
+      ? 'Checked by QA: see its report on the mission'
+      : facts.summary !== null ? 'Claimed by the agent, not independently verified' : 'Not verified';
     const criteria = this.deps.criteria.listActive(mission.id)
       .filter((c) => c.source !== 'spec' && c.status === 'accepted')
-      .map((c) => ({ key: c.key, statement: c.statement, verified: c.source === 'implicit' ? 'Not independently verified' : 'See the QA report' }));
-    return prBody({ link: null, criteria, why, missionId: mission.id });
+      .map((c) => ({ key: c.key, statement: c.statement, verified: c.source === 'implicit' ? 'Not independently verified' : status }));
+    const issue = facts.issue === null ? null : { ...facts.issue, closes: repo === null ? null : closingLine(facts.issue.url, repo) };
+    return prBody({ summary: facts.summary, issue, criteria, holds: facts.holds, why, missionId: mission.id });
   }
 
   /** The code step's branch: an implement or conflict step's, else the first that succeeded. */

@@ -21,7 +21,7 @@ const plan = {
   tasks: [
     { key: 'open_pr', title: 'Open PR', objective: 'Push feat/x and open a PR', roleId: 'development',
       executionPolicy: { isolation: 'worktree', maxWallTimeMs: 600000, capabilities: [] } },
-    { key: 'ci', title: 'CI', objective: 'Wait for CI', executor: 'wait', waitFor: 'gh pr checks feat/x --required',
+    { key: 'ci', title: 'CI', objective: 'Wait for CI', executor: 'wait', waitFor: 'gh pr checks feat/x',
       everyMs: 30000, timeoutMs: 2700000, dependsOn: ['open_pr'], executionPolicy: { isolation: 'worktree' } },
     { key: 'approve', title: 'Approve', objective: 'Approve the PR on GitHub', executor: 'human', dependsOn: ['ci'] },
     { key: 'figma', title: 'Design', objective: 'Make the design in Figma', executor: 'human', roleId: 'design', dependsOn: ['ci'] },
@@ -33,7 +33,7 @@ ok('parses', parsed.ok, parsed.ok ? '' : parsed.error.join('; '));
 if (parsed.ok) {
   const [pr, ci, approve] = parsed.value.tasks;
   ok('agent task is unchanged', pr.executor === 'agent' && pr.roleId === 'development' && pr.waitPolicy === null);
-  ok('wait step keeps its command', ci.executor === 'wait' && ci.waitPolicy?.command === 'gh pr checks feat/x --required');
+  ok('wait step keeps its command', ci.executor === 'wait' && ci.waitPolicy?.command === 'gh pr checks feat/x');
   ok('wait step keeps its cadence', ci.waitPolicy?.everyMs === 30000 && ci.waitPolicy?.timeoutMs === 2700000);
   ok('wait step is not sandboxed', ci.executionPolicy.isolation === 'none');
   ok('human step needs no role', approve.executor === 'human' && approve.roleId === 'human');

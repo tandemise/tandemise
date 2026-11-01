@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import type {
@@ -206,6 +207,14 @@ export class FakeRuntimeAdapter implements AgentRuntimeAdapter {
         await delay(step.ms, signal);
         continue;
       }
+      if (step.kind === 'call') {
+        const called = substituteStep(step, values) as Extract<FakeStep, { kind: 'call' }>;
+        sink.push({ type: 'tool.started', tool: called.tool, inputSummary: JSON.stringify(called.input).slice(0, 300) });
+        const result = await callTool(request.mcpConfigPath, called, signal);
+        sink.push({ type: 'message', text: `${called.tool}: ${result.text}` });
+        sink.push({ type: 'tool.completed', tool: called.tool, outcome: result.ok ? 'ok' : 'error' });
+        continue;
+      }
       this.#emit(substituteStep(step, values), request, sink, log);
       if (sink.terminated) return;
     }
@@ -252,6 +261,7 @@ export class FakeRuntimeAdapter implements AgentRuntimeAdapter {
         sink.fail(step.code, step.message, step.retryable === true);
         return;
       case 'delay':
+      case 'call':
         return;
     }
   }
@@ -313,6 +323,63 @@ function parseJsonScript(json: string): ReturnType<typeof parseFakeScript> {
   } catch (e) {
     return { ok: false, error: TandemiseError.validation(`Fake script is not valid JSON: ${errorMessage(e)}`) };
   }
+}
+
+/**
+ * One `tools/call` through the run's MCP config, as a worker makes it: the
+ * config's server is started, asked once, and stopped. The run ending under the
+ * call closes the connection, which is what a real worker sees too.
+ */
+function callTool(
+  configPath: string | null,
+  step: Extract<FakeStep, { kind: 'call' }>,
+  signal: AbortSignal,
+): Promise<{ ok: boolean; text: string }> {
+  if (configPath === null) return Promise.resolve({ ok: false, text: 'No tools were published to this run.' });
+  let server: { command: string; args: string[]; env: Record<string, string> } | undefined;
+  try {
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as { mcpServers?: Record<string, typeof server> };
+    server = Object.values(config.mcpServers ?? {})[0];
+  } catch (e) {
+    return Promise.resolve({ ok: false, text: `Cannot read the MCP config: ${errorMessage(e)}` });
+  }
+  if (server === undefined) return Promise.resolve({ ok: false, text: 'The MCP config names no server.' });
+  const { command, args, env } = server;
+  return new Promise((done) => {
+    const child = spawn(command, args, { env: { ...ownNodeEnv(), ...env }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true });
+    let settled = false;
+    const finish = (result: { ok: boolean; text: string }): void => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      child.kill();
+      done(result);
+    };
+    const onAbort = (): void => finish({ ok: false, text: 'Connection closed' });
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) { onAbort(); return; }
+    let buffered = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffered += chunk.toString('utf8');
+      let newline = buffered.indexOf('\n');
+      while (newline >= 0) {
+        const line = buffered.slice(0, newline);
+        buffered = buffered.slice(newline + 1);
+        newline = buffered.indexOf('\n');
+        let message: { id?: number; result?: { isError?: boolean; content?: { text?: string }[] }; error?: { message?: string } };
+        try { message = JSON.parse(line) as typeof message; } catch { continue; }
+        if (message.id !== 2) continue;
+        if (message.error !== undefined) finish({ ok: false, text: message.error.message ?? 'error' });
+        else finish({ ok: message.result?.isError !== true, text: message.result?.content?.[0]?.text ?? '' });
+      }
+    });
+    child.on('error', (e) => finish({ ok: false, text: errorMessage(e) }));
+    child.on('close', () => finish({ ok: false, text: 'Connection closed' }));
+    const send = (message: unknown): void => { child.stdin.write(`${JSON.stringify(message)}\n`); };
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'fake', version: '0' } } });
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: step.tool, arguments: step.input } });
+  });
 }
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {
