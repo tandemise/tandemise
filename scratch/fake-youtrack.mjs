@@ -60,8 +60,6 @@ export async function startFakeYouTrack(options = {}) {
   const states = options.states ?? DEFAULT_STATES;
   const resolvedStates = new Set(options.resolved ?? DEFAULT_RESOLVED.filter((s) => states.includes(s)));
   const types = options.types ?? ['Bug', 'Task'];
-  /** States YouTrack refuses for an unassigned issue, as a team's workflow can (#187). */
-  const requireAssignee = options.requireAssignee ?? [];
   const token = options.token ?? 'perm:test';
   const login = options.login ?? 'tandemise-bot';
   const extraFields = options.fields ?? ['Priority', 'Subsystem'];
@@ -76,8 +74,6 @@ export async function startFakeYouTrack(options = {}) {
   const attachments = new Map();
   /** every command, in order: { query, issues: [{ idReadable }] } */
   const commands = [];
-  /** Fields set through POST /api/issues/<id> customFields (#187), in order: `{ issue, fields: ["State=In Progress"] }`. */
-  const fieldSets = [];
   /** every request: { method, path, query (URLSearchParams), authorization, accept } */
   const calls = [];
   const delays = new Map();
@@ -157,8 +153,7 @@ export async function startFakeYouTrack(options = {}) {
       { $type: 'StateIssueCustomField', name: 'State', value: { $type: 'StateBundleElement', name: i.state } },
       { $type: 'SingleEnumIssueCustomField', name: 'Type', value: i.type === null ? null : { $type: 'EnumBundleElement', name: i.type } },
       { $type: 'SingleUserIssueCustomField', name: 'Assignee', value: i.assignee === null ? null : { $type: 'User', login: i.assignee, name: i.assignee } },
-      // Like YouTrack, every field of the project, an empty one with a null value.
-      ...[...new Set([...extraFields, ...Object.keys(i.fields)])].map((name) => ({ $type: 'SingleEnumIssueCustomField', name, value: i.fields[name] === undefined ? null : { $type: 'EnumBundleElement', name: i.fields[name] } })),
+      ...Object.entries(i.fields).map(([name, value]) => ({ $type: 'SingleEnumIssueCustomField', name, value: { $type: 'EnumBundleElement', name: value } })),
     ],
   });
   const findIssue = (idOrKey) => issues.get(idOrKey) ?? [...issues.values()].find((i) => i.id === idOrKey);
@@ -199,22 +194,14 @@ export async function startFakeYouTrack(options = {}) {
     const pairs = [];
     for (const t of commandTokens(query)) {
       if (!t.braced && FIELD_NAMES.includes(t.text)) pairs.push([t.text, []]);
-      else if (pairs.length === 0) return `Unknown command ${query}`;
-      // A second word after a value: the value had a space in it (#187).
-      else if (pairs.at(-1)[1].length > 0) return `${pairs.at(-1)[0]} expected: {${[...pairs.at(-1)[1], t.text].join(' ')}}`;
+      else if (pairs.length === 0 || pairs.at(-1)[1].length > 0) return `Unknown command ${query}`;
       else pairs.at(-1)[1].push(t.text);
     }
     for (const [field, words] of pairs) {
       const value = words[0] ?? '';
       if (value === '') return `No value for ${field}`;
-      // What a real YouTrack answered for `State {In Progress}` (#187): a
-      // command does not take a value with a space, braced or not. Set such a
-      // value through the issue's customFields instead.
-      if (/\s/.test(value)) return `${field} expected: {${value}}`;
       if (field === 'State') {
         if (!states.includes(value)) return `Unknown state ${value}`;
-        // A workflow rule some teams have: this state needs an assignee first.
-        if (requireAssignee.includes(value) && issue.assignee === null && !pairs.some(([f]) => f === 'Assignee')) return `Assignee is required for ${value}`;
         issue.state = value;
         issue.resolved = resolvedStates.has(value) ? now() : null;
       } else if (field === 'Type') {
@@ -257,7 +244,7 @@ export async function startFakeYouTrack(options = {}) {
       }
       if (req.method === 'GET' && path === '/_fake/state') {
         return reply(200, {
-          issues: [...issues.values()], comments: Object.fromEntries(comments), commands, fieldSets,
+          issues: [...issues.values()], comments: Object.fromEntries(comments), commands,
           calls: calls.map((c) => ({ method: c.method, path: c.path, query: c.query.toString(), authorization: c.authorization })),
         });
       }
@@ -341,26 +328,6 @@ export async function startFakeYouTrack(options = {}) {
           const body = json();
           if (typeof body.summary === 'string') issue.summary = body.summary;
           if (typeof body.description === 'string') issue.description = body.description;
-          // Fields set as data (#187): a bundle value by name, a user by login.
-          const sets = Array.isArray(body.customFields) ? body.customFields : [];
-          const named = (f) => (Array.isArray(f.value) ? f.value[0] : f.value) ?? {};
-          for (const f of sets) {
-            if (typeof f.$type !== 'string' || !f.$type.endsWith('IssueCustomField')) return fail(400, 'bad_request', `No $type for ${f.name}`);
-            if (f.name === 'State') {
-              const value = named(f).name;
-              if (!states.includes(value)) return fail(400, 'bad_request', `Unknown state ${value}`);
-              const assigning = sets.some((x) => x.name === 'Assignee');
-              if (requireAssignee.includes(value) && issue.assignee === null && !assigning) return fail(400, 'bad_request', `Assignee is required for ${value}`);
-            } else if (f.name === 'Type' && !types.includes(named(f).name)) return fail(400, 'bad_request', `Unknown type ${named(f).name}`);
-          }
-          for (const f of sets) {
-            const v = named(f);
-            if (f.name === 'State') { issue.state = v.name; issue.resolved = resolvedStates.has(v.name) ? now() : null; }
-            else if (f.name === 'Type') issue.type = v.name;
-            else if (f.name === 'Assignee') issue.assignee = v.login ?? null;
-            else issue.fields[f.name] = v.name;
-          }
-          if (sets.length > 0) fieldSets.push({ issue: issue.idReadable, fields: sets.map((f) => `${f.name}=${named(f).name ?? named(f).login}`) });
           issue.updated = now();
           save();
           return send(200, issueJson(issue, u.searchParams.get('fields') ?? ''));
@@ -407,7 +374,6 @@ export async function startFakeYouTrack(options = {}) {
     comments,
     attachments,
     commands,
-    fieldSets,
     calls,
     putIssue,
     putComment,

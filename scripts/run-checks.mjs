@@ -97,7 +97,6 @@ export const OFFLINE_CHECKS = [
   'trust-boundary-check',
   'version-check',
   'workflow-check',
-  'worktree-base-check',
 ];
 
 const TIMEOUT_MS = 5 * 60_000;

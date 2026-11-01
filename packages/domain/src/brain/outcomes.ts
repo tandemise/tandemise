@@ -31,7 +31,11 @@ export interface OutcomeEvent {
     /** The task the outcome is about, so later outcomes (a hold, a revert) find its step result. */
     readonly taskKey?: string;
   };
-  readonly merge?: { readonly verdict: 'merge' | 'ask'; readonly score: number; readonly pr: string };
+  readonly merge?: {
+    readonly verdict: 'merge' | 'ask'; readonly score: number; readonly pr: string;
+    /** Set when Tandemise merged it on a person's Merge (#174): who approved it, and the card. */
+    readonly approval?: { readonly by: string; readonly card?: string };
+  };
 }
 
 // ---------------------------------------------------------------- the fold

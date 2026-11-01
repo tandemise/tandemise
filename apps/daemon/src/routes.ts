@@ -242,9 +242,6 @@ export function buildRouter(services: TandemiseServices, options: {
     if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
     return summary;
   });
-  // "Try the move again" from the Inbox's Stalled row (#187).
-  r.post('/v1/workspaces/:id/board/retry-move', async (ctx) =>
-    services.tracker.retryMove(ctx.caller, asId(ctx.params.id!), (await ctx.body(boardItemKeyRequest)).key));
   r.post('/v1/workspaces/:id/board/ready', async (ctx) =>
     services.tracker.markReady(ctx.caller, asId(ctx.params.id!), (await ctx.body(boardItemKeyRequest)).key));
 

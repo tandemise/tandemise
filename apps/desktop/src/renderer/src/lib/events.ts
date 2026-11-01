@@ -304,7 +304,12 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
     case 'merge.decided':
       return { ...base, icon: 'shield', tone: 'pending', title: body.verdict === 'merge' ? 'Decided to merge on its own' : 'Decided to ask for your review', detail: null, link: null };
     case 'merge.merged':
-      return { ...base, icon: 'check', tone: 'succeeded', title: 'Merged', detail: null, link: null };
+      // #174: who had it merged. A merge on your Merge is Tandemise's; only one it didn't run is "in GitHub".
+      return {
+        ...base, icon: 'check', tone: 'succeeded',
+        title: body.how === 'auto' ? 'Merged on its own' : body.how === 'approval' ? 'Merged on your approval' : body.how === 'github' ? `Merged in GitHub by ${body.by}` : 'Merged',
+        detail: null, link: null,
+      };
     case 'merge.asked':
       return { ...base, icon: 'approvals', tone: 'blocked', title: 'Asked for your review', detail: body.reasons.join(' ') || null, link: null };
     case 'merge.reverted':

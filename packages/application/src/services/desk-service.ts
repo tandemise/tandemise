@@ -36,8 +36,6 @@ export interface DeskDeps {
   readonly gates: Pick<GateService, 'trace'>;
   readonly limits: Pick<LimitService, 'usage' | 'missionView'>;
   readonly liveness: Pick<LivenessService, 'classify' | 'stalled' | 'silentRuns'>;
-  /** Start moves the tracker refused (#187), counted with Stalled; resolved per call. */
-  readonly trackerStalled?: (workspaceId: WorkspaceId) => readonly unknown[];
   /** Drafts with something to decide (P6). */
   readonly readiness: Pick<ReadinessService, 'counts'>;
   /** Resolved per call: the backlog is composed with projections, which read this. */
@@ -76,7 +74,7 @@ export class DeskService {
       month: month.month,
       monthUsage: month.limits,
       usage: month.usage,
-      stalled: this.deps.liveness.stalled(workspaceId).length + (this.deps.trackerStalled?.(workspaceId).length ?? 0),
+      stalled: this.deps.liveness.stalled(workspaceId).length,
     };
   }
 

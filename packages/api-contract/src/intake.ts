@@ -446,12 +446,6 @@ export interface BoardItemView {
   readonly type?: string | null;
   readonly startable: { readonly ok: true } | { readonly ok: false; readonly reason: string };
   /**
-   * The tracker refused Start's move to in progress, in its words (#187):
-   * "Couldn't move GAR-12 to In Progress in YouTrack: …". Tandemise tries
-   * again every minute. Null otherwise; absent from an older daemon.
-   */
-  readonly moveProblem?: string | null;
-  /**
    * A draft item (#135): whether Refine is offered, and the refinement under
    * way, if any. Absent on items that are not in a draft state, and from a
    * daemon older than this field.

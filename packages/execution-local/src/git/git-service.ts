@@ -146,10 +146,7 @@ export class GitService {
     options: { createBranch?: boolean } = {},
   ): Promise<void> {
     const args = (options.createBranch ?? true)
-      // `--no-track`: cut from `origin/main`, git would otherwise make the
-      // task branch track the remote's main, and a bare `git push` from the
-      // worktree would aim at it.
-      ? ['worktree', 'add', '--no-track', '-b', branch, worktreePath, base]
+      ? ['worktree', 'add', '-b', branch, worktreePath, base]
       : ['worktree', 'add', worktreePath, branch];
     await this.#must(repoPath, args);
   }

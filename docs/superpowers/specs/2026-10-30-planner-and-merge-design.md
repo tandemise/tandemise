@@ -515,6 +515,7 @@ This design adds one event op to #51's ledger (`memory/ledger/<yyyy>/<mm>/<write
 ```
 
 - A `step_result` is written when a step settles, from its `RunScore` (`packages/domain/src/entities/eval.ts:25`). A `held` is written from `task.hold_ended` (#50). A `changes_requested` from a feedback round or a GitHub review in `CHANGES_REQUESTED`. The merge outcomes from §8.
+- A merge Tandemise runs is `merged`, on its own or on a person's **Merge**; on a Merge, `merge.approval` keeps who approved it and the card (#174). `merged_by_person` is only a merge Tandemise didn't run: one made in GitHub, or of a head it never decided on. The feed says "Merged on its own", "Merged on your approval" or "Merged in GitHub by <login>".
 - `merged_clean` is written seven days after a merge with no revert and no `broke_main`. "Clean" can't be known at merge time.
 - `foldOutcomes(events) → OutcomeStats` is pure (`@tandemise/domain`, `brain/outcomes.ts`), keyed by bucket and model, and feeds §6.2, §5.3 and the `history.*` merge facts. Every teammate's daemon folds the same events into the same table, so routing is shared without a server.
 - Eval trials (`isTrialMission`) write no outcomes, as #51 requires.

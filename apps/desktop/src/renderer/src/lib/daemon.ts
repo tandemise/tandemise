@@ -372,11 +372,6 @@ export class DaemonClient {
     return this.#request('POST', `/workspaces/${workspaceId}/board/refine`, { key }, undefined, { timeoutMs: 60_000 });
   }
 
-  /** Start's move to in progress again, for an item the tracker refused it on (#187). */
-  retryMove(workspaceId: string, key: string): Promise<BoardView> {
-    return this.#request('POST', `/workspaces/${workspaceId}/board/retry-move`, { key }, undefined, { timeoutMs: 60_000 });
-  }
-
   /** Writes the refined description and Done-when lines to the tracker and marks the item ready (#135). */
   markItemReady(workspaceId: string, key: string): Promise<BoardView> {
     return this.#request('POST', `/workspaces/${workspaceId}/board/ready`, { key }, undefined, { timeoutMs: 60_000 });

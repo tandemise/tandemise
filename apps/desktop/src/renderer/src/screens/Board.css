@@ -120,11 +120,6 @@
   cursor: not-allowed;
 }
 
-/* The tracker refused Start's move to in progress (#187), in its words. */
-.board__move-problem {
-  margin-top: var(--s1);
-}
-
 /* Why an item cannot start, beside its disabled Start (a disabled button takes no focus, so no tooltip). */
 .board__blocked {
   max-width: 280px;

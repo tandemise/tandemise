@@ -7,7 +7,6 @@ import { useDaemonMutation } from '../../lib/queries.js';
 import { showFlash } from '../../lib/notices.js';
 import { quietFor } from '../../lib/domain.js';
 import { relativeTime } from '../../lib/format.js';
-import { useWorkspaceId } from '../../lib/workspace.js';
 import { Button, Chip, Tooltip, Truncate } from '@tandemise/design/react';
 
 /**
@@ -19,17 +18,15 @@ import { Button, Chip, Tooltip, Truncate } from '@tandemise/design/react';
  */
 export function StalledRow({ stalled, bordered = false }: { stalled: InboxStalledView; bordered?: boolean }): JSX.Element {
   const [confirming, setConfirming] = useState(false);
-  const workspaceId = useWorkspaceId();
   const act = useDaemonMutation(
     async (daemon, kind: InboxStalledView['action']['kind']): Promise<unknown> => {
       const action = stalled.action;
       if (kind === 'retry' && action.kind === 'retry') return daemon.retryTask(action.taskId);
       if (kind === 'replan') return daemon.missionAction(stalled.missionId, 'plan');
       if (kind === 'refine') return daemon.refineMission(stalled.missionId);
-      if (kind === 'tracker-move' && action.kind === 'tracker-move') return daemon.retryMove(workspaceId ?? '', action.itemKey);
       return daemon.missionAction(stalled.missionId, 'cancel', { reason: 'Cancelled from the Inbox: nothing could move it.' });
     },
-    ['tasks', 'missions', 'approvals', 'refinement', 'intake'],
+    ['tasks', 'missions', 'approvals', 'refinement'],
     stalled.missionId,
   );
   const done = (kind: InboxStalledView['action']['kind']): void => {
@@ -38,7 +35,6 @@ export function StalledRow({ stalled, bordered = false }: { stalled: InboxStalle
       kind === 'retry' && stalled.action.kind === 'retry' ? `Retrying ${stalled.action.taskKey}.`
         : kind === 'replan' ? `Planning “${stalled.missionTitle}” again.`
           : kind === 'refine' ? `Refining “${stalled.missionTitle}”.`
-            : kind === 'tracker-move' ? `Asked the tracker to move it again.`
             : `Cancelled “${stalled.missionTitle}”.`,
     );
   };
