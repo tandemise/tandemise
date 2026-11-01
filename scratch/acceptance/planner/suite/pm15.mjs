@@ -1,4 +1,4 @@
-// PM13 (#194) — A failing CI check is classified before Tandemise acts on it.
+// PM15 (#194) — A failing CI check is classified before Tandemise acts on it.
 // - Before GitHub registers a check, the ship card reads "Waiting for checks to start", not "0 of 0".
 // - A pull-request title check that fails (the title was changed on GitHub to a plain sentence) is fixed in the
 //   ship step: the pull request is retitled as a Conventional Commit, the feed says so, the check runs again and
@@ -18,10 +18,10 @@ const SHOTS = resolve(here, '../../../../docs/superpowers/evidence/2026-11-01-ci
 const GH = `${SCRATCH}/gh`;
 const c = await context();
 const { page, until, sleep, api } = c;
-const ev = new Evidence('PM13', 'A failing check is classified first: a title is fixed in ship, an unknown check is asked about, no round');
+const ev = new Evidence('PM15', 'A failing check is classified first: a title is fixed in ship, an unknown check is asked about, no round');
 const shot = async (name) => {
   mkdirSync(SHOTS, { recursive: true });
-  const path = join(SHOTS, `pm13-${name}.png`);
+  const path = join(SHOTS, `pm15-${name}.png`);
   await page.screenshot(path);
   ev.shots.push(path);
 };
