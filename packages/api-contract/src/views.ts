@@ -372,6 +372,13 @@ export interface InboxStalledView {
   readonly forIds: readonly string[];
   /** When the mission last changed. */
   readonly since: string;
+  /**
+   * The mission's pull request, when what is stuck is its CI wait or its ship
+   * step (#145): the row links it. Optional, like every field added after P9.
+   */
+  readonly pullRequestUrl?: string | null;
+  /** The row also offers to cancel the mission, beside its one action (#145). */
+  readonly cancellable?: boolean;
 }
 
 /** A run that has been silent past its threshold (P9 spec §2). */
