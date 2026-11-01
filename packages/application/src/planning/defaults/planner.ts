@@ -12,7 +12,12 @@ export const SHIPPED_PLANNER = {
     { name: 'payments', paths: ['**/billing/**', '**/payment*/**', '**/stripe*/**'], sensitivity: 'critical' },
     { name: 'ci-and-infra', paths: ['.github/**', 'infra/**', '**/Dockerfile', '**/*.tf', '**/docker-compose*.yml'], sensitivity: 'critical' },
     { name: 'dependencies', paths: ['**/package.json', '**/package-lock.json', '**/pnpm-lock.yaml', '**/go.sum', '**/Cargo.lock'], sensitivity: 'sensitive' },
-    { name: 'docs', paths: ['docs/**', '**/*.md'], sensitivity: 'none' },
+    // A change that touches only these files needs no test run, type check,
+    // lint or build (#106): CI still runs everything on the pull request.
+    {
+      name: 'docs', paths: ['docs/**', '**/*.md', '**/*.mdx', '**/*.txt'], sensitivity: 'none',
+      checks: { tests: 'none', typecheck: 'none', lint: 'none', build: 'none' },
+    },
   ],
   trackerTypes: { Bug: 'fix', Feature: 'feature', Task: 'chore', Chore: 'chore', Docs: 'docs', Security: 'security' },
   labels: { bug: 'fix', enhancement: 'feature', dependencies: 'deps', documentation: 'docs', security: 'security' },
@@ -50,4 +55,7 @@ export const SHIPPED_PLANNER = {
   ],
   holdApproval: { minTasks: 5, rate: 0.4 },
   tiebreak: 'on',
+  // Each check's time budget in minutes (#111). A repository's own budget, set
+  // in Project settings → Repositories, wins over these.
+  checks: { budgets: {} },
 } as const;

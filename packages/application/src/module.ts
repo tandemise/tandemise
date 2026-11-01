@@ -259,6 +259,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       r.resolve(t.EVALUATION_REPOSITORY),
       r.resolve(t.EVENT_RECORDER),
       clock(r),
+      r.resolve(t.FACTORY_CONFIG_SOURCE),
     ), { source: SOURCE });
 
     bind(t.ARTIFACT_HARVESTER, (r) => new ArtifactHarvester(

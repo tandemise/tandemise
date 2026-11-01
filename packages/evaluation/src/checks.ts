@@ -90,10 +90,12 @@ export function createCommandCheckRunner(options: CommandCheckRunnerOptions): Ch
       timeoutMs: spec.timeoutMs ?? defaultTimeoutMs,
     });
 
+    const budgetMs = spec.timeoutMs ?? defaultTimeoutMs;
     return {
       ...base,
-      outcome: outcome.exitCode === 0 ? 'PASS' : 'FAIL',
-      detail: describe(spec, outcome),
+      // A killed run measured nothing about the work (#111): not a FAIL.
+      outcome: outcome.timedOut === true ? 'TIMEOUT' : outcome.exitCode === 0 ? 'PASS' : 'FAIL',
+      detail: describe(spec, outcome, budgetMs),
       command: spec.command,
       exitCode: outcome.exitCode,
       durationMs: outcome.durationMs,
@@ -137,11 +139,23 @@ export function checkSpecsFor(
  * tail of the output - where compilers and test runners put the summary - and
  * is redacted before it can reach a log or an event body.
  */
-function describe(spec: CheckSpec, outcome: CommandOutcome): string {
-  if (outcome.timedOut) return `\`${spec.command}\` exceeded its time budget after ${outcome.durationMs}ms.`;
+function describe(spec: CheckSpec, outcome: CommandOutcome, budgetMs: number): string {
+  if (outcome.timedOut) {
+    return `\`${spec.command}\` ran out of time: it was stopped after its ${formatBudget(budgetMs)} budget. `
+      + 'That says nothing about the work; the check never finished.';
+  }
   if (outcome.exitCode === 0) return `\`${spec.command}\` passed in ${outcome.durationMs}ms.`;
   const tail = lastLines(outcome.stderr.trim() || outcome.stdout.trim(), 20);
   return `\`${spec.command}\` exited ${outcome.exitCode}.\n${summarize(tail, 1200)}`;
+}
+
+/** "10 min", "90 s": a budget as a person reads it. */
+export function formatBudget(ms: number): string {
+  if (ms >= 60_000) {
+    const minutes = Math.round((ms / 60_000) * 10) / 10;
+    return `${minutes} min`;
+  }
+  return `${Math.max(1, Math.round(ms / 1000))} s`;
 }
 
 function lastLines(text: string, count: number): string {

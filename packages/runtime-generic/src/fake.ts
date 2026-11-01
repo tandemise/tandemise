@@ -4,7 +4,7 @@ import type {
   AgentEvent, InteractiveInvocation, RuntimeCapability, RuntimeDiscovery, RuntimeHealth, RuntimeProfile,
 } from '@tandemise/domain';
 import { NormalizingEventSink, SESSION_NOT_FOUND, classifyAbort } from '@tandemise/runtimes-core';
-import type { AgentRuntimeAdapter, RunRequest } from '@tandemise/runtimes-core';
+import type { AgentRuntimeAdapter, InteractiveOptions, RunRequest } from '@tandemise/runtimes-core';
 import { TandemiseError, errorMessage, isPathInside, ownNodeEnv, systemClock } from '@tandemise/shared';
 import type { Clock, RunId } from '@tandemise/shared';
 import { DEFAULT_FAKE_SCRIPT, parseFakeScript, stepApplies, substituteStep } from './fake-script.js';
@@ -28,7 +28,7 @@ export const FAKE_CAPABILITIES: readonly RuntimeCapability[] = [
  * line at a time and writes every reply straight away, because it will run
  * under a PTY where buffered output would look like a hang.
  */
-function interactiveScript(sessionFile: string, ref: string | null): string {
+function interactiveScript(sessionFile: string, ref: string | null, promptsFile: string | null): string {
   return `
 const fs = require('fs');
 const path = require('path');
@@ -36,8 +36,12 @@ const readline = require('readline');
 fs.writeFileSync(${JSON.stringify(sessionFile)}, 'fake-session-' + Date.now());
 process.stdout.write('Fake session ' + ${JSON.stringify(ref ?? 'new')} + '\\n');
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
+const promptsFile = ${JSON.stringify(promptsFile)};
 rl.on('line', (line) => {
   process.stdout.write('> ' + line + '\\n');
+  if (promptsFile !== null && line.trim() !== '/exit') {
+    fs.appendFileSync(promptsFile, JSON.stringify({ at: new Date().toISOString(), prompt: line }) + '\\n');
+  }
   if (line.startsWith('write ')) {
     const name = line.slice(6).trim();
     fs.writeFileSync(path.resolve(process.cwd(), name), 'written in a held session\\n');
@@ -122,11 +126,11 @@ export class FakeRuntimeAdapter implements AgentRuntimeAdapter {
   interactive(
     sessionRef: string | null,
     request: RunRequest,
-    opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+    opts: InteractiveOptions,
   ): InteractiveInvocation {
     return {
       file: process.execPath,
-      args: ['-e', interactiveScript(opts.sessionFile, sessionRef)],
+      args: ['-e', interactiveScript(opts.sessionFile, sessionRef, opts.promptsFile ?? null)],
       env: { ...ownNodeEnv() },
       cwd: request.workingDirectory,
       sessionFile: opts.sessionFile,

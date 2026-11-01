@@ -27,7 +27,7 @@ export interface MergeFacts {
   readonly coverageChangedLines: number | null;
   readonly ci: { readonly state: 'PASS' | 'FAIL' | 'PENDING' | 'NONE'; readonly requiredPresent: boolean | null };
   readonly reviewRequired: boolean | null;
-  readonly checksTests: 'PASS' | 'FAIL' | 'SKIP' | null;
+  readonly checksTests: 'PASS' | 'FAIL' | 'SKIP' | 'TIMEOUT' | null;
   readonly review: { readonly blocking: number | null; readonly major: number | null; readonly independent: boolean | null };
   readonly criteria: { readonly unverified: number; readonly implicit: boolean };
   readonly process: {
@@ -36,6 +36,8 @@ export interface MergeFacts {
     readonly holds: number | null;
     readonly changesRequested: number; readonly escalations: number; readonly gateRetries: number; readonly personCommits: number;
     readonly revertOfAuto: boolean;
+    /** A retry changed files the step's earlier attempts had not touched (#117). Absent reads as false. */
+    readonly retryOutOfScope?: boolean;
   };
   readonly history: { readonly areaReverts90d: number | null; readonly areaRecentRevert: boolean | null };
 }
@@ -93,6 +95,7 @@ export function mergeFactsToGate(f: MergeFacts): { facts: GateFacts; predicates:
     'process.gate_retries': f.process.gateRetries,
     'process.person_commits': f.process.personCommits,
     'process.revert_of_auto': f.process.revertOfAuto,
+    'process.retry_out_of_scope': f.process.retryOutOfScope ?? false,
     'history.area_reverts_90d': undef(f.history.areaReverts90d),
     'history.area_recent_revert': undef(f.history.areaRecentRevert),
   };

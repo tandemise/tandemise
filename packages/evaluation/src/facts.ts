@@ -33,10 +33,10 @@ const APPROVAL_FACT_NAME: Readonly<Record<ApprovalKind, string>> = {
  * evaluate against: it is how the UI shows which conditions are still
  * outstanding.
  */
-/** FAIL beats SKIP beats PASS: the least reassuring measurement wins. */
+/** FAIL beats TIMEOUT beats SKIP beats PASS: the least reassuring measurement wins. */
 function worstOutcome(existing: GateValue, next: CheckOutcome): CheckOutcome {
   if (existing === undefined) return next;
-  const rank = (o: GateValue): number => (o === 'FAIL' ? 2 : o === 'SKIP' ? 1 : 0);
+  const rank = (o: GateValue): number => (o === 'FAIL' ? 3 : o === 'TIMEOUT' ? 2 : o === 'SKIP' ? 1 : 0);
   return rank(existing) >= rank(next) ? (existing as CheckOutcome) : next;
 }
 

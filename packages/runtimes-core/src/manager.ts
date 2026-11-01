@@ -4,7 +4,7 @@ import type {
 import { Err, Ok, TandemiseError, errorMessage, nullLogger, systemClock } from '@tandemise/shared';
 import type { Clock, Logger, Result, RunId, RuntimeProfileId } from '@tandemise/shared';
 import { token } from '@tandemise/kernel';
-import type { AgentRuntimeAdapter, RunRequest, SlotReservation, SlotRetention } from './adapter.js';
+import type { AgentRuntimeAdapter, InteractiveOptions, RunRequest, SlotReservation, SlotRetention } from './adapter.js';
 import type { RuntimeRegistry } from './registry.js';
 
 /** How long a health probe is reused. Short enough for a polling UI to feel live. */
@@ -353,7 +353,7 @@ export class RuntimeManager {
     profile: RuntimeProfile,
     sessionRef: string | null,
     request: RunRequest,
-    opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+    opts: InteractiveOptions,
   ): InteractiveInvocation {
     const adapter = this.#registry.adapter(profile.adapterId);
     if (adapter.interactive === undefined) {

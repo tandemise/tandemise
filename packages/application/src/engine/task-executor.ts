@@ -32,7 +32,8 @@ import type { EventRecorder, EventScope } from '../support/event-recorder.js';
 import { runtimeCapabilitiesFor } from '../support/capabilities.js';
 import type { RuntimeOverrides } from '../support/runtime-overrides.js';
 import { ArtifactHarvester, outDirFor, type HarvestResult, type OverBudgetArtifact } from './harvester.js';
-import type { CheckService } from './checks.js';
+import type { CheckService, PlannedCheck } from './checks.js';
+import { personSaidSection, readPersonSaid } from '../support/hold-steer.js';
 import type { GateService } from './gates.js';
 import type { ReviewPipeline } from './reviews.js';
 import type { FeedbackRounds } from './feedback-rounds.js';
@@ -650,6 +651,9 @@ export class TaskExecutor {
       const overtakenBeforeRun = this.#overtaken(running, scope, signal);
       if (overtakenBeforeRun !== null) return overtakenBeforeRun;
 
+      // #117: where a retry starts, so what it adds to the step's change can be told apart afterwards.
+      const retryFrom = feedback !== null && target.kind === 'worktree' ? await this.#head(target, signal) : null;
+
       // 7. Run.
       const outcome = await this.#drive({
         task: running, mission, role, profile, adapter, target, assignment, grants, scope, signal, agent,
@@ -687,6 +691,7 @@ export class TaskExecutor {
       //      it describes as provenance. `.tandemise/out/` is git-ignored, so the
       //      commit's content is unaffected by the order.
       const refs = await this.#commit(target, running, role, profile, outcome.runId, scope);
+      if (retryFrom !== null) await deps.checks.measureRetryScope({ task: running, target, runId: outcome.runId, scope, signal }, retryFrom);
       const harvest = await deps.harvester.harvest({
         mission,
         task: running,
@@ -1318,6 +1323,20 @@ export class TaskExecutor {
       return this.#settle(task, scope, 'SUCCEEDED', `Found blocking problems: ${verdict.detail}`);
     }
 
+    // 11(a''). A check that ran out of time measured nothing about the work
+    //         (#111). Re-running the agent cannot make a slow suite finish:
+    //         on the dogfood run every retry re-ran the suite, timed out the
+    //         same way and blocked anyway, an hour later. The check service
+    //         already gave it a second run with twice the budget, so the step
+    //         asks a person now: raise the budget, change the command, or go
+    //         again. No attempt is spent on the agent's account.
+    const timedOut = gate === null ? [] : checks.filter((c) => c.outcome === 'TIMEOUT' && verdict.detail.includes(c.name));
+    if (runFailure === null && timedOut.length > 0 && !isTrialMission(mission)) {
+      const reason = timeoutReason(timedOut);
+      this.#createTimeoutApproval(task, mission, workspace, timedOut, reason);
+      return this.#settle(task, scope, 'BLOCKED', reason, { retryFeedback: timeoutFeedback(timedOut) });
+    }
+
     // 11(b). Gate feedback into the retry. Shown on the row, and kept in
     //        `retryFeedback` so the next attempt's prompt can quote it verbatim
     //        however long the task waits - even past a block and a manual retry.
@@ -1888,6 +1907,15 @@ export class TaskExecutor {
 
     // The ledger as the gates will measure it, so the prompt names the same ids.
     const ledger = this.deps.gates.trace(mission.id).trace.rows.map((r) => r.criterion);
+    // #106: what Tandemise runs after this pass, so the agent need not run it too.
+    const planned = trial === undefined || trial === null ? await this.deps.checks.planned(task, input.repository) : [];
+    // #117: what people said during this step's holds, binding on every later pass.
+    const personSaid = personSaidSection(
+      this.deps.holds.listByMission(task.missionId)
+        .filter((h) => h.taskId === task.id && h.endedAt !== null)
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+        .map((hold) => ({ hold, said: readPersonSaid(hold) })),
+    );
     const compiled = this.deps.contextCompiler.compile({
       role,
       workspaceName: workspace.name,
@@ -1911,6 +1939,8 @@ export class TaskExecutor {
           // #51: a project with no brain is not told about the brain's tools.
           ...this.#contractNotes(task, target, brain === undefined ? input.tools.filter((name) => !name.startsWith('brain.')) : input.tools, input.feedback, input.tighten, input.round ?? null),
           ...ledgerNotes(task, ledger),
+          ...(planned.length === 0 ? [] : [plannedChecksNote(planned)]),
+          ...(personSaid === null ? [] : [personSaid]),
         ],
       },
     });
@@ -1978,7 +2008,12 @@ export class TaskExecutor {
       notes.push(
         `Your previous attempt did not satisfy this task's completion gate. `
         + `Tandemise measured: ${feedback} `
-        + 'Fix exactly that before you finish; nothing else about the task has changed.',
+        + 'Fix exactly that before you finish; nothing else about the task has changed. '
+        // #117: a retry told only "the tests failed" edited an unrelated check
+        // to get green, and reverted what a person had asked for.
+        + 'Your previous work is committed on this branch: build on it, do not start over. Keep the change scoped '
+        + 'to this task: do not edit files outside it (other tests, checks, configuration) to make a measurement '
+        + 'pass, and do not undo anything a person asked for. Tandemise flags files a retry adds to the change.',
       );
     }
     // An owner's request, not a gate failure (P0 lesson): the round passed, or the person chose to go again.
@@ -2361,6 +2396,50 @@ export class TaskExecutor {
     this.deps.approvals.create(approval);
     this.deps.recorder.invalidate('approvals', mission.id);
     return approval;
+  }
+
+  /**
+   * The card a timed-out check raises (#111): it says plainly that the check,
+   * not the work, ran out of time, and what a person can do about it.
+   */
+  #createTimeoutApproval(
+    task: MissionTask, mission: Mission, workspace: Workspace, timedOut: readonly CheckResult[], reason: string,
+  ): Approval {
+    const approval = this.deps.approvalFactory.createOrThrow({
+      workspaceId: workspace.id,
+      missionId: mission.id,
+      taskId: task.id,
+      kind: 'intervention',
+      risk: 'read',
+      title: `${task.title}: a check ran out of time`,
+      rationale: reason,
+      effect: 'Raise the check\'s time budget (or change its command) in Project settings → Repositories, then retry: '
+        + 'the agent\'s work is kept on its branch and the checks run again. Accepting marks the result good enough '
+        + 'and lets dependent work continue; the pull request\'s CI still runs the full suite. Leaving it blocked stops here.',
+      evidence: [
+        ...timedOut.map((c) => ({ kind: 'text' as const, label: c.name.replace(/^checks\./, ''), value: summarize(c.detail, 600) })),
+        { kind: 'text', label: 'Objective', value: summarize(task.objective, 600) },
+      ],
+      options: [
+        { id: 'approve', label: 'Retry' },
+        { id: ACCEPT_RESULT_OPTION, label: 'Accept the result and continue' },
+        { id: 'reject', label: 'Leave blocked' },
+      ],
+      recommendedOptionId: null,
+      ...this.deps.reviews.addressFor(task, workspace.id),
+    });
+    this.deps.approvals.create(approval);
+    this.deps.recorder.invalidate('approvals', mission.id);
+    return approval;
+  }
+
+  async #head(target: ExecutionTarget, signal: AbortSignal): Promise<string | null> {
+    try {
+      const r = await target.exec({ command: 'git', args: ['rev-parse', 'HEAD'], signal });
+      return r.exitCode === 0 ? r.stdout.trim() || null : null;
+    } catch {
+      return null;
+    }
   }
 
   // -------------------------------------------------------------- transitions
@@ -2805,6 +2884,44 @@ function tightenPreamble(): string {
 }
 
 /** What a resumed session is told: it already has the task and its draft in context. */
+/**
+ * The row's line for a step whose check ran out of time (#111), in a person's
+ * words: which check, after how long, and that it is not the agent's fault.
+ */
+export function timeoutReason(timedOut: readonly CheckResult[]): string {
+  const names = timedOut.map((c) => `the ${c.name.replace(/^checks\./, '')} check`);
+  const which = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${which.charAt(0).toUpperCase()}${which.slice(1)} ran out of time before it finished. That is not a fault in the work. `
+    + 'Raise its time budget in Project settings → Repositories, or accept the result.';
+}
+
+/** What the agent is told if a person retries after a timeout: the work was not judged, so nothing needs fixing. */
+function timeoutFeedback(timedOut: readonly CheckResult[]): string {
+  return [
+    ...timedOut.map((c) => `${c.name}: ${c.detail}`),
+    'Your work was not judged: the check never finished. Your previous attempt is committed on this branch. '
+    + 'Do not change code to make the check faster or to skip it; if the task is done, finish without further changes.',
+  ].join('\n');
+}
+
+/**
+ * What the step is told about the checks Tandemise runs after it (#106). On the
+ * dogfood run every agent followed the repository's own "run the full CI
+ * before a pull request" and spent 15-20 minutes on it, and then the gate ran
+ * the same suite again. The gate's run is the one that counts, and the pull
+ * request's CI runs everything; the agent runs only what its change needs.
+ */
+function plannedChecksNote(planned: readonly PlannedCheck[]): string {
+  return [
+    'After you finish, Tandemise itself runs these checks in this worktree and judges the step by them:',
+    ...planned.map((c) => `- ${c.name}: \`${c.command}\` (time budget ${c.budgetMinutes} min)`),
+    'Do not run these full commands yourself, even if the repository\'s own instructions say to run its whole '
+      + 'test suite or CI before a pull request: Tandemise runs them once, after you, and the pull request\'s CI runs '
+      + 'everything again. Run only the narrow, fast checks for what you changed (one test file, one package). '
+      + 'A change to documentation only needs no test run at all.',
+  ].join('\n');
+}
+
 function tightenRequest(feedback: string, destinations: readonly string[]): string {
   return [
     tightenPreamble(),

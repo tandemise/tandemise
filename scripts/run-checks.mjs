@@ -35,6 +35,7 @@ export const OFFLINE_CHECKS = [
   'env-leak-check',
   'first-run-words-check',
   'execution-check',
+  'factory-loop-check',
   'feedback-loop-check',
   'fs-security-check',
   'gate-facts-check',

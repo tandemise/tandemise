@@ -1,5 +1,5 @@
 export { RUNTIME_ADAPTERS, RUNTIME_SIGNED_OUT, SESSION_NOT_FOUND, describeAdapter } from './adapter.js';
-export type { AgentRuntimeAdapter, RunRequest, RuntimeAdapterDescriptor, SlotReservation, SlotRetention } from './adapter.js';
+export type { AgentRuntimeAdapter, InteractiveOptions, RunRequest, RuntimeAdapterDescriptor, SlotReservation, SlotRetention } from './adapter.js';
 
 export { RuntimeRegistry, RUNTIME_REGISTRY } from './registry.js';
 

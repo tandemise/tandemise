@@ -124,7 +124,7 @@ interface PackageManifest {
  * something else configures it by hand, which is better than Tandemise
  * inventing a command that happens to exist and does something different.
  */
-const SCRIPT_CANDIDATES: Readonly<Record<keyof RepositoryChecks, readonly string[]>> = {
+const SCRIPT_CANDIDATES: Readonly<Record<Exclude<keyof RepositoryChecks, 'budgets'>, readonly string[]>> = {
   install: [],
   typecheck: ['typecheck', 'type-check', 'tsc'],
   lint: ['lint'],
@@ -135,7 +135,7 @@ const SCRIPT_CANDIDATES: Readonly<Record<keyof RepositoryChecks, readonly string
 };
 
 function detectChecks(scripts: Readonly<Record<string, string>>): RepositoryProbe['detectedChecks'] {
-  const pick = (key: keyof RepositoryChecks): string | null => {
+  const pick = (key: keyof typeof SCRIPT_CANDIDATES): string | null => {
     const name = SCRIPT_CANDIDATES[key].find((candidate) => candidate in scripts);
     return name === undefined ? null : `npm run ${name}`;
   };

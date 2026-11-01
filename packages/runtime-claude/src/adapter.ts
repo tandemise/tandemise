@@ -11,7 +11,7 @@ import {
 } from '@tandemise/runtimes-core';
 import { buildRuntimeEnv, withDeclaredCapabilities, withheldEnvNames } from '@tandemise/runtimes-core';
 import { CLAUDE_SETTINGS_SCHEMA, PARENT_SESSION_ENV, resolveConfigDir } from './settings.js';
-import type { AgentRuntimeAdapter, RunRequest, SupervisedChild } from '@tandemise/runtimes-core';
+import type { AgentRuntimeAdapter, InteractiveOptions, RunRequest, SupervisedChild } from '@tandemise/runtimes-core';
 import { TandemiseError, systemClock } from '@tandemise/shared';
 import type { Clock, RunId } from '@tandemise/shared';
 import { buildInteractiveInvocation, buildInvocation } from './cli-args.js';
@@ -181,7 +181,7 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
   interactive(
     sessionRef: string | null,
     request: RunRequest,
-    opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+    opts: InteractiveOptions,
   ): InteractiveInvocation {
     const file = requireExecutable(request.profile.executablePath);
     const env: Record<string, string> = {};

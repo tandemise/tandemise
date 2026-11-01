@@ -1,7 +1,15 @@
 import type { EvaluationId, MissionId, RunId, TaskId, Timestamp } from '@tandemise/shared';
 
-export const CHECK_OUTCOMES = ['PASS', 'FAIL', 'SKIP'] as const;
+/**
+ * `TIMEOUT` is its own outcome (#111): a check that ran out of its time budget
+ * measured nothing about the work. Reading it as FAIL sent the agent back to
+ * re-do work that may have been fine, and the next run timed out the same way;
+ * the engine asks a person about a timeout instead of retrying the agent.
+ */
+export const CHECK_OUTCOMES = ['PASS', 'FAIL', 'SKIP', 'TIMEOUT'] as const;
 export type CheckOutcome = (typeof CHECK_OUTCOMES)[number];
+/** What QA reports per Done-when line: a person's verdict, which cannot time out. */
+export type CriterionOutcome = Exclude<CheckOutcome, 'TIMEOUT'>;
 
 /**
  * A deterministic check result (MVP.md §17.1 level 1). These are measurements,
@@ -22,6 +30,12 @@ export interface CheckResult {
   readonly durationMs: number;
   readonly outputRef: string | null;
   readonly createdAt: Timestamp;
+  /**
+   * The git tree the check measured (#106), so a later step measuring the same
+   * tree reuses this result instead of running the command again. Absent or
+   * null when it ran outside a git tree; such a result is never reused.
+   */
+  readonly treeSha?: string | null;
 }
 
 /** Structured output of an evaluator role (MVP.md §17.1 level 3). */
@@ -57,7 +71,7 @@ export interface CriterionResult {
    */
   readonly criterionId?: string | null;
   readonly criterion: string;
-  readonly outcome: CheckOutcome;
+  readonly outcome: CriterionOutcome;
   readonly evidence: string;
 }
 
