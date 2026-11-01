@@ -13,6 +13,7 @@ as one product.
   data, with no runtime dependency. React components live on their own
   subpath (`@tandemise/design/react`), with React 18 or 19 as an optional peer
   dependency, so a site that wants only the tokens never loads React.
+- **WCAG 2.1 AA.** Every story passes axe-core's A and AA rules in both themes (`npm run storybook:a11y`, in CI), and the components carry the keyboard and screen reader behaviour (names, roles, focus rings of at least 3:1, focus traps, live regions) so a consumer gets it by using them.
 - **Light and dark are peers.** Each colour role is written once as
   `light-dark(<light>, <dark>)`; `color-scheme` picks the theme.
 
@@ -31,7 +32,7 @@ v0.10.0.
 | `@tandemise/design/tokens.css` | Every token as a CSS custom property: palette, roles (both themes), shadows, radius, spacing, type, motion, the focus ring, the z-index scale and control heights (with a `[data-density='compact']` set). No name collides with a Tailwind v4 theme variable: fonts, radii, shadows and easings are `--tds-*`. |
 | `@tandemise/design/base.css` | A small reset and type defaults built on the roles (body colours and font, focus ring, selection, scrollbars, reduced motion). Import after tokens.css. |
 | `@tandemise/design/components.css` | The component stylesheet: `.btn`, `.badge`, `.dot`, `.card`, `.field` and inputs, `.segmented`, `.switch`, `.chip`, `.idchip`, `.stat`, `.banner`, `.overlay`/`.modal`, `.tabs`/`.tab`, `.tooltip`, `.truncate`, `.empty`, `.logo`. BEM classes, state in `data-*`/`aria-*`, roles and scales only. Import after base.css. |
-| `@tandemise/design/react` | Accessible React components over components.css: `Button`, `Badge`, `StatusPill`, `StatusDot`, `Card`, `Icon`, `Logo`, `Field`, `Segmented`, `Switch`, `Chip`, `IdChip`, `Stat`, `Banner`, `Dialog` (+ `useDialogLayer`), `Tabs`/`Tab`, `Tooltip`, `Truncate`, `EmptyState`. See [React components](#react-components). |
+| `@tandemise/design/react` | Accessible React components over components.css: `Button`, `Badge`, `StatusPill`, `StatusDot`, `Card`, `Icon`, `Logo`, `Field`, `Segmented`, `Switch`, `Chip`, `IdChip`, `Stat`, `Banner`, `Dialog` (+ `useDialogLayer`), `Tabs`/`Tab`, `Tooltip`, `Truncate`, `EmptyState`, `SkipLink`. See [React components](#react-components). |
 | `@tandemise/design/tailwind.css` | A Tailwind v4 theme (`@theme`) with the palette as utilities, and the roles and Tailwind's font, radius, shadow and easing names bridged to tokens.css. |
 | `@tandemise/design` | The tokens as typed data (`palette`, `colorRoles`, `radius`, `space`, `fontSize`, ...), `resolveTheme()`, `contrast()`, the Tailwind v3 `tailwindPreset`, `LOGO` and `ICON_PATHS`. |
 | `@tandemise/design/tokens`, `/icons`, `/logo`, `/resolve`, `/tailwind` | The same, one module at a time, for bundles that want only one. |
@@ -216,6 +217,7 @@ classes in `components.css`, takes its state as props and reports it as
 | `Tooltip` | `content`, `placement`, `delay`; children one element or `(trigger) => …` | `role="tooltip"`, tied with `aria-describedby` unless it repeats the trigger's name. WCAG 1.4.13: shows on hover and on focus; Escape dismisses it (and not the dialog around it); the pointer can move onto it; it stays until pointer and focus have left. Plain-text triggers are made focusable; it stays inside the window. Use it instead of a native `title`. |
 | `Truncate` | `as`, `placement` | One line with an ellipsis. Only while it is cut off: its full text in a tooltip on hover and focus, and a tab stop (or, inside a link or button, shown when that control has keyboard focus). |
 | `EmptyState` | `icon`, `title`, `body`, `action`, `inline` | Plain content. |
+| `SkipLink` | `target` (the id of the page's `<main>`), children ("Skip to main content") | WCAG 2.4.1: the first stop on a page, drawn only while it has keyboard focus; Enter moves focus to `target` by script, so it also works under a hash router. |
 
 The pure parts (`trapTarget`, `nextTabIndex`, `nextSegmentIndex`, `tooltipPosition`, `tooltipFit`, `isClipped`, `buttonClass`)
 are exported and tested on their own.

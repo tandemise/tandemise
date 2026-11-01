@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { MissionDetail, TaskView } from '@tandemise/api-contract';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -74,10 +74,50 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
   const asking = detail.approvals.filter((a) => a.taskId === task.id && a.status === 'PENDING' && a.kind !== 'check');
   const heldBy = hold === null ? null : hold.heldBy === actors.meId ? 'You' : hold.heldByName;
   const failure = cont.error ?? release.error ?? reopen.error;
+  const panel = useRef<HTMLElement>(null);
+  const [screenReader, setScreenReader] = useScreenReaderMode();
+
+  // A terminal takes Tab and Escape for itself, so the panel's own keys apply only outside it (2.1.2):
+  // F6 leaves the terminal for the panel's buttons, Tab stays inside the panel, Escape there closes it.
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>): void => {
+    const root = panel.current;
+    if (root === null) return;
+    const inTerminal = (event.target as HTMLElement).closest('.xterm') !== null;
+    if (event.key === 'F6') {
+      event.preventDefault();
+      if (inTerminal) {
+        // Out to the actions; while they are disabled (Continue or Release in flight), to any other control
+        // outside the terminal, and failing that to the panel itself, so F6 never leaves focus in the terminal.
+        const outside = [...root.querySelectorAll<HTMLElement>(PANEL_STOPS)].filter((el) => el.closest('.xterm') === null && el.getClientRects().length > 0);
+        const target = outside.find((el) => el.closest('.terminal-panel__actions') !== null) ?? outside[0] ?? root;
+        target.focus();
+      } else {
+        root.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus();
+      }
+      return;
+    }
+    if (inTerminal) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeTerminal();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const stops = [...root.querySelectorAll<HTMLElement>(PANEL_STOPS)]
+      .filter((el) => el.getClientRects().length > 0 && el.closest('.xterm') === null);
+    const terminalInput = root.querySelector<HTMLElement>('.xterm-helper-textarea');
+    if (terminalInput) stops.push(terminalInput);
+    const at = stops.indexOf(event.target as HTMLElement);
+    const next = stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length];
+    if (next) {
+      event.preventDefault();
+      next.focus();
+    }
+  };
 
   return (
     <div className="overlay terminal-overlay">
-      <section className="terminal-panel" role="dialog" aria-modal="true" aria-label={`Terminal: ${task.title}`}>
+      <section ref={panel} tabIndex={-1} className="terminal-panel" role="dialog" aria-modal="true" aria-label={`Terminal: ${task.title}`} onKeyDown={onKeyDown}>
         <header className="terminal-panel__head">
           <Icon name="terminal" size={15} className="terminal-panel__icon" />
           <div className="terminal-panel__titles">
@@ -101,6 +141,11 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
                 onClick={() => release.mutate(undefined)}
               >
                 {release.isPending ? 'Releasing…' : 'Release'}
+              </Button>
+            </Tooltip>
+            <Tooltip content="Lets a screen reader read the terminal's output as it arrives, and its lines with the arrow keys">
+              <Button variant="ghost" aria-pressed={screenReader} onClick={() => setScreenReader(!screenReader)}>
+                Screen reader mode
               </Button>
             </Tooltip>
             <Tooltip content="The session keeps running; open it again from the step">
@@ -137,7 +182,7 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
         ) : null}
 
         <div className="terminal-panel__body" data-ended={ended !== null}>
-          <TerminalView key={attachment} taskId={task.id} onEnded={setEnded} onTrustHint={setTrustHint} />
+          <TerminalView key={attachment} taskId={task.id} label={`Terminal for ${task.title}`} screenReader={screenReader} onEnded={setEnded} onTrustHint={setTrustHint} />
           {ended !== null ? (
             <div className="terminal-panel__ended" role="status">
               <div className="terminal-panel__ended-words">
@@ -163,9 +208,37 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
             </div>
           ) : null}
         </div>
+        <p className="terminal-panel__keys" id="terminal-keys">
+          <kbd>F6</kbd> moves between the terminal and the buttons above it; the terminal keeps <kbd>Tab</kbd> and <kbd>Esc</kbd> for itself.
+        </p>
       </section>
     </div>
   );
+}
+
+/** What Tab and F6 may land on in the panel, outside the terminal. */
+const PANEL_STOPS = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]';
+
+const SCREEN_READER_KEY = 'tandemise.terminal.screenReader';
+
+/** The terminal's screen reader mode, remembered on this computer. Off by default: it costs a little speed. */
+function useScreenReaderMode(): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(SCREEN_READER_KEY) === 'on';
+    } catch {
+      return false;
+    }
+  });
+  const set = (next: boolean): void => {
+    setOn(next);
+    try {
+      localStorage.setItem(SCREEN_READER_KEY, next ? 'on' : 'off');
+    } catch {
+      /* not remembered; still applies */
+    }
+  };
+  return [on, set];
 }
 
 /**
@@ -174,8 +247,12 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
  * `onEnded` hears how the session ended; `onTrustHint` whether the folder-trust
  * question may be on screen (the session is young, or its output asks it).
  */
-function TerminalView({ taskId, onEnded, onTrustHint }: {
+function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
   taskId: string;
+  /** The terminal region's name for a screen reader. */
+  label: string;
+  /** xterm's screen reader mode: output is read as it arrives, and its rows are in the accessibility tree. */
+  screenReader: boolean;
   onEnded: (end: SessionEnd) => void;
   onTrustHint: (show: boolean) => void;
 }): JSX.Element {
@@ -186,6 +263,13 @@ function TerminalView({ taskId, onEnded, onTrustHint }: {
   ended.current = onEnded;
   const hint = useRef(onTrustHint);
   hint.current = onTrustHint;
+  const terminal = useRef<Terminal | null>(null);
+  const reader = useRef(screenReader);
+  reader.current = screenReader;
+
+  useEffect(() => {
+    if (terminal.current) terminal.current.options.screenReaderMode = screenReader;
+  }, [screenReader]);
 
   useEffect(() => {
     const element = host.current;
@@ -196,7 +280,11 @@ function TerminalView({ taskId, onEnded, onTrustHint }: {
       cursorBlink: true,
       scrollback: 5000,
       theme: terminalTheme(element),
+      screenReaderMode: reader.current,
     });
+    terminal.current = term;
+    // F6 is the panel's, not the program's: it is how focus leaves the terminal (2.1.2).
+    term.attachCustomKeyEventHandler((event) => event.key !== 'F6');
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(element);
@@ -284,11 +372,12 @@ function TerminalView({ taskId, onEnded, onTrustHint }: {
       resized.dispose();
       socket.onclose = null;
       socket.close();
+      terminal.current = null;
       term.dispose();
     };
   }, [url]);
 
-  return <div ref={host} className="terminal-panel__xterm" />;
+  return <div ref={host} className="terminal-panel__xterm" role="group" aria-label={label} aria-describedby="terminal-keys" />;
 }
 
 /**

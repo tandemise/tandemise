@@ -13,8 +13,21 @@ export function Markdown({ source }: { source: string }): JSX.Element {
   return <div className="prose">{renderBlocks(source.replace(/\r\n/g, '\n'))}</div>;
 }
 
+/** The smallest heading level the document uses (4 if none), ignoring `#` lines inside fenced code. */
+function topHeadingLevel(lines: readonly string[]): number {
+  let top = 4;
+  let fenced = false;
+  for (const line of lines) {
+    if (/^```/.test(line)) fenced = !fenced;
+    else if (!fenced) top = Math.min(top, /^(#{1,4})\s/.exec(line)?.[1]?.length ?? 4);
+  }
+  return top;
+}
+
 function renderBlocks(source: string): ReactNode[] {
   const lines = source.split('\n');
+  // The document's top heading level, whatever it wrote it as (`#` or `##`), becomes an h3 for a screen reader.
+  const top = topHeadingLevel(lines);
   const out: ReactNode[] = [];
   let i = 0;
   let key = 0;
@@ -49,7 +62,9 @@ function renderBlocks(source: string): ReactNode[] {
       const level = (heading[1] ?? '#').length;
       const text = heading[2] ?? '';
       const Tag = (['h1', 'h2', 'h3', 'h4'] as const)[level - 1] ?? 'h4';
-      out.push(<Tag key={key++}>{renderInline(text)}</Tag>);
+      // A document always sits under the page's h1 and the reader's h2, so its top heading is an h3 to a screen
+      // reader and the rest follow without a gap (1.3.1); the tag keeps the look.
+      out.push(<Tag key={key++} aria-level={Math.min(6, level - top + 3)}>{renderInline(text)}</Tag>);
       i += 1;
       continue;
     }

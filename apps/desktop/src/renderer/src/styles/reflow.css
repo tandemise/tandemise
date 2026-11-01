@@ -1,0 +1,160 @@
+/*
+ * Reflow (WCAG 1.4.10) and text resize (1.4.4).
+ *
+ * The window is at least 960px wide, but zoom (⌘+) makes the CSS viewport
+ * narrower: 200% of the minimum window is 480px, 400% of a 1280px window is
+ * 320px. Below 760px the shell turns into one column that scrolls vertically
+ * as a single document: the sidebar becomes a bar with a Menu button, page
+ * headers wrap, and every multi-column layout stacks. Nothing here applies at
+ * a normal zoom level.
+ *
+ * Loaded last (main.tsx), so it overrides the layout rules it relaxes.
+ */
+
+@media (max-width: 760px) {
+  /* ------------------------------------------------------------ the shell */
+  body {
+    overflow: auto;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .sidebar {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar__brand {
+    height: auto;
+    padding: var(--s2) var(--s4);
+    -webkit-app-region: no-drag;
+  }
+
+  .sidebar__menu {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .sidebar[data-open='false'] .sidebar__panel {
+    display: none;
+  }
+
+  .sidebar__nav {
+    overflow: visible;
+  }
+
+  .main {
+    flex: 1;
+    min-height: auto;
+    /* A long path or id breaks rather than widening the page. */
+    overflow-wrap: anywhere;
+  }
+
+  /* --------------------------------------------------- page scaffolding */
+  .topbar {
+    height: auto;
+    min-height: 0;
+    padding: var(--s3) var(--s4);
+    -webkit-app-region: no-drag;
+  }
+
+  .topbar__inner {
+    flex-wrap: wrap;
+  }
+
+  .topbar__titles {
+    flex-basis: 100%;
+  }
+
+  .topbar__title,
+  .topbar__subtitle {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .topbar__actions {
+    flex-wrap: wrap;
+    flex: 1 1 auto;
+  }
+
+  .topbar__actions > * {
+    max-width: 100%;
+  }
+
+  .page {
+    overflow: visible;
+    min-height: auto;
+    padding: var(--s4) var(--s4) var(--s8);
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+    padding-left: var(--s4);
+    padding-right: var(--s4);
+    height: auto;
+  }
+
+  :is(.grid--2, .grid--3, .grid--4, .split, .reader) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Prose and long values wrap instead of pushing the page wider. */
+  :is(p, li, dd, td, th, .list__title, .list__subtitle, .banner, .card) {
+    overflow-wrap: anywhere;
+  }
+
+  .list__row {
+    flex-wrap: wrap;
+  }
+
+  /* Rows of actions and chips wrap; a chip's long value breaks rather than pushing the page wider. */
+  :is(.row, .feedcard__actions, .feedcard__byline, .section__head, .section__action) {
+    flex-wrap: wrap;
+  }
+
+  .feedcard__byline {
+    white-space: normal;
+  }
+
+  .feedcard__actions {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    max-width: 100%;
+    margin-right: 0;
+  }
+
+  .chip {
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .btn {
+    max-width: 100%;
+    height: auto;
+    min-height: var(--control-h);
+    white-space: normal;
+  }
+
+  /* A staffing row is a form of four parts: one under the other. */
+  :is(.staffrow, .staffing__review) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .staffrow .select {
+    max-width: 100%;
+  }
+}

@@ -25,7 +25,10 @@ export function WorkspaceSwitcher(): JSX.Element {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     const escape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      // Back to the button that opened it, if focus was inside the menu.
+      if (root.current?.contains(document.activeElement)) root.current.querySelector<HTMLElement>('.wsswitch__trigger')?.focus();
     };
     document.addEventListener('mousedown', dismiss);
     document.addEventListener('keydown', escape);
@@ -42,8 +45,8 @@ export function WorkspaceSwitcher(): JSX.Element {
       <button
         type="button"
         className="wsswitch__trigger"
-        aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls="wsswitch-menu"
         onClick={() => setOpen((value) => !value)}
       >
         <span className="wsswitch__body">
@@ -56,13 +59,13 @@ export function WorkspaceSwitcher(): JSX.Element {
       </button>
 
       {open ? (
-        <div className="wsswitch__menu" role="listbox">
+        // A disclosure of plain buttons: a listbox may hold only options, and "New project…" is an action (4.1.2).
+        <div className="wsswitch__menu" id="wsswitch-menu" role="group" aria-label="Projects">
           {all.map((view) => (
             <button
               key={view.workspace.id}
               type="button"
-              role="option"
-              aria-selected={view.workspace.id === current?.workspace.id}
+              aria-current={view.workspace.id === current?.workspace.id ? 'true' : undefined}
               className="wsswitch__option"
               onClick={() => {
                 select(view.workspace.id);
@@ -76,7 +79,7 @@ export function WorkspaceSwitcher(): JSX.Element {
               <span className="wsswitch__count">{view.repositories.length}</span>
             </button>
           ))}
-          <div className="wsswitch__sep" />
+          <div className="wsswitch__sep" role="separator" />
           <button
             type="button"
             className="wsswitch__option"

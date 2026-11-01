@@ -110,7 +110,7 @@ function MonthBar({ status }: { status: LimitStatusView }): JSX.Element {
         <span className="stat__label">{status.label} this month</span>
         <span className="mono">{status.bar}</span>
       </div>
-      <div className="meter" style={{ marginTop: 'var(--s1)' }} aria-label={`${status.label} this month: ${status.bar}`}>
+      <div className="meter" style={{ marginTop: 'var(--s1)' }} aria-hidden="true">
         <div className="meter__fill" style={{ width: `${width}%`, background: fill }} />
       </div>
       {status.note ? <p className="muted" style={{ marginTop: 'var(--s1)', fontSize: 'var(--fs-sm)' }}>{status.note}</p> : null}
