@@ -3,7 +3,7 @@ import type {
   MissionCriterion, MissionQuestion, MissionQuestionRepositoryPort, MissionRepositoryPort, RepoRepositoryPort, Repository,
   RuntimeProfile, RuntimeProfileRepositoryPort, UnitOfWork, Workspace, WorkspaceRepositoryPort,
 } from '@tandemise/domain';
-import { ARTIFACT_OUT_DIR, AUTONOMY_DECIDER, ISSUE_CRITERIA_AUTHOR, CORE_CAPABILITIES, RUNTIME_ACTOR, SYSTEM_ACTOR } from '@tandemise/domain';
+import { ARTIFACT_OUT_DIR, AUTONOMY_DECIDER, ISSUE_CRITERIA_AUTHOR, CORE_CAPABILITIES, RUNTIME_ACTOR, SYSTEM_ACTOR, TRACKER_CRITERIA_AUTHOR } from '@tandemise/domain';
 import type {
   AddCriterionRequest, AnswerQuestionRequest, CriterionVerdictRequest, RefinementCriterionView, RefinementQuestionView, RefinementView,
 } from '@tandemise/api-contract';
@@ -58,6 +58,8 @@ export interface RefinementDeps {
    * never throws and does nothing the second time.
    */
   readonly intake?: (missionId: MissionId) => Promise<unknown>;
+  /** The key of the tracker item a mission was made from (`GAR-71`), for "From GAR-71" (#185); optional for harnesses. */
+  readonly trackerKey?: (missionId: MissionId) => string | null;
 }
 
 /** A pass that could not finish, with the sentence the person reads. */
@@ -130,7 +132,7 @@ export class RefinementServiceImpl implements RefinementService {
       failure: this.#running.has(missionId) ? null : this.#failures.get(missionId) ?? null,
       artifactId: latest?.id ?? null,
       headline: latest?.handoff?.headline ?? latest?.summary ?? null,
-      criteria: this.deps.criteria.listUserRows(missionId).map(criterionView),
+      criteria: this.deps.criteria.listUserRows(missionId).map((c) => criterionView(c, () => this.deps.trackerKey?.(missionId) ?? null)),
       questions: this.deps.questions.listByMission(missionId).map(questionView),
       readiness: {
         ready: readiness.ready,
@@ -483,11 +485,16 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-function criterionView(c: MissionCriterion): RefinementCriterionView {
+function criterionView(c: MissionCriterion, trackerKey: () => string | null): RefinementCriterionView {
   const origin = c.refinementArtifactId !== null || c.status !== 'accepted' || /^P\d+$/.test(c.key)
     ? 'refinement'
-    : c.decidedBy === ISSUE_CRITERIA_AUTHOR ? 'issue' : c.decidedBy !== null ? 'added' : 'request';
+    : c.decidedBy === ISSUE_CRITERIA_AUTHOR ? 'issue'
+      // Lines read from the tracker item the mission was made from (#185): never "Added by you".
+      : c.decidedBy === TRACKER_CRITERIA_AUTHOR ? 'tracker'
+        : c.decidedBy !== null ? 'added' : 'request';
+  const key = origin === 'tracker' ? trackerKey() : null;
   return {
+    ...(origin === 'tracker' ? { originLabel: key === null ? 'From the tracker item' : `From ${key}` } : {}),
     id: c.id,
     key: c.key,
     statement: c.statement,

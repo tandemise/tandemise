@@ -9,7 +9,7 @@
 // Start then plans that same mission and moves the item to In Progress.
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
-import { clickInRow, answerWithOption } from '../../p6/common.mjs';
+import { clickInRow, answerWithOption, sectionText } from '../../p6/common.mjs';
 import { boardRow, openBoard, REAL_YOUTRACK, yt } from '../common.mjs';
 
 const c = await context();
@@ -47,7 +47,9 @@ const mapped = await until(async () => {
 }, { label: 'the draft state saved', timeoutMs: 20_000 }).catch(() => null);
 ev.check('proof (API): the tracker maps Draft after Save tracker', mapped !== null, mapped?.tracker?.states);
 
-await yt.put({ idReadable: KEY, summary: 'Greet visitors by name', description: 'Visitors see a generic page. Make it feel personal.', state: 'Draft' });
+// The item has its own Acceptance criteria section, as a team's template asks for (#185).
+const BODY = 'Visitors see a generic page. Make it feel personal.\n\n## Acceptance criteria\n- AC01: The page loads in under two seconds\n- AC02: The page works without JavaScript\n\n## Notes\nKeep the current colours.';
+await yt.put({ idReadable: KEY, summary: 'Greet visitors by name', description: BODY, state: 'Draft' });
 await openBoard(c);
 await until(async () => (await boardRow(c, KEY)) !== undefined, { label: `${KEY} on the board`, timeoutMs: 20_000 });
 const draftGroup = await page.evaluate(`(() => {
@@ -83,6 +85,9 @@ await clickInRow(c, 'Proposed criteria', 'P3', 'Reject');
 await answerWithOption(c, 'Q1', 'Only the home page');
 await page.screenshot(ev.shot('decided-on-mission'));
 const decided = await api.get(`/v1/missions/${missionId}/refinement`);
+const doneWhen = await sectionText(c, 'Done when');
+ev.check(`the item's own criteria read "From ${KEY}" on the mission, not "Added by you"`, (doneWhen.match(new RegExp(`From ${KEY}`, 'g')) ?? []).length === 2
+  && decided.criteria.filter((x) => x.origin === 'tracker').every((x) => x.originLabel === `From ${KEY}`), doneWhen);
 ev.check('two accepted, one rejected, the question answered: ready', decided.readiness.ready === true, decided.readiness);
 await sleep(6_000);
 ev.check('proof (fake YouTrack): still nothing written while the person decided', (await posts()).slice(before).length === 0 && (await yt.issue(KEY)).state === 'Draft');
@@ -93,7 +98,7 @@ const card = await until(async () => {
   const t = await page.evaluate(`document.querySelector('[data-board-item=${JSON.stringify(KEY)}]')?.innerText ?? ''`);
   return t.includes('Ready to write to YouTrack') && t;
 }, { label: 'the ready card', timeoutMs: 20_000 }).catch(() => '');
-ev.check('the card says it is ready to write, with Open refinement and the write button', card.includes('Ready to write to YouTrack: 2 Done-when lines.')
+ev.check('the card says it is ready to write, with Open refinement and the write button', card.includes('Ready to write to YouTrack: 4 Done-when lines.')
   && card.includes('Open refinement') && card.includes('Write to YouTrack and mark ready'), card);
 const writeEnabled = await page.evaluate(`[...document.querySelector('[data-board-item=${JSON.stringify(KEY)}]').querySelectorAll('button')].some((b) => b.innerText.startsWith('Write to YouTrack and mark ready') && !b.disabled)`);
 ev.check('…and the write button is enabled', writeEnabled === true);
@@ -101,11 +106,19 @@ await page.screenshot(ev.shot('ready-to-write'));
 await page.evaluate(`[...document.querySelector('[data-board-item=${JSON.stringify(KEY)}]').querySelectorAll('button')].find((b) => b.innerText.startsWith('Write to YouTrack and mark ready')).click()`);
 
 const written = await until(async () => { const i = await yt.issue(KEY); return i.state === 'Open' && i; }, { label: `${KEY} Open in the fake`, timeoutMs: 30_000 }).catch(() => null);
-const accepted = decided.criteria.filter((x) => x.status === 'accepted').map((x) => x.statement);
-ev.check('proof (fake YouTrack): the description keeps its text and gains the Done-when and Decisions sections',
-  written !== null && written.description.startsWith('Visitors see a generic page. Make it feel personal.')
-  && written.description.includes(`## Done when\n- [ ] ${accepted[0]}\n- [ ] ${accepted[1]}`)
-  && written.description.includes('## Decisions\n- Which pages should greet the visitor by name? — Only the home page'), written?.description);
+const added = decided.criteria.filter((x) => x.status === 'accepted' && x.origin !== 'tracker').map((x) => x.statement);
+const rejected = decided.criteria.filter((x) => x.status === 'rejected').map((x) => x.statement);
+// Byte for byte: every line of the item, in order and unchanged; the rest is exactly what was decided here.
+const extra = [];
+{
+  const mine = BODY.split('\n');
+  let at = 0;
+  for (const line of (written?.description ?? '').split('\n')) { if (at < mine.length && line === mine[at]) at++; else extra.push(line); }
+  if (at !== mine.length) extra.unshift('(an original line is missing or changed)');
+}
+const expected = [`- AC03: ${added[0]}`, `- AC04: ${added[1]}`, '', '## Decisions', '- Which pages should greet the visitor by name? — Only the home page', '- Not now:', `  - ${rejected[0]}`];
+ev.check('proof (fake YouTrack): the item is kept byte for byte; only AC03, AC04 and the Decisions (with Not now) were added',
+  written !== null && JSON.stringify(extra) === JSON.stringify(expected), { extra, description: written?.description });
 ev.check(`proof (fake YouTrack): ${KEY} moved from Draft to Open`, written?.state === 'Open', written?.state);
 const comments = await yt.comments(KEY);
 ev.check('proof (fake YouTrack): the activity comment says who refined it and what was written', comments.length === 1

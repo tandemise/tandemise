@@ -90,7 +90,10 @@ export class GhPullRequestFlow implements PullRequestPort {
    */
   async checks(cwd: string, repo: string, sha: string): Promise<PullRequestChecks> {
     const runSchema = z.object({
+      id: z.number().optional(),
       name: z.string(),
+      started_at: z.string().nullable().optional(),
+      app: z.object({ id: z.number().optional(), slug: z.string().optional() }).nullable().optional(),
       status: z.string(),
       conclusion: z.string().nullable().optional(),
       details_url: z.string().nullable().optional(),
@@ -116,12 +119,14 @@ export class GhPullRequestFlow implements PullRequestPort {
     const status = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/commits/${sha}/status`], z.object({
       statuses: z.array(z.object({ context: z.string(), state: z.string(), target_url: z.string().nullable().optional(), description: z.string().nullable().optional() }).passthrough()).optional(),
     })).catch(() => ({ statuses: [] }));
+    // The combined status already holds only the latest status per context.
     const statuses = status.statuses ?? [];
-    const done = all.filter((r) => r.status.toLowerCase() === 'completed');
+    const latest = latestPerCheck(all);
+    const done = latest.filter((r) => r.status.toLowerCase() === 'completed');
     const failingRuns = done.filter((r) => !['success', 'neutral', 'skipped'].includes((r.conclusion ?? '').toLowerCase()));
     const failingStatuses = statuses.filter((s) => s.state === 'failure' || s.state === 'error');
     const pendingStatuses = statuses.filter((s) => s.state === 'pending');
-    const total = all.length + statuses.length;
+    const total = latest.length + statuses.length;
     const finished = done.length + statuses.length - pendingStatuses.length;
     const failing = [
       ...failingRuns.map((r) => {
@@ -269,4 +274,25 @@ export class GhPullRequestFlow implements PullRequestPort {
     }).passthrough()));
     return rows.map((r) => ({ sha: r.sha, subject: r.commit.message.split('\n')[0] ?? '' }));
   }
+}
+
+/**
+ * One run per check: the latest. A check run again on the same commit (a
+ * re-run, or a workflow re-triggered by an `edited` event) leaves its earlier
+ * runs in GitHub's list; counting them kept a check that failed and then
+ * passed failing for ever (#197). Runs are keyed by app and name, and the
+ * latest is the one started last, else the higher id.
+ */
+export function latestPerCheck<T extends { readonly name: string; readonly id?: number | undefined; readonly started_at?: string | null | undefined; readonly app?: { readonly id?: number | undefined; readonly slug?: string | undefined } | null | undefined }>(runs: readonly T[]): T[] {
+  const byKey = new Map<string, T>();
+  const order = (r: T): [number, number] => [r.started_at == null ? 0 : Date.parse(r.started_at) || 0, r.id ?? 0];
+  for (const run of runs) {
+    const key = `${run.app?.id ?? run.app?.slug ?? ''}\u0000${run.name}`;
+    const known = byKey.get(key);
+    if (known === undefined) { byKey.set(key, run); continue; }
+    const [a1, a2] = order(run);
+    const [b1, b2] = order(known);
+    if (a1 > b1 || (a1 === b1 && a2 > b2)) byKey.set(key, run);
+  }
+  return [...byKey.values()];
 }

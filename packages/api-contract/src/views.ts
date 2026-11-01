@@ -304,8 +304,14 @@ export interface RefinementCriterionView {
   readonly key: string;
   readonly statement: string;
   readonly status: 'proposed' | 'accepted' | 'rejected' | 'stale';
-  /** Where it came from: the request's own lines, added by hand later, proposed by refinement, or a GitHub issue's list (P14). */
-  readonly origin: 'request' | 'added' | 'refinement' | 'issue';
+  /**
+   * Where it came from: the request's own lines, added by hand later,
+   * proposed by refinement, a GitHub issue's list (P14), or the tracker item
+   * the mission was made from (#185).
+   */
+  readonly origin: 'request' | 'added' | 'refinement' | 'issue' | 'tracker';
+  /** For `tracker`: the line the app shows, `From GAR-71`. Absent from an older daemon. */
+  readonly originLabel?: string | null;
   /** `autonomy` when accepted automatically, `person` when someone decided it, null while undecided or for request lines. */
   readonly decidedBy: 'autonomy' | 'person' | null;
   readonly decidedById: string | null;
