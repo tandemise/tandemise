@@ -18,7 +18,7 @@ import {
   planMissionRequest, setLaneRequest, mergePolicyRequest,
   ACCEPTED_INTAKE_SCHEMAS, intakeSignalsQuery, mintIntakeTokenRequest,
   decideIntakeSignalRequest,
-  startBoardItemRequest,
+  startBoardItemRequest, boardItemKeyRequest,
   saveIntakeSourceSecretRequest, saveTrackerSecretRequest, setIntakeSourceEnabledRequest,
   ackIntakeClosureRequest,
   connectRelayRequest, coordinationEndpointRequest, coordinationPullRequest, projectKeyRequest, takeOverClaimRequest,
@@ -230,6 +230,17 @@ export function buildRouter(services: TandemiseServices, options: {
     if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
     return summary;
   });
+  // Refine a draft item, then write it back as ready (#135): the second is the only one that writes to the tracker.
+  r.post('/v1/workspaces/:id/board/refine', async (ctx) => {
+    const workspaceId = asId<'WorkspaceId'>(ctx.params.id!);
+    const request = await ctx.body(boardItemKeyRequest);
+    const mission = await services.tracker.refine(ctx.caller, workspaceId, request.key);
+    const summary = services.missions.list({ workspaceId }).find((s) => s.mission.id === mission.id);
+    if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
+    return summary;
+  });
+  r.post('/v1/workspaces/:id/board/ready', async (ctx) =>
+    services.tracker.markReady(ctx.caller, asId(ctx.params.id!), (await ctx.body(boardItemKeyRequest)).key));
 
   // Skills (P13): the project's library, imported by content hash and pinned per run.
   r.get('/v1/workspaces/:id/skills', (ctx) => services.skills.list(asId(ctx.params.id!)));

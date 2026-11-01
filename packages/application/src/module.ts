@@ -1194,6 +1194,11 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       missions: r.resolve(t.MISSION_REPOSITORY),
       createMission: (caller, request, origin) => r.resolve(t.MISSION_SERVICE).create(caller, request, origin),
       planDraft: (missionId) => r.resolve(t.PLANNING_SERVICE).begin(missionId),
+      // Refine on a draft item (#135), resolved per call like the mission service.
+      refinement: {
+        begin: (caller, missionId) => r.resolve(t.REFINEMENT_SERVICE).begin(caller, missionId),
+        view: (missionId) => r.resolve(t.REFINEMENT_SERVICE).view(missionId),
+      },
       claims: r.resolve(it.INTAKE_CLAIMS),
       settings: r.resolve(t.SETTINGS_STORE),
       members: r.resolve(t.MEMBER_REPOSITORY),

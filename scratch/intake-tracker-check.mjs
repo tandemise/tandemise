@@ -441,6 +441,64 @@ try {
   check('the github section ran', false, String(e?.stack ?? e));
 }
 
+// ------------------------------------------------------------------ refine a draft (#135)
+section('refine a draft (#135): the refined description, the activity line, and both adapters');
+{
+  const original = 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Something vague\n\n## Notes\nKeep the old flow.';
+  const refined = D.refinedDescription(original, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]);
+  check('refinedDescription keeps the text, replaces the Done-when section and adds Decisions',
+    refined === 'Customers on Safari cannot pay.\n\n## Notes\nKeep the old flow.\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later', refined);
+  check('…parseCriteria reads exactly the accepted lines back', eq(D.parseCriteria(refined), ['Checkout completes on Safari 17', 'A failed payment says why']), D.parseCriteria(refined));
+  check('…and writing it twice writes the same text', D.refinedDescription(refined, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]) === refined);
+  check('an empty description gets only the sections', D.refinedDescription('', ['A'], []) === '## Done when\n- [ ] A');
+  const line = D.refinedActivityLine({ by: 'Ana', criteria: 2, answered: 1, from: 'Draft', to: 'Open' });
+  check('refinedActivityLine: Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.',
+    line === 'Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.', line);
+  check('…with one line and no answers', D.refinedActivityLine({ by: 'Ana', criteria: 1, answered: 0, from: 'Draft', to: 'Open' }) === 'Refined in Tandemise by Ana: 1 Done-when line. Moved from Draft to Open.');
+  const started = D.activityCommentBody({ starter: 'Ana', missionTitle: 'Checkout', steps: null, prUrl: null, completed: null, cancelled: null, refined: D.refinedLineOf(`${line}`) });
+  check('a later activity comment keeps the refined line on top', started === `${line}\n\nStarted in Tandemise by Ana: Checkout.`, started);
+  check('refinedLineOf finds nothing in a plain activity comment', D.refinedLineOf('Started in Tandemise by Ana: Checkout.') === null);
+  const mapping = { kind: 'youtrack', project: 'GAR', states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: [], draft: ['Draft'] }, onComplete: 'done' };
+  check('a draft state the tracker lacks is a mapping problem', D.stateMappingProblem(mapping, { states: ['Open', 'In Progress', 'Done'] })?.startsWith("YouTrack has no state 'Draft' in GAR."));
+  check('…and one it has is not', D.stateMappingProblem(mapping, { states: ['Draft', 'Open', 'In Progress', 'Done'] }) === null);
+
+  const Y = await import('@tandemise/integration-youtrack');
+  const ytFake = await startFakeYouTrack({ project: 'GAR', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
+  try {
+    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: original, state: 'Draft' });
+    const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'GAR', token: 'perm:test' });
+    const ref = D.trackerRef('youtrack', 'GAR-7');
+    await yt.updateDescription(ref, refined);
+    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === refined
+      && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/GAR-7'), ytFake.issues.get('GAR-7')?.description);
+    check('…and leaves the summary and state alone', ytFake.issues.get('GAR-7')?.summary === 'Pay on Safari' && ytFake.issues.get('GAR-7')?.state === 'Draft');
+  } catch (e) {
+    check('the youtrack refine section ran', false, String(e?.stack ?? e));
+  } finally {
+    await ytFake.close();
+  }
+
+  const G = await import('@tandemise/integration-github');
+  const draftStates = { ready: ['open'], in_progress: 'status: in progress', done: ['closed'], wont_do: [], draft: ['draft'] };
+  check('github: the draft label is a state label', eq(G.githubStateLabels(draftStates), ['status: in progress', 'draft']));
+  try {
+    const gt = new G.GhPrimaryTracker(exec, { repo: 'acme/refine', stateLabels: G.githubStateLabels(draftStates) });
+    putLabels(GH, 'acme/refine', ['draft', 'status: in progress']);
+    const made = await gt.create({ title: 'Pay on Safari', description: original });
+    await gt.transition(made.ref, 'draft');
+    check('github: an open issue carrying the draft label reads as draft', (await gt.get(made.ref)).state === 'draft');
+    await gt.updateDescription(made.ref, refined);
+    const editCall = calls(GH).findLast((c) => c.args[0] === 'issue' && c.args[1] === 'edit' && c.args.includes('--body'));
+    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === refined
+      && editCall.args[editCall.args.indexOf('--repo') + 1] === 'acme/refine', editCall?.args);
+    await gt.transition(made.ref, 'open');
+    const after = await gt.get(made.ref);
+    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === refined, after);
+  } catch (e) {
+    check('the github refine section ran', false, String(e?.stack ?? e));
+  }
+}
+
 // ------------------------------------------------------------------ resolver
 section('resolver: a project\'s tracker from its config and the secret store');
 const fake2 = await startFakeYouTrack({ project: 'GAR', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
