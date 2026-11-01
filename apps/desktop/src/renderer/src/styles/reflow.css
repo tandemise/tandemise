@@ -89,6 +89,11 @@
     flex: 1 1 auto;
   }
 
+  /* Here the actions wrap to a row of their own, with no crumbs beside them to step past. */
+  .topbar__inner:has(.topbar__eyebrow) > .topbar__actions {
+    margin-top: 0;
+  }
+
   .topbar__actions > * {
     max-width: 100%;
   }

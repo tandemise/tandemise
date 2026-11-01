@@ -197,9 +197,10 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Top-aligned: a subtitle can grow (a task's disclosure, #105), and the actions stay level with the title. */
 .topbar__inner {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--s3);
   width: 100%;
 }
@@ -257,6 +258,11 @@
   /* Shrinks and wraps rather than pushing an action out of the window. */
   flex: 0 1 auto;
   min-width: 0;
+}
+
+/* Crumbs sit above the title, so the actions step down past them to stay level with the title row. */
+.topbar__inner:has(.topbar__eyebrow) > .topbar__actions {
+  margin-top: var(--s4);
 }
 
 .page {
