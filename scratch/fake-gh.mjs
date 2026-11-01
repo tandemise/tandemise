@@ -495,6 +495,8 @@ function prCommand(dir, state, args, out) {
     return;
   }
   if (verb === 'merge') {
+    // `refuseMerge`: every merge is refused with this message, as gh prints it (#184).
+    if (r.refuseMerge) fail(r.refuseMerge);
     // A push that lands between a decision and its merge (`moveHeadOnMerge`), once.
     if (r.moveHeadOnMerge) { pr.headRefOid = r.moveHeadOnMerge; delete r.moveHeadOnMerge; save(); }
     const match = flag(args, '--match-head-commit');
@@ -521,6 +523,8 @@ function prCommand(dir, state, args, out) {
     pr.mergeSubject = flag(args, '--subject');
     pr.mergeBody = flag(args, '--body');
     save();
+    // `mergeInProgress`: GitHub merges it, but the call answers that a merge is already in progress, once.
+    if (r.mergeInProgress) { delete r.mergeInProgress; save(); fail('GraphQL: Merge already in progress (mergePullRequest)'); }
     return;
   }
   fail(`fake gh: unknown pr command ${verb}`);

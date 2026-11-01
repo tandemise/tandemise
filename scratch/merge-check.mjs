@@ -778,6 +778,15 @@ await attempt('#174: a merge on your approval is not a merge in GitHub', async (
   const outB = outcomes(b.m).find((o) => o.kind === 'merged');
   check('merged at once on approval: merged, with the approver and the card', outB?.merge?.approval?.card === b.card.id && !kinds(b.m).includes('merged_by_person'), kinds(b.m));
 
+  // The call answers "Merge already in progress" while GitHub merges it: the merge SHA came from Tandemise's own call.
+  fake.setRepo(w.ghDir, REPO, { mergeInProgress: true });
+  const p = await approve('fix: typo in the sidebar');
+  await w.h.until(() => w.h.repo.missions.get(p.m.id).status === 'COMPLETE', 30000).catch(() => {});
+  const outP = outcomes(p.m).find((o) => o.kind === 'merged');
+  check('"Merge already in progress", then merged: merged on approval, not merged_by_person', outP?.merge?.approval?.card === p.card.id && !kinds(p.m).includes('merged_by_person'), kinds(p.m));
+  check('…the feed and the step say merged on your approval', merged(p.m)?.how === 'approval' && (ship(p.m).statusReason ?? '').startsWith('Merged on your approval'), [merged(p.m), ship(p.m).statusReason]);
+  check('…recorded once', w.h.repo.events.listByMission(p.m.id).filter((e) => e.body.type === 'merge.merged').length === 1 && outcomes(p.m).filter((o) => o.kind === 'merged').length === 1);
+
   // Queued, but GitHub merged a head Tandemise never decided on: that merge is a person's.
   fake.setRepo(w.ghDir, REPO, queued);
   const c = await approve('fix: typo in the header');
