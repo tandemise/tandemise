@@ -3,6 +3,7 @@ import { lintGate, lintRule } from '../gate-lint.js';
 import { ARTIFACT_TYPES } from '../entities/artifact.js';
 import { CHECK_NAMES, MAX_CHECK_BUDGET_MINUTES } from '../entities/workspace.js';
 import { stepSkillProblem } from '../entities/skill.js';
+import { CI_CHECK_KINDS } from '../merge/ci-checks.js';
 import { LANES, RISK_LEVELS, SENSITIVITIES, STEP_CLASSES, TASK_SIZES, TASK_TYPES } from './types.js';
 
 /**
@@ -103,6 +104,14 @@ export const plannerConfigSchema = z.object({
   }).default({ minTasks: 5, rate: 0.4 }),
   tiebreak: onOff.default('on'),
   checks: checkSettings.default({ budgets: {} }),
+  /**
+   * What a failing CI check on the pull request is about (#194): a check's
+   * name, or a glob over it, mapped to `metadata`, `code` or `unknown`. Wins
+   * over the defaults, which read the check's name and what it printed.
+   */
+  ci: z.object({
+    checks: z.record(name, z.enum(CI_CHECK_KINDS)).default({}),
+  }).default({ checks: {} }),
 });
 
 export type PlannerConfig = z.infer<typeof plannerConfigSchema>;
