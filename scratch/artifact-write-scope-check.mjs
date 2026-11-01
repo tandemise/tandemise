@@ -35,8 +35,31 @@ console.log('── artifact.write without filesystem.write\n');
   ok('Edit stays offered', !disallowed.split(',').includes('Edit'));
   ok('Bash is still disallowed', disallowed.split(',').includes('Bash'));
   ok('NotebookEdit is still disallowed', disallowed.split(',').includes('NotebookEdit'));
-  ok('writes are allowed only under .tandemise/out', flag(args, '--allowed-tools') === 'Edit(.tandemise/out/**)', flag(args, '--allowed-tools'));
+  ok('writes are allowed only under .tandemise/out, relatively and by the absolute path',
+    flag(args, '--allowed-tools') === 'Edit(.tandemise/out/**),Edit(//tmp/wt/.tandemise/out/**)', flag(args, '--allowed-tools'));
   ok('permission mode stays default, so unmatched writes are refused', flag(args, '--permission-mode') === 'default');
+}
+
+console.log('\n── a working directory behind a symlink: both spellings of the out folder are allowed (#191)\n');
+{
+  // A step's first pass wrote its report by the absolute path its prompt names, the
+  // unresolved spelling; the relative rule matches only against the resolved one, so
+  // the write was refused, while a later pass that wrote relatively went through.
+  const { mkdtempSync, mkdirSync, symlinkSync, realpathSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const base = mkdtempSync(join(tmpdir(), 'aws-'));
+  mkdirSync(join(base, 'real'));
+  symlinkSync(join(base, 'real'), join(base, 'link'));
+  const args = buildInvocation({
+    runId: 'run_x', prompt: 'p', workingDirectory: join(base, 'link'), grants: ['repository.read', 'filesystem.read', 'artifact.write'], allowedRoots: [], mcpConfigPath: null,
+    maxWallTimeMs: 1000, signal: new AbortController().signal, log: null,
+    profile: { id: 'rt', adapterId: 'claude-code', settings: {}, args: [], executablePath: null },
+  }, null).args;
+  const allowed = flag(args, '--allowed-tools').split(',');
+  const strip = (p) => p.replace(/^\/+/, '');
+  ok('the out folder under the path as given', allowed.includes(`Edit(//${strip(join(base, 'link'))}/.tandemise/out/**)`), allowed);
+  ok('and under the resolved path', allowed.includes(`Edit(//${strip(realpathSync(join(base, 'link')))}/.tandemise/out/**)`), allowed);
+  ok('and nothing outside it', allowed.every((r) => r.includes('.tandemise/out/**')), allowed);
 }
 
 console.log('\n── neither grant: fully read-only, as before\n');
@@ -81,7 +104,7 @@ console.log('\n── shell without filesystem.write (review, QA): commands run,
 console.log('\n── profile allow rules are kept alongside\n');
 {
   const args = invoke(['artifact.write'], { allowedTools: 'WebFetch' });
-  ok('both rules present', flag(args, '--allowed-tools') === 'Edit(.tandemise/out/**),WebFetch', flag(args, '--allowed-tools'));
+  ok('both rules present', flag(args, '--allowed-tools') === 'Edit(.tandemise/out/**),Edit(//tmp/wt/.tandemise/out/**),WebFetch', flag(args, '--allowed-tools'));
 }
 
 console.log('\n── the user\'s own MCP servers never reach a run\n');

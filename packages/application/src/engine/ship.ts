@@ -675,7 +675,8 @@ export class ShipService {
     let result: Awaited<ReturnType<PullRequestPort['merge']>>;
     // Under way already, or failed and asked about while this look waited on GitHub: not called again.
     // Checked and claimed with no await in between, so two looks never both call it.
-    if (this.#merging.has(decision.id) || this.#failedCard(mission, task, decision)?.status === 'PENDING') return { kind: 'waiting' };
+    // Merged meanwhile by another look (the decision says so): nothing to call.
+    if (this.#merging.has(decision.id) || this.#failedCard(mission, task, decision)?.status === 'PENDING' || (d.mergeDecisions.get(decision.id)?.mergedAt ?? null) !== null) return { kind: 'waiting' };
     this.#merging.add(decision.id);
     try {
       result = await this.deps.pullRequests.merge(repository.path, pr.repo, pr.number, {

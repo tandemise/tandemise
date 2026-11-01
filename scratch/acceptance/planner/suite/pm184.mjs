@@ -1,4 +1,4 @@
-// PM15 (#184) — A merge that fails after Merge is never silent. GitHub refuses the merge (as gh refused a
+// PM184 (#184) — A merge that fails after Merge is never silent. GitHub refuses the merge (as gh refused a
 // field in #183). The ship step blocks with a "Merge failed" card naming GitHub's reason, with Retry merge,
 // Open the pull request and "I'll merge it in GitHub"; Home counts it in Needs you, in the tile and the
 // list; the Inbox shows it. Once GitHub takes merges again, Retry merge merges it.
@@ -15,10 +15,10 @@ const SHOTS = resolve(here, '../../../../docs/superpowers/evidence/2026-11-01-me
 const GH = `${SCRATCH}/gh`;
 const c = await context();
 const { page, until, sleep, api } = c;
-const ev = new Evidence('PM15', 'A merge that fails after Merge blocks with a card that names why; Home and the Inbox show it; Retry merge merges');
+const ev = new Evidence('PM184', 'A merge that fails after Merge blocks with a card that names why; Home and the Inbox show it; Retry merge merges');
 const shot = async (name) => {
   mkdirSync(SHOTS, { recursive: true });
-  const path = join(SHOTS, `pm15-${name}.png`);
+  const path = join(SHOTS, `pm184-${name}.png`);
   await page.screenshot(path);
   ev.shots.push(path);
 };

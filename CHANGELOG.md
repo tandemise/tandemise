@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.2](https://github.com/tandemise/tandemise/compare/v0.12.1...v0.12.2) (2026-11-01)
+
+
+### Bug Fixes
+
+* judge main by its own ci after a merge, and never offer revert first ([#188](https://github.com/tandemise/tandemise/issues/188)) ([933fb18](https://github.com/tandemise/tandemise/commit/933fb18d6318a9fc79e1549ba56f00b278427264))
+* keep each review step's verdict its own and block a step whose output write was refused ([#199](https://github.com/tandemise/tandemise/issues/199)) ([625693c](https://github.com/tandemise/tandemise/commit/625693c8af424771db129ae63c3e73da0263913a))
+* set youtrack fields as data so multi-word states move ([#195](https://github.com/tandemise/tandemise/issues/195)) ([f23bb19](https://github.com/tandemise/tandemise/commit/f23bb19a7ab46e313fa06018a013a0b4942827e0))
+* start task worktrees from the remote's current default branch ([#169](https://github.com/tandemise/tandemise/issues/169)) ([5726853](https://github.com/tandemise/tandemise/commit/572685361c2810f1b3b8f75f6458c9e03655c164))
+
 ## [0.12.1](https://github.com/tandemise/tandemise/compare/v0.12.0...v0.12.1) (2026-11-01)
 
 

@@ -800,7 +800,7 @@ await attempt('#184: a merge that fails after Merge asks', async () => {
   const w = await world();
   fake.setRepo(w.ghDir, REPO, { defaultChecks: [{ name: 'unit', conclusion: 'success' }] });
   const ship = (m) => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
-  const merges = () => fake.calls(w.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'merge');
+  const merges = (m) => fake.calls(w.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'merge' && (m === undefined || w.h.repo.mergeDecisions.listByMission(m.id).some((d) => String(d.prNumber) === c.args[2])));
   const failedCard = (m) => w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.title.startsWith('Merge failed'));
   const approve = async (title) => {
     const m = await w.mission(title);
@@ -819,7 +819,7 @@ await attempt('#184: a merge that fails after Merge asks', async () => {
   const card = failedCard(a);
   check('a refused merge blocks the step with a card naming the reason', card !== undefined && ship(a).status === 'BLOCKED' && card.rationale.includes(REFUSED) && (ship(a).statusReason ?? '').includes(REFUSED), [ship(a).status, ship(a).statusReason, card?.title]);
   check('…with Retry merge, Open the pull request and "I\'ll merge it in GitHub"', card?.options.map((o) => o.label).join('|') === 'Retry merge|I\'ll merge it in GitHub' && card.evidence.some((e) => e.kind === 'link' && e.label === 'Open the pull request'), card && [card.options, card.evidence]);
-  check('…tried once: a refusal a retry can\'t change is not retried', merges().length - before === 1, merges().length - before);
+  check('…tried once: a refusal a retry can\'t change is not retried', merges(a).length === 1, merges(a).length);
   check('…and it waits on you in the Inbox', card?.kind !== 'check' && card?.addresseeIds?.length !== 0, card?.addresseeIds);
   fake.setRepo(w.ghDir, REPO, { refuseMerge: undefined });
   await w.h.services.approvals.decide(w.caller, card.id, { optionId: 'approve' });
@@ -832,7 +832,7 @@ await attempt('#184: a merge that fails after Merge asks', async () => {
   const b = await approve('fix: typo in the footer');
   await w.h.until(() => failedCard(b) !== undefined, 30000).catch(() => {});
   const card2 = failedCard(b);
-  check(`a passing failure is tried ${app.MERGE_TRIES} times before it asks`, merges().length - before2 === app.MERGE_TRIES && card2 !== undefined, merges().length - before2);
+  check(`a passing failure is tried ${app.MERGE_TRIES} times before it asks`, merges(b).length === app.MERGE_TRIES && card2 !== undefined, merges(b).length);
   check('…and the card says how many tries were made', (card2?.rationale ?? '').includes(`after ${app.MERGE_TRIES} tries`) && card2.evidence.some((e) => e.label === 'Tries' && e.value === `${app.MERGE_TRIES} of ${app.MERGE_TRIES}`), card2 && [card2.rationale, card2.evidence]);
   await w.h.services.approvals.decide(w.caller, card2.id, { optionId: 'reject' });
   await w.h.until(() => ship(b).status === 'AWAITING_EXTERNAL', 10000).catch(() => {});
