@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { MissionCriterionView } from '@tandemise/api-contract';
 import { Drawer } from '../../components/Modal.js';
 import { StatusBadge } from '../../components/primitives.js';
@@ -25,15 +25,18 @@ export function DoneWhen({ missionId }: { missionId: string }): JSX.Element | nu
 
   const counted = rows.filter((r) => r.counted);
   const verified = counted.filter((r) => r.result === 'PASS').length;
+  // A plan with no step that verifies these lines (the quick lane has no QA): said once, not as a red mark per row (#105).
+  const yours = counted.length > 0 && counted.every((r) => byYou(r));
 
   return (
     <section className="section feed__section" aria-label="Done when">
       <div className="section__head">
         <h2 className="section__title">Done when</h2>
         <span className="section__meta">
-          {verified} of {counted.length} verified
+          {yours ? 'You check these at review' : `${verified} of ${counted.length} verified`}
         </span>
       </div>
+      {yours ? <p className="muted done-when__note">No step in this plan verifies these lines, so you check them when you review the pull request.</p> : null}
       <div className="list">
         {rows.map((row) => {
           const status = statusOf(row);
@@ -43,7 +46,7 @@ export function DoneWhen({ missionId }: { missionId: string }): JSX.Element | nu
               <span className="mono muted">{row.key}</span>
               <div className="list__main">
                 <Truncate as="div" className="list__title">
-                  {row.statement}
+                  <InlineMarkdown text={row.statement} />
                 </Truncate>
                 <div className="list__subtitle truncate">{traceLine(row)}</div>
               </div>
@@ -84,14 +87,38 @@ function statusOf(row: MissionCriterionView): { label: string; tone: Tone } {
   if (row.result === 'PASS') return { label: 'Verified', tone: 'succeeded' };
   if (row.result === 'FAIL') return { label: 'Failed', tone: 'failed' };
   if (row.uncovered) return { label: 'Not covered', tone: 'blocked' };
+  if (byYou(row)) return { label: 'At your review', tone: 'pending' };
   return { label: 'Not verified', tone: 'pending' };
+}
+
+/** A line nothing in the plan verifies, and nothing has: the person checks it when reviewing. */
+function byYou(row: MissionCriterionView): boolean {
+  return row.plannedCheck === 'none' && row.result !== 'PASS' && row.result !== 'FAIL' && !row.uncovered && row.qaArtifactId === null;
+}
+
+/**
+ * A Done-when line as the tracker wrote it, with its inline Markdown shown
+ * rather than spelled out (#105): **bold** and `code`. Text only, never HTML.
+ */
+function InlineMarkdown({ text }: { text: string }): JSX.Element {
+  const out: ReactNode[] = [];
+  const pattern = /\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`/g;
+  let at = 0;
+  for (const m of text.matchAll(pattern)) {
+    if (m.index > at) out.push(text.slice(at, m.index));
+    if (m[3] !== undefined) out.push(<code key={m.index}>{m[3]}</code>);
+    else out.push(<strong key={m.index}>{m[1] ?? m[2]}</strong>);
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return <>{out}</>;
 }
 
 /** What the plan will do with a line nothing covers or verifies yet. */
 const PLANNED_CHECK = {
   spec: 'The spec will cover this',
   qa: 'QA will verify this',
-  none: 'Nothing in this plan verifies this',
+  none: 'No step in this plan verifies this; you check it at review',
   unplanned: 'Waiting for the plan',
 } as const;
 

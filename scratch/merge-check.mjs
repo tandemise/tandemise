@@ -43,6 +43,25 @@ await attempt('ship opens', async () => {
   ];
   for (const [type, title, want] of prTitles) check(`pr title for ${type} "${title}"`, D.prTitle({ type }, title) === want, D.prTitle({ type }, title));
 
+  // #113: a real body. What changed first, the issue it closes, an honest status per Done-when line, holds.
+  const body = D.prBody({
+    summary: { headline: 'One file changed: docs/QUICKSTART.md step 2', points: ['Says to press **Discover runtimes**', 'Names the Linux path'] },
+    issue: { label: 'GitHub', key: '#97', url: 'https://github.com/acme/app/issues/97', closes: 'Closes #97' },
+    criteria: [{ key: 'C1', statement: 'Step 2 names `Discover runtimes`', verified: 'Claimed by the agent, not independently verified' }],
+    holds: ['Ana held Implement for 4 min and handed it back; 1 file changed (+2 -0).'],
+    why: ['Docs · tiny · low risk; quick lane.'],
+    missionId: 'msn_x',
+  });
+  check('the body leads with the summary', body.startsWith('## Summary\n\nOne file changed: docs/QUICKSTART.md step 2\n\n- Says to press **Discover runtimes**\n- Names the Linux path'), body);
+  check('it closes the issue, by GitHub\'s own keyword', body.includes('\n\nCloses #97\n') && body.includes('[GitHub #97](https://github.com/acme/app/issues/97)'), body);
+  check('a line nobody verified says so', body.includes('| C1 | Step 2 names `Discover runtimes` | Claimed by the agent, not independently verified |'), body);
+  check('holds are listed', body.includes('## Held by a person\n\n- Ana held Implement'), body);
+  const bare = D.prBody({ summary: null, issue: null, criteria: [], holds: [], why: [], missionId: 'msn_y' });
+  check('with nothing known, it says so plainly and claims nothing', !bare.includes('Closes') && !bare.includes('QA') && bare.includes('No Done-when lines were given.'), bare);
+  check('the closing keyword: same repository is #n', D.closingLine('https://github.com/acme/app/issues/97', 'acme/app') === 'Closes #97');
+  check('another repository is owner/repo#n', D.closingLine('https://github.com/acme/tracker/issues/5', 'acme/app') === 'Closes acme/tracker#5');
+  check('a YouTrack item closes nothing on GitHub', D.closingLine('https://acme.youtrack.cloud/issue/APP-3', 'acme/app') === null);
+
   const w = await world();
   const m = await w.mission('fix: typo in the settings title');
   const ship = () => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
@@ -56,7 +75,11 @@ await attempt('ship opens', async () => {
   check('with no CI on the repository, the ship step asks', ship().status === 'AWAITING_APPROVAL', [ship().status, ship().statusReason]);
   check('the ship task kept its executor', ship().executor === 'ship');
   const pr = fake.pullRequests(w.ghDir, REPO)[0];
-  check('the body carries no agent text', pr !== undefined && !pr.body.includes('ZZ-AGENT-SAYS') && pr.body.includes('Done when'), pr?.body);
+  check('the body carries no agent claim beyond its handoff', pr !== undefined && !pr.body.includes('ZZ-AGENT-SAYS') && pr.body.includes('Done when'), pr?.body);
+  // #113: the change set's headline leads the body; nothing claims a QA report that does not exist.
+  const headline = w.h.repo.artifacts.listByMission(m.id).find((a) => a.type === 'ChangeSet')?.handoff?.headline;
+  check('the body opens with what changed (the change set\'s headline)', typeof headline === 'string' && pr?.body.startsWith(`## Summary\n\n${headline}`), [headline, pr?.body.slice(0, 200)]);
+  check('no "See the QA report" when there is none', !pr?.body.includes('See the QA report'), pr?.body);
   check('pr.opened is recorded', w.h.repo.events.listByMission(m.id).some((e) => e.body.type === 'ship.pr_opened' && e.body.number === pr.number));
   // Ship again: the pull request is found by its head, not opened twice.
   const flow = new GH.GhPullRequestFlow(realExecutor(join(w.ghDir, 'bin')));

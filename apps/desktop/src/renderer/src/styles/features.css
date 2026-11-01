@@ -2184,3 +2184,47 @@
   flex: 1 1 16rem;
   min-width: 0;
 }
+
+
+/* The mission header for a tracker item (#105): one line, a short summary, the task behind a disclosure. */
+.topbar__subtitle:has(.mission-subtitle) {
+  white-space: normal;
+  overflow: visible;
+}
+
+.mission-subtitle__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s1);
+  margin: 0;
+}
+
+.mission-subtitle__summary {
+  margin: var(--s1) 0 0;
+  color: var(--text);
+  max-width: 72ch;
+}
+
+.mission-subtitle__details {
+  margin-top: var(--s1);
+}
+
+.mission-subtitle__details > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.mission-subtitle__goal {
+  margin: var(--s2) 0 0;
+  padding: var(--s2) var(--s3);
+  max-height: 16rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  background: var(--surface-sunken);
+  border-radius: var(--tds-radius-md);
+}
