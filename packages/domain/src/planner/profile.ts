@@ -23,9 +23,66 @@ const SOURCE_TYPES: Readonly<Record<string, TaskType>> = {
 /** A description at most this many words long is short: nothing in it suggests more than a small change (#103). */
 export const SHORT_DESCRIPTION_WORDS = 60;
 
+const REPRO = /^(?:steps\s+to\s+reproduce|to\s+reproduce|how\s+to\s+reproduce|reproduction(?:\s+steps)?|repro(?:\s+steps)?)\b/i;
+const CODE_SPAN = /(`+)[\s\S]*?\1/g;
+
+/** A line that is a label rather than prose: `**Repro**`, `Steps to reproduce:`. */
+function labelOf(line: string): string | null {
+  const m = /^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*:?\s*$/.exec(line) ?? /^\s*([A-Za-z][\w ]{0,40}?)\s*:\s*$/.exec(line);
+  return m === null ? null : m[1]!.replace(/:\s*$/, '').trim();
+}
+
+/**
+ * What a keyword rule reads (#210): the item's title and its prose. Code
+ * spans, fenced blocks and a "Steps to reproduce" section are left out: a
+ * command someone runs to show the bug (`npm run db:migrate`) says nothing
+ * about what the change is. A section under a heading ends at the next
+ * heading of its level or above; one under a label ("**Repro**", "Steps to
+ * reproduce:") ends at the next heading or label.
+ */
+export function keywordText(item: Pick<ProfileInput['item'], 'title' | 'description'>): string {
+  const kept: string[] = [];
+  let fence: string | null = null;
+  // The level of the reproduction section being skipped; 7 for one under a label.
+  let repro: number | null = null;
+  for (const line of item.description.replace(/\r\n?/g, '\n').split('\n')) {
+    const opener = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence !== null) {
+      if (opener !== undefined && opener[0] === fence[0] && opener.length >= fence.length && line.trim() === opener) fence = null;
+      continue;
+    }
+    if (opener !== undefined) { fence = opener; continue; }
+    const heading = /^\s{0,3}(#{1,6})\s+(.*?)[\s#]*$/.exec(line);
+    const label = heading === null ? labelOf(line) : null;
+    if (heading !== null) {
+      if (repro !== null && heading[1]!.length <= repro) repro = null;
+      if (REPRO.test(heading[2]!)) { repro = heading[1]!.length; continue; }
+    } else if (label !== null) {
+      if (repro === 7) repro = null;
+      if (REPRO.test(label)) { repro ??= 7; continue; }
+    }
+    if (repro === null) kept.push(line);
+  }
+  return `${item.title.replace(CODE_SPAN, ' ')}\n${kept.join('\n').replace(CODE_SPAN, ' ')}`.toLowerCase();
+}
+
+/**
+ * A tracker's word for an item's kind (its type, or one of its labels) mapped
+ * by a planner map, `trackerTypes` or `labels` (#154). Case, spaces, hyphens
+ * and underscores don't matter: "User Story", "user-story" and "user_story"
+ * are one key. The profile and the pull request's title (#172) share it.
+ */
+export function trackerKindType(word: string, map: Readonly<Record<string, TaskType>>): TaskType | undefined {
+  const norm = (w: string): string => w.toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+  const want = norm(word);
+  if (want === '') return undefined;
+  const key = Object.keys(map).find((k) => norm(k) === want);
+  return key === undefined ? undefined : map[key];
+}
+
 /** The words a rule's `item.keywords_any(...)` matched in the item, in the rule's order. */
 export function matchedKeywords(when: string, input: ProfileInput): string[] {
-  const text = `${input.item.title}\n${input.item.description}`.toLowerCase();
+  const text = keywordText(input.item);
   const out: string[] = [];
   for (const call of when.matchAll(/item\.keywords_any\(([^)]*)\)/g)) {
     for (const arg of call[1]!.matchAll(/"([^"]*)"|'([^']*)'/g)) {
@@ -89,7 +146,7 @@ const lower = (xs: readonly string[]): string[] => xs.map((x) => x.toLowerCase()
 export function planRuleContext(input: ProfileInput, profile: Partial<Pick<TaskProfile, 'type' | 'size' | 'risk' | 'areas' | 'repos'>>): {
   facts: GateFacts; predicates: GatePredicates;
 } {
-  const text = `${input.item.title}\n${input.item.description}`.toLowerCase();
+  const text = keywordText(input.item);
   const strs = (args: readonly GateValue[]): string[] => args.filter((a): a is string => typeof a === 'string').map((a) => a.toLowerCase());
   const prefix = titlePrefix(input.item.title);
   const areas = profile.areas ?? [];
@@ -130,12 +187,12 @@ export function profileTask(input: ProfileInput, config: PlannerConfig): TaskPro
   if (prefix !== null && PREFIX_TYPES[prefix] !== undefined) proposeType(PREFIX_TYPES[prefix]!, 'title prefix', `${prefix}:`);
 
   if (input.item.trackerType !== null) {
-    const key = Object.keys(config.trackerTypes).find((k) => k.toLowerCase() === input.item.trackerType!.toLowerCase());
-    if (key !== undefined) proposeType(config.trackerTypes[key]!, 'tracker type', input.item.trackerType);
+    const mapped = trackerKindType(input.item.trackerType, config.trackerTypes);
+    if (mapped !== undefined) proposeType(mapped, 'tracker type', input.item.trackerType);
   }
   for (const label of input.item.labels) {
-    const key = Object.keys(config.labels).find((k) => k.toLowerCase() === label.toLowerCase());
-    if (key !== undefined) proposeType(config.labels[key]!, 'label', label);
+    const mapped = trackerKindType(label, config.labels);
+    if (mapped !== undefined) proposeType(mapped, 'label', label);
   }
   for (const source of input.item.sources) {
     const t = SOURCE_TYPES[source.toLowerCase()];
@@ -148,6 +205,8 @@ export function profileTask(input: ProfileInput, config: PlannerConfig): TaskPro
     signals.push({ name: 'path', value: path, effect: `area ${area.name}${area.sensitivity === 'none' ? ', not sensitive' : `, ${area.sensitivity}`}` });
   }
 
+  // The files the change touched, once it is measured (#210); none before.
+  const changed = input.basis === 'measured' ? input.changed ?? [] : [];
   const ruleSet = { type: false, size: false, risk: false };
   for (const rule of config.profile.rules) {
     const { facts, predicates } = planRuleContext(input, { type, size, risk, areas, repos: input.repos });
@@ -166,7 +225,19 @@ export function profileTask(input: ProfileInput, config: PlannerConfig): TaskPro
       sizeFrom = 'rule';
       signals.push({ name: 'rule', value: rule.when, effect: `size ${size}`, ...withSaid });
     }
-    if (rule.set.risk !== undefined && !ruleSet.risk) {
+    if (rule.set.risk !== undefined && !ruleSet.risk && changed.length > 0 && /item\.keywords_any\(/.test(rule.when)) {
+      // Graded again from the change (#210): what the item's text says about
+      // risk gives way to what the change touches, whose areas and their
+      // sensitivity floor (below) decide.
+      ruleSet.risk = true;
+      const words = matchedKeywords(rule.when, input);
+      const sensitive = areas.filter((a) => a.sensitivity !== 'none').map((a) => a.name);
+      signals.push({
+        name: 'change', value: `${changed.length} ${changed.length === 1 ? 'file' : 'files'} changed`, effect: `risk ${risk}`,
+        said: `the change itself touches ${sensitive.length > 0 ? sensitive.join(', ') : 'no sensitive area'}`
+          + (words.length > 0 ? `, though the item says ${words.map((w) => `"${w}"`).join(' and ')}` : ''),
+      });
+    } else if (rule.set.risk !== undefined && !ruleSet.risk) {
       ruleSet.risk = true;
       // A rule can say a task is riskier, never that it is safer than the base.
       risk = atLeast(RISK_LEVELS, risk, rule.set.risk);

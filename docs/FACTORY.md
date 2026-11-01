@@ -78,6 +78,17 @@ ci:                          # what a failing CI check is about: metadata | code
 - **Profile**: type, size and risk, each with the signals that set it. Any
   `critical` area makes risk high and any `sensitive` one at least medium: no
   rule, model or person can put risk below that floor.
+- **Type from the tracker**: the tracker item's own type (`trackerTypes`: a
+  YouTrack `Bug` is a fix, a `User Story` a feature) and its labels or tags
+  (`labels`: a GitHub `bug` label is a fix) set the type before any quick model
+  is asked. Case, spaces and hyphens don't matter (`user-story` matches
+  `User Story`). The pull request's title maps the tracker type the same way.
+- **Keyword rules** (`item.keywords_any(...)`) read the item's title and its
+  prose. Code spans, fenced blocks and a "Steps to reproduce" (or "Repro")
+  section are left out: `npm run db:migrate` in a bug's reproduction steps is
+  not a migration. Once the change is measured, a keyword rule no longer sets
+  risk: the areas the change touches do. A lane the item's text chose can step
+  down then, and the plan decision says so; a lane you chose never does.
 - **Lanes**: *quick* is one step then the pull request (no refinement, no
   planner run, no plan approval); *standard* adds an independent review and,
   when you gave Done-when lines, verification; *careful* is spec, architecture,

@@ -1,7 +1,7 @@
 import {
   FACTORY_WORKFLOW_ID, IMPLICIT_CRITERION, IMPLICIT_CRITERION_KEY,
   addSkillRefs, applyModules, chooseLane, compileWorkflow, evaluateGate, isTrialMission, laneWorkflowId, parseSkillRef,
-  profileRuleContext, profileLine, profileTask, stepClassFor, tiebreakReason, validateMissionPlan, matchGlob,
+  LANE_STEPPED_DOWN, RISK_LEVELS, profileRuleContext, profileLine, profileTask, stepClassFor, tiebreakReason, validateMissionPlan, matchGlob,
   type Lane, type MissionPlan, type Mission, type MissionCriteriaRepositoryPort, type MissionRepositoryPort,
   type PlanDecision, type PlanDecisionRepositoryPort, type PlannedTask, type PlannerConfig, type ProfileInput,
   type RepoRepositoryPort, type Repository, type RoleRepositoryPort, type RoleTemplate, type SkillRef, type TaskProfile,
@@ -55,8 +55,11 @@ export interface PlannerDeps {
   readonly clock: Clock;
   readonly log: Logger;
   readonly tiebreak?: TiebreakRunnerPort;
-  /** The type of the tracker item Start made the mission from (#52), mapped by planner.yaml's trackerTypes. */
-  readonly trackerItems?: { get(id: string): { readonly type?: string } | undefined };
+  /**
+   * The tracker item Start made the mission from (#52): its type and its
+   * labels or tags, mapped by planner.yaml's `trackerTypes` and `labels` (#154).
+   */
+  readonly trackerItems?: { get(id: string): { readonly type?: string; readonly tags?: readonly string[] } | undefined };
   readonly skills?: SkillPinning;
   /** For escalating a running mission and switching its lane (#53 §5.4). Optional for older harnesses. */
   readonly tasks?: TaskRepositoryPort;
@@ -123,11 +126,15 @@ export class PlannerService {
     return mission.workflowPreset === FACTORY_WORKFLOW_ID && !isTrialMission(mission);
   }
 
-  /** The tracker item's type, when Start made this mission from one (null otherwise, or once the item is gone). */
-  #trackerType(mission: Mission): string | null {
+  /**
+   * The tracker item's type and labels (a GitHub issue's labels, a YouTrack
+   * item's tags), when Start made this mission from one; nothing otherwise,
+   * or once the item is gone (#154).
+   */
+  #trackerItem(mission: Mission): { readonly trackerType: string | null; readonly labels: readonly string[] } {
     const id = mission.trackerItemId;
-    if (id === undefined || id === null) return null;
-    return this.deps.trackerItems?.get(id)?.type ?? null;
+    const item = id === undefined || id === null ? undefined : this.deps.trackerItems?.get(id);
+    return { trackerType: item?.type ?? null, labels: item?.tags ?? [] };
   }
 
   /**
@@ -160,7 +167,7 @@ export class PlannerService {
   async predict(mission: Mission): Promise<{ profile: TaskProfile; lane: Lane; because: string; config: FactoryConfig }> {
     const repositories = this.#orderedRepositories(mission.workspaceId);
     const config = await this.#config(mission.workspaceId, repositories, true);
-    const input = gatherSignals({ mission, criteria: this.deps.criteria.listActive(mission.id), repositories, trackerType: this.#trackerType(mission) });
+    const input = gatherSignals({ mission, criteria: this.deps.criteria.listActive(mission.id), repositories, ...this.#trackerItem(mission) });
     const profile = profileTask(input, config.planner);
     return { profile, config, ...chooseLane(profile, config.planner, input.person) };
   }
@@ -185,7 +192,7 @@ export class PlannerService {
     const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id };
     const config = await this.#config(mission.workspaceId, ctx.repositories, true);
     const criteria = this.deps.criteria.listActive(mission.id);
-    let input: ProfileInput = gatherSignals({ mission, criteria, repositories: ctx.repositories, trackerType: this.#trackerType(mission) });
+    let input: ProfileInput = gatherSignals({ mission, criteria, repositories: ctx.repositories, ...this.#trackerItem(mission) });
     let profile = profileTask(input, config.planner);
 
     let tiebreak: PlanDecision['tiebreak'] = null;
@@ -320,12 +327,18 @@ export class PlannerService {
     const config = await this.#config(mission.workspaceId, repositories, true);
     const before = this.deps.planDecisions.latest(mission.id);
     const criteria = this.deps.criteria.listActive(mission.id);
-    const input = gatherSignals({ mission, criteria, repositories, extraPaths: paths, basis: 'measured', trackerType: this.#trackerType(mission) });
+    const input = gatherSignals({ mission, criteria, repositories, extraPaths: paths, changed: paths, basis: 'measured', ...this.#trackerItem(mission) });
     const person = options.person ?? mission.laneRequest ?? 'auto';
     const profile = profileTask({ ...input, person }, config.planner);
     const measured = chooseLane(profile, config.planner, person);
     const laneNow = before?.lane ?? 'standard';
     const stricter = laneStricter(measured.lane, laneNow);
+    // A lane the item's text chose steps down once the change shows less risk
+    // (#210): never a person's choice, and only from the prediction. Steps
+    // already planned stay; the lane the merge decision reads is the lighter one.
+    const lighter = !stricter && laneStricter(laneNow, measured.lane) && person === 'auto' && before?.basis === 'predicted'
+      && before.laneBecause !== 'you chose it' && !before.lightenedByPerson && paths.length > 0
+      && RISK_LEVELS.indexOf(profile.risk) < RISK_LEVELS.indexOf(before.profile.risk);
 
     const { facts, predicates } = profileRuleContext(profile);
     const current: MissionPlan = { summary: '', tasks };
@@ -349,7 +362,7 @@ export class PlannerService {
       const was = tasks.find((x) => x.key === t.key);
       return was !== undefined && STARTABLE.includes(was.status) && was.completionGate !== t.completionGate;
     });
-    if (planned.length === 0 && gateEdits.length === 0 && !stricter && withModules.applied.every((m) => before?.modules.includes(m))) return [];
+    if (planned.length === 0 && gateEdits.length === 0 && !stricter && !lighter && withModules.applied.every((m) => before?.modules.includes(m))) return [];
 
     for (const edit of gateEdits) {
       const was = tasks.find((x) => x.key === edit.key)!;
@@ -370,8 +383,8 @@ export class PlannerService {
       policyRef: policyRef(config),
       basis: 'measured',
       profile,
-      lane: stricter ? measured.lane : laneNow,
-      laneBecause: stricter ? measured.because : before?.laneBecause ?? measured.because,
+      lane: stricter || lighter ? measured.lane : laneNow,
+      laneBecause: stricter ? measured.because : lighter ? LANE_STEPPED_DOWN : before?.laneBecause ?? measured.because,
       workflowId: before?.workflowId ?? measured.lane,
       modules: [...new Set([...(before?.modules ?? []), ...withModules.applied])],
       dropped: before?.dropped ?? [],
@@ -389,6 +402,9 @@ export class PlannerService {
       const touched = paths.find((p) => config.planner.areas.some((a) => sensitive.includes(a.name) && a.paths.some((g) => matchGlob(g, p)))) ?? paths[0];
       const what = made.map((t) => withArticle(t.title.toLowerCase())).join(' and ');
       this.deps.recorder.note(scope, touched === undefined ? `You made it careful, so I added ${what}.` : `It touched ${touched}, so I added ${what}.`);
+    }
+    if (lighter) {
+      this.deps.recorder.note(scope, `What the change touches is less risky than its text said, so it moved to the ${measured.lane} lane.`);
     }
     this.deps.recorder.invalidate('tasks', mission.id);
     return made.map((t) => t.key);
