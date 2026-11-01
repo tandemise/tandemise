@@ -57,7 +57,10 @@ daemon printed while starting, is in `~/.tandemise/logs/daemon-launch.log`.
    at a throwaway clone: every code-writing task gets its own worktree, but
    product, design, architecture and release steps write `.tandemise/out/` in
    the checkout itself (see [Known limitations](KNOWN_LIMITATIONS.md)).
-2. **Runtimes → Discover**: Claude Code is detected automatically. Any other
+2. **Runtimes**: a fresh install has no runtimes configured, and nothing runs
+   until you add one. Press **Discover runtimes** to list the agent CLIs
+   installed on this machine, then press **Add** on Claude Code's row; it is
+   used only once it shows **Configured**. Any other
    agent CLI can be added here as a `generic-cli` runtime — give it a command,
    an argument template with `{{prompt}}`, and whether the prompt goes as an
    argument or on stdin. No code change is needed to add a worker.

@@ -24,7 +24,7 @@
       "observed": {
         "text": "Hold",
         "disabled": false,
-        "title": "Stop the agent and work with it in its own terminal"
+        "title": ""
       }
     },
     {
@@ -34,29 +34,29 @@
     {
       "label": "a fresh session starts (nothing to resume)",
       "ok": true,
-      "observed": "Fake session new\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session new\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (DB): a hold from READY, with no session before it",
       "ok": true,
       "observed": {
-        "id": "hld_01m683x3a2d26aqym2ky",
-        "heldBy": "mem_01m683jx1kvrs3wj5c7r",
+        "id": "hld_01m69w4cbg19yy2vz8b7",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "fromStatus": "READY",
-        "profileId": "rt_01m683wrsjscrs5gjga6",
+        "profileId": "rt_01m69w41tshw0e8vywdf",
         "sessionBefore": null,
         "sessionAfter": null,
         "endedAt": null,
         "ending": null,
         "consumedAt": null,
         "diffStat": null,
-        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m683jx1kvrs3wj5c7q/missions/msn_01m683wtvvvrcyvzmxas/holds/hld_01m683x3a2d26aqym2ky"
+        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69w43x8yk0vabykyt/holds/hld_01m69w4cbg19yy2vz8b7"
       }
     },
     {
       "label": "proof (API): its worktree was provisioned",
       "ok": true,
-      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m683jx1kvrs3wj5c7q/missions/msn_01m683wtvvvrcyvzmxas/worktrees/two-pages-mvvws1mg-settings-r359gen3"
+      "observed": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69w43x8yk0vabykyt/worktrees/two-pages-mvwvvqlc-settings-pqmr8hsy"
     },
     {
       "label": "proof (disk): the session works in that worktree",
@@ -71,6 +71,6 @@
     "setup: both steps go to one fake runtime with a single slot"
   ],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H7-fresh-session.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H7-fresh-session.png"
   ]
 }

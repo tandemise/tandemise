@@ -12,13 +12,13 @@
       "ok": true,
       "observed": {
         "status": "AWAITING_INPUT",
-        "card": "Which layout should onboarding use (mvvwr7cb)?"
+        "card": "Which layout should onboarding use (mvwvuwkg)?"
       }
     },
     {
       "label": "the question waits on you in the Inbox",
       "ok": true,
-      "observed": "Inbox\nWhat is waiting on a person.\nWhich layout should onboarding use (mvvwr7cb)?\nFor you·Ask about onboarding mvvwr2od\nQuestion\njust now"
+      "observed": "Inbox\nWhat is waiting on a person.\nWhich layout should onboarding use (mvwvuwkg)?\nFor you·Ask about onboarding mvwvurwb\nQuestion\njust now"
     },
     {
       "label": "Hold from its drawer opens the terminal panel",
@@ -27,7 +27,7 @@
     {
       "label": "the session is resumed in the terminal, to answer there",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m683vhq55ja5sdnvm8\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69w2v302gjyc2v5e6\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (API): the step is HELD",
@@ -47,7 +47,7 @@
     {
       "label": "it is listed as decided: withdrawn because the work moved on",
       "ok": true,
-      "observed": "r7cb)?\nWithdrawn — the work ended first · “Held by Demostenes Garcia.”\nAsk about onboarding mvvwr2od\nApprove the plan fo"
+      "observed": "uwkg)?\nWithdrawn — the work ended first · “Held by Demostenes Garcia.”\nAsk about onboarding mvwvurwb\nApprove the plan fo"
     },
     {
       "label": "Release in the drawer ends the hold",
@@ -56,7 +56,7 @@
   ],
   "notes": [],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H6-inbox-question.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H6-inbox-after.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H6-inbox-question.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H6-inbox-after.png"
   ]
 }

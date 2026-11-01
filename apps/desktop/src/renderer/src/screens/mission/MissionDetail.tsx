@@ -22,7 +22,7 @@ import { describeError } from '../../lib/daemon.js';
 import { clearMissionNotice, useMissionNotice } from '../../lib/notices.js';
 import { useOpenTerminal } from '../../lib/terminal.js';
 import { TerminalPanel } from '../../components/TerminalPanel.js';
-import { Banner, Button, Card, Tooltip } from '@tandemise/design/react';
+import { Banner, Button, Card, Tab, Tabs, Tooltip } from '@tandemise/design/react';
 
 // Feed first: it is where a mission opens, and the order of the tabs says so.
 export const MISSION_TABS = ['feed', 'plan', 'timeline', 'artifacts', 'checks', 'metrics'] as const;
@@ -183,14 +183,14 @@ export function MissionDetail({ id, tab }: { id: string; tab: MissionTab }): JSX
 
       <LimitCardPanel approvalId={detail.limits?.pendingApprovalId ?? null} />
 
-      <div className="tabs" style={{ marginTop: 'var(--s3)' }}>
+      <Tabs label="Mission sections" style={{ marginTop: 'var(--s3)' }}>
         <TabLink id={id} tab="feed" current={tab} label="Feed" count={needsYouCount(detail, meId)} />
         <TabLink id={id} tab="plan" current={tab} label="Plan" count={detail.tasks.length} />
         <TabLink id={id} tab="timeline" current={tab} label="Timeline" />
         <TabLink id={id} tab="artifacts" current={tab} label="Artifacts" count={liveArtifactCount(detail)} />
         <TabLink id={id} tab="checks" current={tab} label="Checks & Gates" count={detail.checks.length} />
         <TabLink id={id} tab="metrics" current={tab} label="Metrics" />
-      </div>
+      </Tabs>
 
       {renderPane(tab, detail, focusNeeds, () => setFocusNeeds(false))}
 
@@ -281,10 +281,9 @@ function TabLink({
   count?: number;
 }): JSX.Element {
   return (
-    <Link href={tab === 'feed' ? `/missions/${id}` : `/missions/${id}/${tab}`} className="tab" aria-selected={current === tab}>
+    <Tab as={Link} href={tab === 'feed' ? `/missions/${id}` : `/missions/${id}/${tab}`} selected={current === tab} count={count !== undefined && count > 0 ? count : undefined}>
       {label}
-      {count !== undefined && count > 0 ? <span className="tab__count">{count}</span> : null}
-    </Link>
+    </Tab>
   );
 }
 
@@ -456,9 +455,9 @@ function LimitCardPanel({ approvalId }: { approvalId: string | null }): JSX.Elem
   const view = approvalId === null ? undefined : approvals.data?.find((a) => a.approval.id === approvalId);
   if (view === undefined || view.approval.status !== 'PENDING') return null;
   return (
-    <div style={{ margin: 'var(--s3) var(--s7) 0' }} aria-label="Limit reached">
-      <ApprovalCard view={view} compact />
-    </div>
+    <section style={{ margin: 'var(--s3) var(--s7) 0' }} aria-label="Limit reached">
+      <ApprovalCard view={view} compact headingLevel={2} />
+    </section>
   );
 }
 

@@ -27,6 +27,24 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* F6's last resort when every control is disabled: the panel takes focus, and shows it inside its own edge. */
+.terminal-panel:focus-visible {
+  outline-offset: -2px;
+}
+
+/* How focus gets out of the terminal, said under it (2.1.2). */
+.terminal-panel__keys {
+  margin: 0;
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.terminal-panel__actions {
+  flex-wrap: wrap;
+}
+
 .terminal-panel__icon {
   flex: none;
   color: var(--text-secondary);

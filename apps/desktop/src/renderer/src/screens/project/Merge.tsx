@@ -76,7 +76,7 @@ export function Merge({ workspaceId }: { workspaceId: string }): JSX.Element {
         {previewError !== null ? <p className="merge__error">{previewError}</p> : null}
         {save.isError ? <p className="merge__error">{(save.error as Error).message}</p> : null}
         {view.error !== null ? <p className="merge__error">The merge policy can't be read ({view.error}), so every pull request asks.</p> : null}
-        <h4 className="merge__heading">Never merged on its own</h4>
+        <h3 className="merge__heading">Never merged on its own</h3>
         <ul className="merge__list">
           {never.map((rule, i) => (
             <li key={i}>
@@ -84,7 +84,7 @@ export function Merge({ workspaceId }: { workspaceId: string }): JSX.Element {
             </li>
           ))}
         </ul>
-        <h4 className="merge__heading">Risk score</h4>
+        <h3 className="merge__heading">Risk score</h3>
         <ul className="merge__list">
           {score.map((rule, i) => <li key={i}>{rule.why}: {rule.points} {rule.points === 1 ? 'point' : 'points'}</li>)}
         </ul>

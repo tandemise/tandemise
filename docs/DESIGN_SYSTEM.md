@@ -209,7 +209,8 @@ Build screens from these before inventing new ones. Where a component exists
 in `@tandemise/design/react`, use it rather than typing the classes: it carries
 the accessibility (`Button`, `Badge`, `StatusPill`, `StatusDot`, `Card`,
 `Icon`, `Logo`, `Field`, `Segmented`, `Switch`, `Chip`, `IdChip`, `Stat`,
-`Banner`, `Dialog`, `Tabs`/`Tab`, `Tooltip`, `Truncate`, `EmptyState`). The
+`Banner`, `Dialog`, `Tabs`/`Tab`, `Tooltip`, `Truncate`, `EmptyState`,
+`SkipLink`). The
 desktop's `components/primitives.tsx` and `components/Modal.tsx` wrap them with
 the app's own vocabulary (`StatusBadge` takes a status string, `ConfirmDialog`
 its copy). A router link that must look like a button takes `buttonClass()`.
@@ -219,7 +220,7 @@ Each class uses roles only; the component classes live in
 | Need | Use |
 |---|---|
 | Actions | `Button` / `.btn`, plus `--primary` (at most one per view), `--ghost`, `--danger`, `size` `sm` (28px, a row of actions on a list item) or `lg`, `--icon` (always with an `aria-label`, and a `Tooltip` showing it), `--block`; `loading` for work in flight |
-| Navigation | `Tabs` + `Tab` (`.tabs`, `.tab`, `.tab__count`), rendered as router links |
+| Navigation | `Tabs` + `Tab` (`.tabs`, `.tab`, `.tab__count`), rendered as router links or buttons, never a bare `.tab` with `aria-selected`; `SkipLink` first in every shell |
 | State | `.badge--{pending,running,blocked,failed,succeeded,release,accent}`, `.dot--{tone}`, `.dot--pulse` for live |
 | Inputs | `Field` (`.field`), `.input`, `.textarea`, `.select`, `Segmented` (a radio group), `Switch`, `.search` |
 | Containers | `Card`, `.list` / `.list__row`, `.table`, `Banner` (`neutral`, `accent`, `warn`, `danger`; `live` when it appears while the person is there), `Dialog`, `.overlay`, `.palette` |
@@ -228,6 +229,40 @@ Each class uses roles only; the component classes live in
 | Empty and error | `.empty`, `.errorstate`, `.skeleton` |
 | Icons | `Icon` (`@tandemise/design/react`, re-exported by `components/Icon.tsx`), drawing `ICON_PATHS`: stroke icons in `currentColor` at 1.7 weight on a 24px grid |
 | Hints | `Tooltip` for a hint (it is reachable by keyboard, dismissable with Escape, hoverable and persistent: WCAG 1.4.13); `Truncate` for text an ellipsis cuts off. Never a native `title`: a keyboard user never sees it, and `check:design` rejects one in the renderer. |
+
+## Accessibility
+
+WCAG 2.1 AA is the minimum for every screen, in both themes. What that means in
+this app, and what keeps it there:
+
+- **Structure.** One `<main id="main">` and one `h1` (the `PageHeader` title) per
+  screen; headings never skip a level (a document's own headings are shifted
+  under the reader's with `aria-level`); the sidebar is a labelled `nav`; the
+  `SkipLink` is the first Tab stop.
+- **Keyboard.** Everything works with the keyboard, focus is always drawn
+  (`--focus-ring`, 2px, at least 3:1; inputs double their border in the ring's
+  colour), dialogs and drawers trap Tab and close on Escape. The held step's
+  terminal keeps Tab and Escape for the program: F6 moves focus out of it and
+  back, Escape outside it closes the panel, and a Screen reader mode button
+  turns on xterm's accessibility tree.
+- **Reflow.** Below 760 CSS px (the window zoomed to 200% and beyond) the shell
+  is one column that scrolls vertically: the sidebar folds behind Menu, page
+  headers wrap, grids stack (`styles/reflow.css`). Only diagrams (the plan),
+  tables and code may scroll both ways (`data-scroll-2d`).
+- **Names and status.** Every control is named (`check:design` rejects an
+  icon-only control without `aria-label`); a visual alternative is in words
+  (the plan's edges are "After …" on each card, a meter repeats a number shown
+  beside it). The daemon's connection and the one-line flash are announced
+  through live regions that are always mounted; the "Now" line is not a live
+  region, so live agent work does not chatter.
+- **Motion.** `prefers-reduced-motion` turns animation off (`base.css`).
+
+The gates: `npm run check:design` (static), `npm run -w @tandemise/design
+storybook:a11y` (every story, axe, both themes) and
+`node scratch/acceptance/a11y/run-all.mjs` (every screen and state of the real
+window, axe plus structure, names, a keyboard pass, reflow and text spacing; the
+CI job "Accessibility (desktop)"). The hold suite's H12 covers the terminal.
+The audit behind this section is `docs/accessibility/AUDIT-2026-10-31.md`.
 
 Status always maps through `Tone` (`lib/format.ts`):
 `running | blocked | failed | succeeded | pending`. Add a tone there and in
