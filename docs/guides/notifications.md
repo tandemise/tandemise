@@ -46,9 +46,32 @@ now** while they are in force.
 
 ## Check that notifications reach you
 
-Click **Send a test notification**. You should see "Notifications are on". If
-nothing appears, allow notifications for Tandemise (or "Electron" when you run
-it from source) in your system's notification settings.
+The last row of **Settings → Notifications** says what your system does with
+Tandemise's notifications, as far as the system tells:
+
+| It says | Meaning |
+|---|---|
+| **Showing** | The system takes them and shows banners (GNOME and other Linux desktops say so). |
+| **No banners** | The system takes them but shows no banner: GNOME's **Do Not Disturb** is on, or banners (or notifications) are off for Tandemise in GNOME Settings. They wait in the notification list; the row says which switch to turn. |
+| **Not delivered** | The system takes none: no notification library (install `libnotify4`), no notification server on the session, or Windows refused the toast. Nothing is recorded as notified, so every item is announced once the system can show it. |
+| **Not reported** | macOS and Windows do not tell apps whether their notifications are allowed. Send a test notification to find out. |
+
+Click **Send a test notification**. Below the button it reports whether the
+system **took** it (on Linux: the notification server answered with an id) and,
+where the system says, whether it is **on screen** or went to the list without
+a banner. If it was not delivered it says why. On macOS or Windows, if nothing
+appears, allow notifications for Tandemise in System Settings → Notifications
+(macOS) or Settings → System → Notifications (Windows).
+
+### The Linux AppImage
+
+The .deb installs a `tandemise.desktop` entry, which is how the desktop finds
+Tandemise's name and icon. The AppImage installs nothing, so its notifications
+arrive with the icon inside the notification and GNOME lists no Tandemise under
+Settings → Notifications. Settings offers **Add to apps**: on your click it
+writes a launcher for this AppImage to `~/.local/share/applications` and its
+icon beside it; **Remove from apps** takes both away again. Tandemise never
+writes there on its own.
 
 ![A notification's click opens the mission on its plan card](../../apps/desktop/screenshots/notifications-opened.png)
 
@@ -57,5 +80,8 @@ it from source) in your system's notification settings.
 The daemon compares the Inbox with the list of items it has already announced,
 and records the answer in its `settings.json` before replying, so the decision
 never depends on the window being open. The desktop app asks every few seconds
-and shows what comes back. Everything here is read from the Inbox's own rows;
+and shows what comes back. If the system refuses a notification, the app hands
+its items back (`POST /v1/notifications/release`), so they are not counted as
+announced, and waits a minute before asking again; when the system cannot show
+notifications at all, the app does not ask. Everything here is read from the Inbox's own rows;
 no model decides what to tell you.

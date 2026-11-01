@@ -10,7 +10,7 @@ import {
   dismissFeedbackRequest, giveFeedbackRequest, startRoundRequest,
   addCriterionRequest, answerQuestionRequest, criterionVerdictRequest, updateMissionRequest, workspaceUsageQuery,
   advanceClockRequest, createRoutineRequest, updateRoutineRequest, importSkillRequest, previewSkillRequest,
-  takeNotificationsRequest, updateNotificationPreferencesRequest,
+  takeNotificationsRequest, releaseNotificationsRequest, updateNotificationPreferencesRequest,
   updateIssueSettingsRequest,
   applySetupRequest, exportSetupRequest, previewSetupRequest,
   parkTaskRequest, handBackRequest, resolveWorkspaceLinkRequest,
@@ -96,6 +96,9 @@ export function buildRouter(services: TandemiseServices, options: {
     services.notifications.updatePreferences(await ctx.body(updateNotificationPreferencesRequest)));
   r.post('/v1/notifications/take', async (ctx) =>
     services.notifications.take(ctx.caller, await ctx.body(takeNotificationsRequest)));
+  // The desktop took a notice the operating system did not accept: announce those ids again later.
+  r.post('/v1/notifications/release', async (ctx) =>
+    services.notifications.release((await ctx.body(releaseNotificationsRequest)).ids));
 
   // ------------------------------------------------------------ workspaces
   r.get('/v1/home', (ctx) => services.projections.home(ctx.query.get('workspaceId') ?? undefined));
