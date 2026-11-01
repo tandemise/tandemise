@@ -65,7 +65,9 @@ export { EventRecorder } from './support/event-recorder.js';
 export type { EventScope } from './support/event-recorder.js';
 export { RepositoryProber } from './support/repository-prober.js';
 export { RuntimeOverrides } from './support/runtime-overrides.js';
-export { ApprovalWaiter, createApprovalGate, createPolicyEngineToolGate } from './support/tool-policy.js';
+export {
+  ApprovalWaiter, STEP_CAPABILITIES_LABEL, createApprovalGate, createPolicyEngineToolGate, stepApprovedCapabilities,
+} from './support/tool-policy.js';
 export type { ApprovalGateDeps, PolicyGateDeps } from './support/tool-policy.js';
 export { toApprovalView } from './support/approval-view.js';
 export { actorRef, actorRefs, toArtifactView } from './support/actors.js';

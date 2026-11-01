@@ -81,6 +81,7 @@ export const OFFLINE_CHECKS = [
   'schema-constraint-check',
   'secrets-check',
   'shell-benign-check',
+  'step-approval-check',
   'signin-check',
   'staffing-check',
   'trust-boundary-check',
