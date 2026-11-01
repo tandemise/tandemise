@@ -92,6 +92,42 @@ tiebreak: on                 # a cheap model breaks ties only when the rules can
   step class in an area, the next one gets a look from you after it, for that
   task only.
 
+### Checks: what runs, how long it may take
+
+A step's gate names the checks it needs (`checks.tests == PASS`); only those
+run, in the step's worktree, after the agent finishes. The agent's prompt names
+them and tells it not to run the full suite itself.
+
+- **What changed decides what runs.** An area may say what a check runs when
+  every changed file is in it:
+
+  ```yaml
+  areas:
+    - name: docs
+      paths: ["docs/**", "**/*.md"]
+      checks: { tests: none, typecheck: none, lint: none, build: none }
+    - name: design
+      paths: ["packages/design/**"]
+      checks: { tests: "npm run -w @tandemise/design test" }
+  ```
+
+  A docs-only change runs no test suite (the shipped `docs` area says so); a
+  change inside `design` runs that command; a change with any file elsewhere
+  runs the repository's own command. The pull request's CI still runs
+  everything.
+- **Once per tree.** A result is stored with the git tree it measured; a later
+  step on the same tree reuses it instead of running the command again.
+- **Time budgets.** Each check has a budget in minutes: the repository's own
+  (Project settings → Repositories → Checks), else `checks.budgets` here
+  (`checks: { budgets: { tests: 20 } }`), else 10. A check that runs out of
+  time is `TIMEOUT`, not `FAIL`: it runs once more with twice the budget, and
+  if it still does not finish the step asks you (raise the budget, change the
+  command, retry or accept). It never costs the agent an attempt.
+- **Retries keep what you said.** What you type during a Hold is quoted to
+  every later attempt as binding. A retry is told to keep its change scoped;
+  files it adds to the change are recorded as the `scope.retry` check, and the
+  merge score adds points for it (`process.retry_out_of_scope`).
+
 A project file `.tandemise/workflows/<id>.yaml` with a lane's id
 (`quick`, `standard`, `careful`, `fix`, `fix-careful`) replaces that lane.
 
