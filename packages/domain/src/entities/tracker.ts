@@ -40,6 +40,18 @@ export interface TrackerItem {
   /** ISO 8601, the tracker's own. */
   readonly createdAt: string;
   readonly type?: string;
+  /**
+   * How many of its subtasks are still open, when the tracker says (#136): an
+   * item with any is a container, and Start offers its subtasks instead.
+   * Absent when the tracker cannot tell (GitHub Issues through `gh`).
+   */
+  readonly subtasks?: number;
+  /**
+   * The item's tags (YouTrack) or its labels that are not mapped states
+   * (GitHub), as written. `repoTag` reads them to tell another repository's
+   * item. Absent when the tracker has none to give.
+   */
+  readonly tags?: readonly string[];
 }
 
 /** A cached board item: the tracker's item plus what Tandemise keeps about it. */
@@ -187,7 +199,7 @@ export function stateMappingProblem(
   described: { readonly states: readonly string[] },
 ): string | null {
   const s = mapping.states;
-  const named = [...s.ready, s.in_progress, ...(s.in_review === undefined ? [] : [s.in_review]), ...s.done, ...s.wont_do];
+  const named = [...s.ready, s.in_progress, ...(s.in_review === undefined ? [] : [s.in_review]), ...s.done, ...s.wont_do, ...(s.draft ?? [])];
   const missing = named.find((state) => !described.states.includes(state));
   if (missing !== undefined) {
     const tracker = TRACKER_LABELS[mapping.kind] ?? mapping.kind;
@@ -201,6 +213,50 @@ export function stateMappingProblem(
 }
 
 // ------------------------------------------------------------------ Start (spec §7, plan Task 8)
+
+/**
+ * Why an item must not be started in this project, as the Board says it beside
+ * a disabled Start and `start` refuses it, or null when it may be (#136). Read
+ * from what the tracker reported, with the project's tracker config:
+ *
+ *  - an item tagged for another repository: with `repoTag: repo:web`, an item
+ *    carrying `repo:api` (a tag with the same prefix, up to and including its
+ *    first `:`) and not `repo:web` "Belongs to another repository (repo:api)."
+ *    An item with no such tag is this project's;
+ *  - a type the project does not build: with `buildTypes: [Bug, Task]`, a
+ *    Spike is "Spike: this project starts Bug and Task items." An item with no
+ *    type, or no `buildTypes`, is buildable;
+ *  - a container: an item with open subtasks "Has 4 subtasks. Start one of them."
+ *
+ * Checked in that order: another repository's container is still not ours.
+ * Tags and types match without regard to case.
+ */
+export function startRefusal(
+  item: Pick<TrackerItem, 'type' | 'subtasks' | 'tags'>,
+  config: Pick<TrackerConfig, 'buildTypes' | 'repoTag'>,
+): string | null {
+  const repoTag = config.repoTag?.trim();
+  if (repoTag !== undefined && repoTag.includes(':')) {
+    const prefix = repoTag.slice(0, repoTag.indexOf(':') + 1).toLowerCase();
+    const tags = item.tags ?? [];
+    const ours = tags.some((t) => t.trim().toLowerCase() === repoTag.toLowerCase());
+    const other = tags.find((t) => t.trim().toLowerCase().startsWith(prefix) && t.trim().toLowerCase() !== repoTag.toLowerCase());
+    if (!ours && other !== undefined) return `Belongs to another repository (${other.trim()}).`;
+  }
+  const buildTypes = (config.buildTypes ?? []).map((t) => t.trim()).filter((t) => t !== '');
+  const type = item.type?.trim();
+  if (buildTypes.length > 0 && type !== undefined && type !== '' && !buildTypes.some((t) => t.toLowerCase() === type.toLowerCase())) {
+    return `${type}: this project starts ${andList(buildTypes)} items.`;
+  }
+  const open = item.subtasks ?? 0;
+  if (open > 0) return open === 1 ? 'Has 1 subtask. Start it instead.' : `Has ${open} subtasks. Start one of them.`;
+  return null;
+}
+
+/** `Bug`, `Bug and Task`, `Bug, Task and Story`. */
+function andList(words: readonly string[]): string {
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
 
 /** `mission_criteria.decided_by` for the Done-when lines parsed from a tracker item, as P14's `ISSUE_CRITERIA_AUTHOR`. */
 export const TRACKER_CRITERIA_AUTHOR = 'tracker';
@@ -290,6 +346,8 @@ export interface ActivityCommentInput {
   readonly prUrl: string | null;
   readonly completed: { readonly rows: readonly CompletedCriterion[] } | null;
   readonly cancelled: { readonly readyState: string } | null;
+  /** The "Refined in Tandemise by …" line written when the draft was made ready (#135), kept on top. */
+  readonly refined?: string | null;
 }
 
 /**
@@ -312,7 +370,7 @@ export interface ActivityCommentInput {
  *     ...
  */
 export function activityCommentBody(input: ActivityCommentInput): string {
-  const lines = [`Started in Tandemise by ${escapeForComment(oneLine(input.starter))}: ${escapeForComment(oneLine(input.missionTitle))}.`];
+  const lines = [...(input.refined === undefined || input.refined === null ? [] : [input.refined, '']), `Started in Tandemise by ${escapeForComment(oneLine(input.starter))}: ${escapeForComment(oneLine(input.missionTitle))}.`];
   if (input.steps !== null && input.steps.length > 0) {
     lines.push('', 'Plan:', ...input.steps.map(stepLine));
   }
@@ -400,4 +458,74 @@ function stateRank(m: TrackerConfig['states'], state: string): number {
   if (state === m.in_review) return 2;
   if (m.done.includes(state) || m.wont_do.includes(state)) return 3;
   return -1;
+}
+
+// ------------------------------------------------------------------ refine a draft (#135)
+
+const DONE_WHEN_HEADING = '## Done when';
+const DECISIONS_HEADING = '## Decisions';
+/** The sections a refined description replaces: any Done-when or acceptance section, and its own Decisions. */
+const REPLACED_SECTION = /^(done when|acceptance criteria|decisions)$/i;
+const SECTION_HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+
+/**
+ * The description a refined draft is written back with (spec
+ * 2026-11-01-board-refine-draft-design.md): the item's own text, with a
+ * `## Done when` checklist of the accepted lines and a `## Decisions` section
+ * of each answered question. A Done-when, acceptance or Decisions section
+ * already there is replaced, so writing twice writes the same text; anything
+ * else the person wrote is kept as it was.
+ */
+export function refinedDescription(
+  description: string,
+  criteria: readonly string[],
+  answered: readonly { readonly question: string; readonly answer: string }[],
+): string {
+  const kept: string[] = [];
+  let skipping: number | null = null;
+  let fenced = false;
+  for (const line of description.replace(/\r\n?/g, '\n').split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    const heading = fenced ? null : SECTION_HEADING.exec(line);
+    if (heading !== null) {
+      const level = heading[1]!.length;
+      if (skipping !== null && level <= skipping) skipping = null;
+      if (skipping === null && REPLACED_SECTION.test(heading[2]!.replace(/[:*_]+/g, '').trim())) {
+        skipping = level;
+        continue;
+      }
+    }
+    if (skipping === null) kept.push(line);
+  }
+  const parts = [kept.join('\n').trim()];
+  parts.push([DONE_WHEN_HEADING, ...criteria.map((c) => `- [ ] ${oneLine(c)}`)].join('\n'));
+  if (answered.length > 0) {
+    parts.push([DECISIONS_HEADING, ...answered.map((a) => `- ${oneLine(a.question)} — ${oneLine(a.answer)}`)].join('\n'));
+  }
+  return parts.filter((p) => p.length > 0).join('\n\n');
+}
+
+/** Only Tandemise starts an activity comment line with these words. */
+const REFINED_PREFIX = 'Refined in Tandemise by ';
+
+/**
+ * The activity comment's line for a draft written back after refinement:
+ * `Refined in Tandemise by Ana: 3 Done-when lines, 1 answered question. Moved from Draft to Open.`
+ */
+export function refinedActivityLine(input: {
+  readonly by: string;
+  readonly criteria: number;
+  readonly answered: number;
+  readonly from: string;
+  readonly to: string;
+}): string {
+  const lines = `${input.criteria} Done-when ${input.criteria === 1 ? 'line' : 'lines'}`;
+  const answers = input.answered === 0 ? '' : `, ${input.answered} answered ${input.answered === 1 ? 'question' : 'questions'}`;
+  return `${REFINED_PREFIX}${escapeForComment(oneLine(input.by))}: ${lines}${answers}. Moved from ${escapeForComment(input.from)} to ${escapeForComment(input.to)}.`;
+}
+
+/** The refined line an activity comment already carries, so a later Start keeps it on top; null when none. */
+export function refinedLineOf(body: string | null | undefined): string | null {
+  if (body === null || body === undefined) return null;
+  return body.split('\n').find((l) => l.startsWith(REFINED_PREFIX)) ?? null;
 }

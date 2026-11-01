@@ -3,7 +3,7 @@ import type {
   TrackedItem, TrackerCommentMarker, TrackerCommentRow, TrackerItem, TrackerItemRepositoryPort, TrackerRef,
 } from '@tandemise/domain';
 import type { TandemiseDatabase } from '../database.js';
-import { toJson } from '../json.js';
+import { parseJsonOrNull, toJson } from '../json.js';
 
 interface ItemRow {
   id: string;
@@ -16,6 +16,8 @@ interface ItemRow {
   state: string;
   assignee: string | null;
   type: string | null;
+  subtasks: number | null;
+  tags: string | null;
   upstream_created_at: string;
   upstream_updated_at: string;
   written_state: string | null;
@@ -34,8 +36,8 @@ interface CommentRow {
   updated_at: string;
 }
 
-const ITEM_COLUMNS = `id, workspace_id, item_ref, key, url, title, description, state, assignee, type, upstream_created_at,
-  upstream_updated_at, written_state, refreshed_at, created_at, updated_at`;
+const ITEM_COLUMNS = `id, workspace_id, item_ref, key, url, title, description, state, assignee, type, subtasks, tags,
+  upstream_created_at, upstream_updated_at, written_state, refreshed_at, created_at, updated_at`;
 
 function itemFromRow(r: ItemRow): TrackedItem {
   return {
@@ -49,11 +51,19 @@ function itemFromRow(r: ItemRow): TrackedItem {
     state: r.state,
     assignee: r.assignee,
     ...(r.type === null ? {} : { type: r.type }),
+    ...(r.subtasks === null ? {} : { subtasks: r.subtasks }),
+    ...tagsOf(r.tags),
     createdAt: r.upstream_created_at,
     updatedAt: r.upstream_updated_at,
     writtenState: r.written_state,
     refreshedAt: r.refreshed_at,
   };
+}
+
+/** Null (never said, or not a list of strings) is no tags at all. */
+function tagsOf(text: string | null): { tags?: readonly string[] } {
+  const tags = parseJsonOrNull<unknown>(text);
+  return Array.isArray(tags) && tags.every((t) => typeof t === 'string') ? { tags: tags as string[] } : {};
 }
 
 /** The board cache (plan Task 2): what the last refresh saw, plus the state Tandemise last wrote. */
@@ -76,9 +86,10 @@ export class SqliteTrackerItemRepository implements TrackerItemRepositoryPort {
     // The id, the written state and the row's own created_at survive a refresh.
     this.#upsert = h.prepare<ItemRow>(
       `INSERT INTO tracker_items (${ITEM_COLUMNS}) VALUES (:id, :workspace_id, :item_ref, :key, :url, :title, :description, :state,
-         :assignee, :type, :upstream_created_at, :upstream_updated_at, :written_state, :refreshed_at, :created_at, :updated_at)
+         :assignee, :type, :subtasks, :tags, :upstream_created_at, :upstream_updated_at, :written_state, :refreshed_at, :created_at, :updated_at)
        ON CONFLICT (workspace_id, item_ref) DO UPDATE SET key = excluded.key, url = excluded.url, title = excluded.title,
          description = excluded.description, state = excluded.state, assignee = excluded.assignee, type = excluded.type,
+         subtasks = excluded.subtasks, tags = excluded.tags,
          upstream_created_at = excluded.upstream_created_at, upstream_updated_at = excluded.upstream_updated_at,
          refreshed_at = excluded.refreshed_at, updated_at = excluded.updated_at`,
     );
@@ -118,6 +129,7 @@ export class SqliteTrackerItemRepository implements TrackerItemRepositoryPort {
     this.#upsert.run({
       id: ids.trackerItem(), workspace_id: workspaceId, item_ref: item.ref, key: item.key, url: item.url, title: item.title,
       description: item.description, state: item.state, assignee: item.assignee, type: item.type ?? null,
+      subtasks: item.subtasks ?? null, tags: item.tags === undefined ? null : toJson(item.tags),
       upstream_created_at: item.createdAt, upstream_updated_at: item.updatedAt, written_state: null, refreshed_at: now,
       created_at: now, updated_at: now,
     });

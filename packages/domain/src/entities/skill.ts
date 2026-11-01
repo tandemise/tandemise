@@ -356,3 +356,71 @@ export function normalizeRoleSkills(value: unknown): RoleSkill[] {
   }
   return out;
 }
+
+// ------------------------------------------------------- a team's skill as a step (#131)
+
+/**
+ * A step that runs one of the team's own Claude Code skills instead of its
+ * role's prompt (#131): `team:build-feature` (a plugin's) or `tdd` (the
+ * repository's own, or one pinned from the library). `args` is a template
+ * filled when the step runs (`stepSkillArgs`).
+ */
+export interface StepSkill {
+  readonly name: string;
+  readonly args: string;
+}
+
+const SKILL_PART = '[A-Za-z0-9][A-Za-z0-9._-]{0,63}';
+const STEP_SKILL_NAME = new RegExp(`^(${SKILL_PART}:)?${SKILL_PART}$`);
+
+/** Why a step can't name this skill, or null: `name` or `plugin:name`, as Claude Code invokes it. */
+export function stepSkillProblem(name: string): string | null {
+  return STEP_SKILL_NAME.test(name)
+    ? null
+    : `“${name}” isn't a skill name. Write it the way Claude Code invokes it: name, or plugin:name.`;
+}
+
+/** `{ plugin: 'team', skill: 'fix-bug' }` for `team:fix-bug`; plugin null for a plain name. */
+export function splitStepSkill(name: string): { readonly plugin: string | null; readonly skill: string } {
+  const at = name.indexOf(':');
+  return at < 0 ? { plugin: null, skill: name } : { plugin: name.slice(0, at), skill: name.slice(at + 1) };
+}
+
+/** What a step skill's `args` may name, filled when the step runs. */
+export interface StepSkillValues {
+  readonly item: { readonly key: string; readonly url: string; readonly title: string } | null;
+  readonly missionTitle: string;
+}
+
+/**
+ * Fills `{{item.key}}`, `{{item.url}}`, `{{item.title}}` (the tracker item the
+ * mission came from; empty without one) and `{{mission.title}}`. Anything else
+ * in braces is left as written.
+ */
+export function stepSkillArgs(template: string, values: StepSkillValues): string {
+  const known: Record<string, string> = {
+    'item.key': values.item?.key ?? '',
+    'item.url': values.item?.url ?? '',
+    'item.title': values.item?.title ?? '',
+    'mission.title': values.missionTitle,
+  };
+  return template.replace(/\{\{\s*([a-z]+\.[a-z]+)\s*\}\}/g, (match, name: string) => known[name] ?? match).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The instructions a step that runs a skill gets in place of its role's
+ * (#131): the skill drives the work, and Tandemise keeps what it owns.
+ */
+export function stepSkillInstructions(skill: StepSkill): string {
+  return [
+    `This step runs the team's own skill /${skill.name}. The skill's instructions are yours: follow them, using this message as its input.`,
+    '',
+    'Tandemise owns these parts of the work. Where the skill has such a phase, stop before it:',
+    '- committing, pushing and opening or merging the pull request (the ship step does it once the gates pass);',
+    '- moving the tracker item or commenting on it.',
+    'Leave the change in the working folder and write the outputs this step asks for below; Tandemise commits them, runs the checks and judges the gate.',
+  ].join('\n');
+}
+
+/** The failure code a run reports when its session did not load the skill it was asked to run (#131). */
+export const SKILL_NOT_LOADED = 'SKILL_NOT_LOADED';

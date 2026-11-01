@@ -7,7 +7,7 @@ import type { ArtifactRequirement, ExecutionPolicy, ApprovalPolicy, RetryPolicy 
 import { validateGate } from './gate.js';
 import { lintGate } from './gate-lint.js';
 import type { ModelPolicy } from './entities/models.js';
-import type { SkillRef } from './entities/skill.js';
+import type { SkillRef, StepSkill } from './entities/skill.js';
 import type { StepClass } from './planner/types.js';
 
 /**
@@ -80,6 +80,8 @@ export interface PlannedTask {
   readonly modelPolicy?: ModelPolicy | null;
   /** A workflow step's `skills:` (P13), resolved to pins when the task is created. A planner never sets them. */
   readonly skillRefs?: readonly SkillRef[];
+  /** The team's skill this step runs instead of its role's prompt (#131): a workflow step's `runSkill`, or `planner.yaml`'s `stepSkills`. */
+  readonly runSkill?: StepSkill | null;
 }
 
 export interface PlanValidationIssue {

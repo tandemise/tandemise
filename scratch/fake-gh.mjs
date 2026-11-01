@@ -35,7 +35,7 @@
 //
 //   gh issue create --repo o/r --title T --body B [--label L]…   (prints the URL)
 //   gh issue list --repo o/r --search Q --state open|closed|all --limit N --json …
-//   gh issue edit N --repo o/r [--add-label L]… [--remove-label L]… [--add-assignee x]
+//   gh issue edit N --repo o/r [--add-label L]… [--remove-label L]… [--add-assignee x] [--body B]
 //   gh issue reopen N --repo o/r
 //   gh search issues "<text>" --repo o/r [--state open|closed] --limit N --json …
 //   gh label list --repo o/r --limit N --json name
@@ -297,6 +297,8 @@ function main(argv) {
       issue.labels = kept;
       const assignees = flags(args, '--add-assignee');
       if (assignees.length > 0) issue.assignees = [...(issue.assignees ?? []), ...assignees.map((login) => ({ login }))];
+      const body = flag(args, '--body');
+      if (body !== undefined) issue.body = body;
       issue.updatedAt = new Date().toISOString();
       writeState(dir, state);
       process.stdout.write(`${issue.url}\n`);

@@ -11,6 +11,7 @@
 // for every run, which skills it found in that folder and in its prompt.
 // N5 (#129) adds an installed plugin under the fixture root (the Claude config
 // folder is the skills root's parent), a grouping folder and a repository skill.
+// N6 (#131) runs steps on a Claude Code profile backed by scratch/fixtures/stub-claude.mjs.
 // Writes p13/evidence/REPORT.md.
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -79,7 +80,7 @@ keepPainting([PORT]);
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
 // No real-model scenario: which skills a run gets is decided by the daemon; the scripted agent shows what it received.
-const scenarios = ['n01-import.mjs', 'n02-role-run.mjs', 'n03-update.mjs', 'n04-missing.mjs', 'n05-plugins.mjs']
+const scenarios = ['n01-import.mjs', 'n02-role-run.mjs', 'n03-update.mjs', 'n04-missing.mjs', 'n05-plugins.mjs', 'n06-team-skill-steps.mjs']
   .filter((file) => !only || only.some((o) => file.includes(o)));
 
 let failed = null;
@@ -106,7 +107,7 @@ if (!process.argv.includes('--hold')) {
 
 // ---------------------------------------------------------------- report
 const results = readdirSync(EVIDENCE).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(EVIDENCE, f), 'utf8')));
-const order = ['N1', 'N2', 'N3', 'N4', 'N5'];
+const order = ['N1', 'N2', 'N3', 'N4', 'N5', 'N6'];
 results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 const lines = [
   '# P13 acceptance report',
