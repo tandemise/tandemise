@@ -28,7 +28,7 @@ export type PrWaitLook =
   | { readonly kind: 'unknown' }
   | { readonly kind: 'pending'; readonly pr: PullRequestRef; readonly detail: string }
   | { readonly kind: 'passed'; readonly pr: PullRequestRef; readonly detail: string }
-  | { readonly kind: 'failed'; readonly pr: PullRequestRef; readonly detail: string; readonly failing: CiFailure }
+  | { readonly kind: 'failed'; readonly pr: PullRequestRef; readonly detail: string; readonly failing: CiFailure; readonly others: readonly CiFailure[] }
   | { readonly kind: 'merged'; readonly pr: PullRequestRef; readonly detail: string }
   | { readonly kind: 'closed'; readonly pr: PullRequestRef; readonly detail: string };
 
@@ -83,7 +83,9 @@ export class PullRequestWait {
   /**
    * One look. `waitedMs` is how long this wait has looked, for the grace;
    * `failedHead` is a head whose failure already sent the work back, so the
-   * same red CI isn't sent back twice while the next commit is on its way.
+   * same red CI isn't sent back twice while the next commit is on its way;
+   * `rerunHead` is a head whose pull request was just fixed (#194), whose red
+   * checks are running again.
    */
   async look(input: {
     readonly mission: Mission;
@@ -91,6 +93,7 @@ export class PullRequestWait {
     readonly repository: Repository | null;
     readonly waitedMs: number;
     readonly failedHead: string | null;
+    readonly rerunHead?: string | null;
   }): Promise<PrWaitLook> {
     const { repository, target } = input;
     if (repository === null) return { kind: 'unknown' };
@@ -111,17 +114,23 @@ export class PullRequestWait {
         return { kind: 'passed', pr, detail: `Every check passed on ${name} (${checks.total} of ${checks.total}).` };
       case 'NONE':
         return input.waitedMs < this.deps.graceMs
-          ? { kind: 'pending', pr, detail: `Waiting for CI to start on ${name}.` }
+          ? { kind: 'pending', pr, detail: `Waiting for checks to start on ${name}.` }
           : { kind: 'passed', pr, detail: `No checks reported on ${name}, so there is nothing to wait for.` };
       case 'FAIL': {
         const failing = checks.failing[0] ?? { name: 'a check', link: null, logTail: null };
+        if (pr.headSha === (input.rerunHead ?? null)) {
+          return { kind: 'pending', pr, detail: `Waiting for the checks to run again on ${name}.` };
+        }
         if (pr.headSha === input.failedHead) {
           return { kind: 'pending', pr, detail: `CI failed on ${failing.name}; waiting for a new commit on ${name}.` };
         }
-        return { kind: 'failed', pr, failing, detail: `CI failed on ${name}: ${failing.name}.` };
+        return { kind: 'failed', pr, failing, others: checks.failing.slice(1), detail: `CI failed on ${name}: ${failing.name}.` };
       }
       case 'PENDING':
-        return { kind: 'pending', pr, detail: `Waiting for CI on ${name} (${checks.done} of ${checks.total} checks done).` };
+        // Before GitHub registers a check, "0 of 0 checks done" reads as if there were nothing to run (#194).
+        return checks.registered === 0
+          ? { kind: 'pending', pr, detail: `Waiting for checks to start on ${name}.` }
+          : { kind: 'pending', pr, detail: `Waiting for CI on ${name} (${checks.done} of ${checks.total} checks done).` };
     }
   }
 

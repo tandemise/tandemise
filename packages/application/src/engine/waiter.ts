@@ -27,7 +27,7 @@ export type WaitOutcome =
   | { readonly kind: 'passed' | 'timedOut' | 'cancelled'; readonly detail: string; readonly polls: number; readonly pr?: PullRequestRef }
   /** A CI wait decided by its pull request (pr-wait.ts): merged or closed on GitHub, or CI failed on it. */
   | { readonly kind: 'merged' | 'closed'; readonly detail: string; readonly polls: number; readonly pr: PullRequestRef }
-  | { readonly kind: 'ciFailed'; readonly detail: string; readonly polls: number; readonly pr: PullRequestRef; readonly failing: CiFailure };
+  | { readonly kind: 'ciFailed'; readonly detail: string; readonly polls: number; readonly pr: PullRequestRef; readonly failing: CiFailure; readonly others?: readonly CiFailure[] };
 
 /** What a wait can be told besides its command: its pull request, and who to tell how each look went. */
 export interface WaitOptions {
@@ -81,7 +81,7 @@ export class Waiter {
         if (signal.aborted) break;
         if (look.kind === 'passed') return { kind: 'passed', detail: look.detail, polls, pr: look.pr };
         if (look.kind === 'merged' || look.kind === 'closed') return { kind: look.kind, detail: look.detail, polls, pr: look.pr };
-        if (look.kind === 'failed') return { kind: 'ciFailed', detail: look.detail, polls, pr: look.pr, failing: look.failing };
+        if (look.kind === 'failed') return { kind: 'ciFailed', detail: look.detail, polls, pr: look.pr, failing: look.failing, others: look.others };
         if (look.kind === 'pending') {
           say(look.detail, look.pr);
           if (!(await this.#sleep(Math.min(policy.everyMs, deadline - this.deps.clock.epochMs()), signal))) break;

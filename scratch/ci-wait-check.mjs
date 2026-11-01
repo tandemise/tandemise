@@ -217,16 +217,88 @@ await attempt('the same ci failure twice', async () => {
   await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
   const ship = h.container.resolve(h.app.SHIP_SERVICE);
   const failing = { name: 'test', link: `https://github.com/${REPO}/actions/runs/7`, logTail: 'expected 2, got 3' };
-  const first = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  const prAt = (sha) => ({ repo: REPO, number: 99, url: `https://github.com/${REPO}/pull/99`, title: 'fix: same red ci', headSha: sha, headBranch: 'b', baseBranch: 'main', state: 'OPEN', isDraft: false, mergedBy: null, mergeSha: null });
+  const first = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), [failing], prAt('a'.repeat(40)));
   check('a CI failure sends the code step back once', first.kind === 'reopened' && (task('implement').round ?? 1) === 2, [first, task('implement').round]);
-  const again = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  const again = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), [failing], prAt('a'.repeat(40)));
   check('the same check failing on the same commit: no new round', again.kind === 'blocked' && (task('implement').round ?? 1) === 2, [again, task('implement').round]);
   const cards = h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).filter((x) => x.title.endsWith('CI fails the same way again'));
   check('…a card says so, with Retry and Leave blocked', cards.length === 1 && cards[0].options.map((o) => o.label).join() === 'Retry,Leave blocked', h.repo.approvals.list({ missionId: m.id }).map((x) => x.title));
   // The round runs; then CI fails again, on the commit it pushed.
   await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
-  const moved = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'b'.repeat(40));
+  const moved = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), [failing], prAt('b'.repeat(40)));
   check('a failure on a new commit starts a round as before', moved.kind === 'reopened' && (task('implement').round ?? 1) === 3, [moved, task('implement').round]);
+});
+
+const TITLE_RULE = { name: 'PR title', pattern: '^(feat|fix|docs|chore|refactor|perf|test|build|ci|revert)(\\([^)]+\\))?!?: [a-z]' };
+const cards = (missionId) => h.repo.approvals.list({ missionId, statuses: ['PENDING'] });
+const notes = (missionId) => h.repo.events.listByMission(missionId).filter((e) => e.body.type === 'note').map((e) => e.body.text);
+
+await attempt('a failing title check is fixed in ship', async () => {
+  section('a failing pull-request title check is fixed in ship, and never starts a round (#194)');
+  fake.setRepo(ghDir, REPO, { titleCheck: TITLE_RULE });
+  try {
+    const pr = openPr('feat/badtitle', green);
+    const { m, task } = await legacyMission('fix: retitle the pull request', 'gh pr checks feat/badtitle');
+    await h.until(() => task('ci')?.status === 'SUCCEEDED' || task('ci')?.status === 'BLOCKED' || (task('implement')?.round ?? 1) >= 2, 60000);
+    const now = fake.pullRequests(ghDir, REPO).find((p) => p.number === pr.number);
+    check('the code step is not sent back for a title', (task('implement').round ?? 1) === 1, [task('implement').round, task('implement').statusReason]);
+    check('the pull request is retitled as a Conventional Commit', new RegExp(TITLE_RULE.pattern).test(now.title) && now.title.startsWith('fix: '), now.title);
+    check('…through gh pr edit --title', fake.calls(ghDir).some((c) => c.args[1] === 'edit' && c.args.includes('--title')), fake.calls(ghDir).filter((c) => c.args[1] === 'edit').map((c) => c.args));
+    check('the feed says why', notes(m.id).some((t) => t.includes('PR title') && t.includes(now.title)), notes(m.id));
+    check('the title check passes again, so the wait ends', task('ci').status === 'SUCCEEDED', [task('ci').status, task('ci').statusReason]);
+    check('no card was needed', cards(m.id).filter((a) => a.taskId === task('ci').id).length === 0, cards(m.id).map((a) => a.title));
+  } finally {
+    fake.setRepo(ghDir, REPO, { titleCheck: undefined });
+  }
+});
+
+await attempt('a pull-request check Tandemise cannot fix', async () => {
+  section('a pull-request check Tandemise cannot fix puts a card up, and never starts a round (#194)');
+  openPr('feat/labels', [{ name: 'build', conclusion: 'success' }, { name: 'Require labels', conclusion: 'failure', logTail: 'Missing a label: needs one of bug, enhancement' }]);
+  const { m, task } = await legacyMission('fix: a pull request without labels', 'gh pr checks feat/labels');
+  await h.until(() => task('ci')?.status === 'BLOCKED' || (task('implement')?.round ?? 1) >= 2, 60000);
+  check('the code step is not sent back', (task('implement').round ?? 1) === 1, [task('implement').round, task('implement').statusReason]);
+  check('the wait stops, naming the check', task('ci').status === 'BLOCKED' && (task('ci').statusReason ?? '').includes('Require labels'), [task('ci').status, task('ci').statusReason]);
+  const card = cards(m.id).find((a) => a.taskId === task('ci').id);
+  check('a card names the check and quotes its log', card !== undefined && card.title.includes('Require labels') && card.evidence.some((e) => e.value.includes('Missing a label')), card && [card.title, card.evidence]);
+  check('…with Retry and Leave blocked', card?.options.map((o) => o.label).join() === 'Retry,Leave blocked', card?.options);
+});
+
+await attempt('an unknown check', async () => {
+  section('a check Tandemise cannot tell is about code asks a person, and planner.yaml can say (#194)');
+  openPr('feat/unknown', [{ name: 'build', conclusion: 'success' }, { name: 'deploy-preview', conclusion: 'failure', logTail: 'quota reached for this account' }]);
+  const { m, task } = await legacyMission('fix: an unknown check', 'gh pr checks feat/unknown');
+  await h.until(() => task('ci')?.status === 'BLOCKED' || (task('implement')?.round ?? 1) >= 2, 60000);
+  check('the code step is not sent back', (task('implement').round ?? 1) === 1, [task('implement').round]);
+  const card = cards(m.id).find((a) => a.taskId === task('ci').id);
+  check('a card asks, with the check\'s name and log tail', card !== undefined && card.title.includes('deploy-preview') && card.evidence.some((e) => e.value.includes('quota reached')), card && [card.title, card.evidence]);
+  check('…and says how planner.yaml can classify it', (card?.effect ?? '').includes('ci.checks'), card?.effect);
+
+  w.files.files.planner = { ...h.app.SHIPPED_PLANNER, ci: { checks: { 'deploy-*': 'code' } } };
+  try {
+    openPr('feat/unknown2', [{ name: 'deploy-preview', conclusion: 'failure', logTail: 'quota reached for this account' }]);
+    const second = await legacyMission('fix: a check planner.yaml calls code', 'gh pr checks feat/unknown2');
+    await h.until(() => (second.task('implement')?.round ?? 1) >= 2 || second.task('ci')?.status === 'BLOCKED', 60000);
+    check('with `ci.checks: { "deploy-*": code }` it is code: the code step goes again', (second.task('implement').round ?? 1) === 2, [second.task('implement').round, second.task('ci').statusReason]);
+  } finally {
+    delete w.files.files.planner;
+  }
+});
+
+await attempt('waiting for checks to start', async () => {
+  section('before any check registers, the step says it waits for checks to start (#194)');
+  const pr = openPr('feat/notyet', []);
+  fake.setRepo(ghDir, REPO, { suites: { [pr.sha]: [{ status: 'queued', latest_check_runs_count: 0, app: { slug: 'github-actions' } }] } });
+  const { task } = await legacyMission('fix: checks not started', 'gh pr checks feat/notyet');
+  await h.until(() => task('ci')?.status === 'AWAITING_EXTERNAL' && /#\d+/.test(task('ci').statusReason ?? ''), 60000);
+  check('the CI wait says "Waiting for checks to start", not "0 of 0"', task('ci').statusReason === `Waiting for checks to start on #${pr.number}.`, task('ci').statusReason);
+  fake.setRepo(ghDir, REPO, { suites: {} });
+  const slow = await world({ ciGraceMs: 120_000 });
+  const m2 = await slow.mission('fix: typo in the settings title');
+  const ship2 = () => slow.h.repo.tasks.listByMission(m2.id).find((t) => t.key === 'ship');
+  await slow.h.until(() => ship2()?.status === 'AWAITING_EXTERNAL', 60000);
+  check('the ship step says "Waiting for checks to start"', ship2().statusReason === 'Waiting for checks to start', ship2().statusReason);
 });
 
 await attempt('waits that are not about a pull request', async () => {

@@ -22,7 +22,7 @@
 //   gh pr list --repo o/r --head B --state all --json …
 //   gh pr create --repo o/r --head B --base main --title T --body-file -   (body on stdin)
 //   gh pr view N --repo o/r --json …
-//   gh pr edit N --repo o/r --add-reviewer R…
+//   gh pr edit N --repo o/r --add-reviewer R… | --title T
 //   gh pr merge N --repo o/r --squash|--merge|--rebase --match-head-commit SHA [--auto] --subject S --body B
 //   gh pr update-branch N --repo o/r
 //   gh pr checks B|N [--required] [--repo o/r]   (a plan's CI wait step, with gh's exit codes)
@@ -50,7 +50,7 @@
 // The state directory is passed by the wrapper script (--fake-state <dir>)
 // because the daemon hands child processes an allow-listed environment only.
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -83,6 +83,34 @@ export function readState(dir) {
   }
 }
 
+/**
+ * One writer at a time. Every gh call reads the whole state and may write it back, and the daemon runs several at
+ * once (one mission's poll, another's comment): without this a write could land on a state read before another
+ * write and undo it. The fake's own calls hold it for the whole call; the helpers below for their edit.
+ */
+const held = new Set();
+export function lock(dir) {
+  const path = join(dir, 'state.lock');
+  if (held.has(path)) return () => {};
+  for (let attempt = 0; ; attempt++) {
+    try {
+      mkdirSync(path);
+      held.add(path);
+      return () => { held.delete(path); rmSync(path, { recursive: true, force: true }); };
+    } catch (e) {
+      if (e?.code !== 'EEXIST') throw e;
+      // A holder that died (killed mid-call) leaves the lock behind: a lock older than 10 s is stale.
+      try { if (Date.now() - statSync(path).mtimeMs > 10_000) rmSync(path, { recursive: true, force: true }); } catch { /* gone */ }
+      if (attempt > 3000) throw new Error(`fake gh: ${path} stayed locked`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+    }
+  }
+}
+const locked = (fn) => (dir, ...rest) => {
+  const release = lock(dir);
+  try { return fn(dir, ...rest); } finally { release(); }
+};
+
 export function writeState(dir, state) {
   const tmp = join(dir, `state.json.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`);
   writeFileSync(tmp, JSON.stringify(state, null, 2));
@@ -90,7 +118,7 @@ export function writeState(dir, state) {
 }
 
 /** Adds or replaces an issue; `labels` are names. */
-export function putIssue(dir, repo, issue) {
+function putIssueUnlocked(dir, repo, issue) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   const full = {
@@ -108,7 +136,7 @@ export function putIssue(dir, repo, issue) {
   return full;
 }
 
-export function patchIssue(dir, repo, number, patch) {
+function patchIssueUnlocked(dir, repo, number, patch) {
   const state = readState(dir);
   const issue = state.repos[repo]?.issues.find((i) => i.number === number);
   if (!issue) throw new Error(`no issue ${repo}#${number}`);
@@ -122,7 +150,7 @@ export function commentsOf(dir, repo, number) {
 }
 
 /** Adds a comment as someone (a contributor, or the signed-in user when `login` is omitted). */
-export function addComment(dir, repo, number, body, login) {
+function addCommentUnlocked(dir, repo, number, body, login) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   const list = (r.comments[String(number)] ??= []);
@@ -133,7 +161,7 @@ export function addComment(dir, repo, number, body, login) {
 }
 
 /** Adds or replaces a pull request (helpers for a check to move its state). */
-export function putPullRequest(dir, repo, pr) {
+function putPullRequestUnlocked(dir, repo, pr) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   r.prs = [...(r.prs ?? []).filter((p) => p.number !== pr.number), pr];
@@ -149,26 +177,34 @@ export function pullRequests(dir, repo) {
  * The check runs GitHub reports on a commit: `[{ name, status, conclusion, logTail, id?, startedAt?, app? }]`.
  * A re-run is another entry with the same name and a later `startedAt` (or higher `id`), as GitHub lists it.
  */
-export function setChecks(dir, repo, sha, checks) {
+function setChecksUnlocked(dir, repo, sha, checks) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   (r.checks ??= {})[sha] = checks;
   writeState(dir, state);
 }
 
-export function setRepo(dir, repo, patch) {
+function setRepoUnlocked(dir, repo, patch) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   Object.assign(r, patch);
   writeState(dir, state);
 }
 
+export const putIssue = locked(putIssueUnlocked);
+export const patchIssue = locked(patchIssueUnlocked);
+export const addComment = locked(addCommentUnlocked);
+export const putPullRequest = locked(putPullRequestUnlocked);
+export const setChecks = locked(setChecksUnlocked);
+export const setRepo = locked(setRepoUnlocked);
+export const putLabels = locked(putLabelsUnlocked);
+
 export function calls(dir) {
   return readFileSync(join(dir, 'calls.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 }
 
 /** Sets the repository's labels, as `gh label list` answers them. */
-export function putLabels(dir, repo, names) {
+function putLabelsUnlocked(dir, repo, names) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   r.labels = [...names];
@@ -218,6 +254,8 @@ function main(argv) {
   const dir = flag(argv, '--fake-state');
   if (dir === undefined) fail('fake gh: no --fake-state');
   const args = argv.slice(argv.indexOf('--fake-state') + 2);
+  // Held until this call exits, however it exits.
+  process.on('exit', lock(dir));
   appendFileSync(join(dir, 'calls.jsonl'), `${JSON.stringify({ args, at: new Date().toISOString() })}\n`);
   const state = readState(dir);
   if (state.failNext) {
@@ -364,6 +402,13 @@ function main(argv) {
         if (r.defaultCheckSequence.length > 1) { r.defaultCheckSequence.shift(); writeState(dir, state); }
       }
       runs ??= r.defaultChecks ?? [];
+      // `titleCheck: { name, pattern }`: a check that reads the pull request's title, as a repository's PR-title
+      // workflow does, judged on every read from the title the open pull request on this commit has now (#194).
+      const titled = r.titleCheck === undefined ? undefined : (r.prs ?? []).filter((p) => p.headRefOid === c[2] && p.state === 'OPEN').sort((a, b) => b.number - a.number)[0];
+      if (titled !== undefined) {
+        const ok = new RegExp(r.titleCheck.pattern).test(titled.title);
+        runs = [...runs, { id: 1_000_000 + (titled.titleEdits ?? 0), name: r.titleCheck.name, conclusion: ok ? 'success' : 'failure', logTail: ok ? null : `The pull request title must be a Conventional Commit with a lowercase subject: "${titled.title}"` }];
+      }
       const query = new URLSearchParams((endpoint ?? '').split('?')[1] ?? '');
       const per = Number(query.get('per_page') ?? 30);
       const page = Number(query.get('page') ?? 1);
@@ -373,7 +418,8 @@ function main(argv) {
     }
     c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]+)\/check-suites$/.exec(path);
     if (c) {
-      const suites = (repoOf(c[1]).suites ?? {})[c[2]] ?? [];
+      // `defaultSuites` stand for every commit with none of its own: a workflow queued that hasn't created its runs.
+      const suites = (repoOf(c[1]).suites ?? {})[c[2]] ?? repoOf(c[1]).defaultSuites ?? [];
       out({ total_count: suites.length, check_suites: suites });
       return;
     }
@@ -481,6 +527,8 @@ function prCommand(dir, state, args, out) {
   if (verb === 'view') { out(pick(pr, flag(args, '--json'))); return; }
   if (verb === 'edit') {
     args.forEach((a, i) => { if (a === '--add-reviewer') pr.reviewers.push(args[i + 1]); });
+    const title = flag(args, '--title');
+    if (title !== undefined) { pr.title = title; pr.titleEdits = (pr.titleEdits ?? 0) + 1; }
     save();
     return;
   }

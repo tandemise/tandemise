@@ -6,8 +6,9 @@ import type {
 } from '@tandemise/domain';
 import {
   APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
-  closingLine, githubRepoFromRemote, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
+  classifyCheck, closingLine, githubRepoFromRemote, isTitleCheck, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
 } from '@tandemise/domain';
+import type { CiCheckKind } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
 import type { CommandExecutor } from '@tandemise/integrations-core';
 import { errorMessage, ids, type Clock, type Logger, type Timestamp } from '@tandemise/shared';
@@ -29,8 +30,11 @@ export type ShipOutcome =
   | { readonly kind: 'opened'; readonly prs: readonly PullRequestRef[] }
   /** Merged, by Tandemise or a person; the step is done. */
   | { readonly kind: 'merged'; readonly reason: string }
-  /** Waiting on a person or on GitHub; the status says which. Nothing for the scheduler to change. */
-  | { readonly kind: 'waiting' }
+  /**
+   * Waiting on a person or on GitHub; the status says which. Nothing for the scheduler to change.
+   * `until`: the pull request was just fixed (#194), and its red checks count as running again until then.
+   */
+  | { readonly kind: 'waiting'; readonly until?: number }
   /** CI failed: the code step went back for another round, and the ship step waits behind it. */
   | { readonly kind: 'reopened'; readonly reason: string }
   | { readonly kind: 'conflict'; readonly taskKey: string }
@@ -54,6 +58,15 @@ export const PR_CHANGED = 'The pull request changed after it was checked; checki
 export const PR_CLOSED = 'The pull request was closed without merging.';
 export const WAITING_FOR_GITHUB_MERGE = 'Waiting for you to merge it in GitHub.';
 const DECISION_LABEL = 'Decision';
+export const WAITING_FOR_CHECKS_TO_START = 'Waiting for checks to start';
+export const WAITING_FOR_RERUN = 'Waiting for the checks to run again on the retitled pull request.';
+
+/** One failing check, as CI reports it. */
+export interface FailingCiCheck {
+  readonly name: string;
+  readonly link: string | null;
+  readonly logTail: string | null;
+}
 
 export interface ShipDeps {
   readonly tasks: TaskRepositoryPort;
@@ -134,6 +147,8 @@ export interface ShipDecideDeps {
 export class ShipService {
   /** Ship steps whose decision must ask whatever the policy says, with why. */
   readonly #mustAsk = new Map<string, string>();
+  /** The pull request a step retitled to fix a title check (#194), by step: which head, and when. */
+  readonly #retitled = new Map<string, { readonly head: string; readonly at: number }>();
 
   constructor(protected readonly deps: ShipDeps) {}
 
@@ -268,7 +283,9 @@ export class ShipService {
       const starting = read.state === 'NONE' && this.deps.clock.epochMs() - started < d.ciGraceMs;
       const checks = starting ? { ...read, state: 'PENDING' as const } : read;
       if (checks.state === 'PENDING') {
-        this.#status(mission, task, 'AWAITING_EXTERNAL', starting ? 'Waiting for CI (0 of 0 checks done)' : `Waiting for CI (${checks.done} of ${checks.total} checks done)`);
+        // Before GitHub registers a check there is nothing to count: "0 of 0" read as if CI had nothing to run (#194).
+        const notStarted = starting || checks.registered === 0;
+        this.#status(mission, task, 'AWAITING_EXTERNAL', notStarted ? WAITING_FOR_CHECKS_TO_START : `Waiting for CI (${checks.done} of ${checks.total} checks done)`);
         if (this.deps.clock.epochMs() - started > d.timeoutMs) return { kind: 'blocked', reason: 'CI didn\'t finish within an hour.' };
         await sleep(d.pollMs, signal);
         const now = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
@@ -276,7 +293,17 @@ export class ShipService {
         pr = now;
         continue;
       }
-      if (checks.state === 'FAIL') return this.#ciFailed(mission, task, checks.failing[0] ?? { name: 'a check', link: null, logTail: null }, pr.headSha);
+      if (checks.state === 'FAIL') {
+        const sent = await this.#ciFailed(mission, task, checks.failing, pr);
+        if (sent.kind !== 'waiting') return sent;
+        // The pull request itself was fixed: its checks run again, on the same head.
+        if (this.deps.clock.epochMs() - started > d.timeoutMs) return { kind: 'blocked', reason: 'CI didn\'t finish within an hour.' };
+        await sleep(d.pollMs, signal);
+        const now = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
+        if (now.state !== 'OPEN') return this.#closedOrMerged(mission, task, now, existing ?? null);
+        pr = now;
+        continue;
+      }
       const decision = await this.#decide(mission, task, repository, pr, checks, existing?.commentId ?? null);
       return this.#settle(mission, task, repository, pr, decision);
     }
@@ -524,9 +551,9 @@ export class ShipService {
   }
 
   /** CI failed on a pull request a wait step watched (#143): the same path as the ship step's own CI. */
-  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
-    if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing.name}.` };
-    return this.#ciFailed(mission, task, failing, head);
+  async ciFailed(mission: Mission, task: MissionTask, failing: readonly FailingCiCheck[], pr: PullRequestRef): Promise<ShipOutcome> {
+    if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing[0]?.name ?? 'a check'}.` };
+    return this.#ciFailed(mission, task, failing, pr);
   }
 
   /** The pull request the mission's CI wait found, when that is how the mission got its pull request. */
@@ -536,8 +563,79 @@ export class ShipService {
     return opened.at(-1) ?? null;
   }
 
-  /** CI failed: the code step gets another round with the log tail, up to its attempts (§8.1 step 3). */
-  #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
+  /**
+   * CI failed (§8.1 step 3). Each failing check is classified first (#194): a
+   * check on the code sends the code step back for a round; a check on the
+   * pull request itself never does, and is fixed here (a title, by retitling
+   * the pull request) or put to a person on a card, as is a check that can't
+   * be told apart.
+   */
+  async #ciFailed(mission: Mission, task: MissionTask, failing: readonly FailingCiCheck[], pr: PullRequestRef): Promise<ShipOutcome> {
+    const all = failing.length > 0 ? failing : [{ name: 'a check', link: null, logTail: null }];
+    const overrides = await this.#ciKinds(mission);
+    const kinds = all.map((check) => ({ check, kind: classifyCheck(check, overrides) }));
+    const code = kinds.find((k) => k.kind === 'code')?.check;
+    if (code !== undefined) return this.#codeRound(mission, task, code, pr.headSha);
+    const unknown = kinds.find((k) => k.kind === 'unknown')?.check;
+    if (unknown !== undefined) {
+      const reason = `CI failed on ${unknown.name}, and Tandemise can't tell whether a change to the code would fix it, so it asks.`;
+      this.#checkCard(mission, task, unknown, 'unknown', reason);
+      return { kind: 'blocked', reason };
+    }
+    return this.#metadataFailed(mission, task, kinds.map((k) => k.check), pr);
+  }
+
+  /** `ci.checks` from the project's planner.yaml; none when it can't be read. */
+  async #ciKinds(mission: Mission): Promise<Readonly<Record<string, CiCheckKind>>> {
+    try {
+      return (await this.deps.decide?.factory(mission.workspaceId))?.planner.ci?.checks ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Only checks on the pull request itself failed. A title check is fixed by
+   * retitling the pull request as a Conventional Commit (GitHub runs the check
+   * again on `edited`), once per head; anything else, or a title that still
+   * fails, is a card naming the check. No round either way.
+   */
+  async #metadataFailed(mission: Mission, task: MissionTask, failing: readonly FailingCiCheck[], pr: PullRequestRef): Promise<ShipOutcome> {
+    const d = this.deps.decide!;
+    const now = this.deps.clock.epochMs();
+    const retitled = this.#retitled.get(task.id);
+    if (retitled !== undefined && retitled.head === pr.headSha && now - retitled.at < d.ciGraceMs) {
+      this.#status(mission, task, 'AWAITING_EXTERNAL', WAITING_FOR_RERUN);
+      return { kind: 'waiting', until: retitled.at + d.ciGraceMs };
+    }
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
+    const title = failing.find((f) => isTitleCheck(f));
+    const repository = mission.repositoryId === null ? undefined : this.deps.repositories.get(mission.repositoryId);
+    if (title !== undefined && repository !== undefined && retitled?.head !== pr.headSha) {
+      const wanted = await this.titleFor(mission, repository, pr.headBranch);
+      if (wanted !== pr.title) {
+        try {
+          await this.deps.pullRequests.editTitle(repository.path, pr.repo, pr.number, wanted);
+          this.#retitled.set(task.id, { head: pr.headSha, at: now });
+          this.deps.recorder.note(scope, `CI failed on ${title.name}, which reads the pull request's title, so Tandemise retitled #${pr.number} to "${wanted}" instead of changing the code. Waiting for the check to run again.`);
+          this.deps.recorder.invalidate('ship', mission.id);
+          this.#status(mission, task, 'AWAITING_EXTERNAL', WAITING_FOR_RERUN);
+          return { kind: 'waiting', until: now + d.ciGraceMs };
+        } catch (e) {
+          this.deps.log.warn('ship.retitle_failed', { missionId: mission.id, error: errorMessage(e) });
+        }
+      }
+    }
+    const check = title ?? failing[0]!;
+    const reason = title !== undefined
+      ? `CI failed on ${check.name}, which reads the pull request's title ("${pr.title}"), so a change to the code can't fix it.`
+      : `CI failed on ${check.name}, which reads the pull request itself, so a change to the code can't fix it.`;
+    this.#checkCard(mission, task, check, 'metadata', reason);
+    return { kind: 'blocked', reason };
+  }
+
+  /** CI failed on the code: the code step gets another round with the log tail, up to its attempts. */
+  #codeRound(mission: Mission, task: MissionTask, failing: FailingCiCheck, head?: string): ShipOutcome {
     const d = this.deps.decide!;
     // An agent's step: a wait or a person's step reads as `implement` by its role, but has no code to redo.
     const code = [...this.deps.tasks.listByMission(mission.id)].reverse()
@@ -774,6 +872,33 @@ export class ShipService {
       evidence: [
         { kind: 'text', label: 'Why it stopped', value: reason },
         ...(failing.link === null ? [] : [{ kind: 'link' as const, label: failing.name, value: failing.link }]),
+      ],
+      options: [{ id: APPROVE_OPTION, label: 'Retry' }, { id: REJECT_OPTION, label: 'Leave blocked' }],
+      recommendedOptionId: null,
+      addressees: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+    });
+    d.approvals.create(card);
+    this.deps.recorder.invalidate('approvals', mission.id);
+  }
+
+  /** A card on the step that read CI, naming a check no round can fix (#194): fix it on GitHub and retry, or leave it. */
+  #checkCard(mission: Mission, task: MissionTask, check: FailingCiCheck, kind: 'metadata' | 'unknown', reason: string): void {
+    const d = this.deps.decide;
+    if (d === undefined || d.approvals.pendingForTask(task.id).length > 0) return;
+    const tail = (check.logTail ?? '').split('\n').slice(-SHIP_LOG_TAIL_LINES).join('\n').trim();
+    const card = d.approvalFactory.createOrThrow({
+      workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'intervention', risk: 'read',
+      title: kind === 'metadata'
+        ? `${this.title(mission)}: CI failed on ${check.name}, which the code can't fix`
+        : `${this.title(mission)}: CI failed on ${check.name}; is it about the code?`,
+      rationale: reason,
+      effect: kind === 'metadata'
+        ? 'The check reads the pull request itself (its title, labels or description). Fix that on GitHub, then Retry: Retry reads CI again. Leaving it blocked stops here.'
+        : `Tandemise can't tell whether a change to the code would fix this check, so it didn't start a round. Retry reads CI again, after you fix or re-run it on GitHub. To have the code step fix it next time, classify it in planner.yaml under ci.checks ("${check.name}": code, or metadata), then Retry.`,
+      evidence: [
+        { kind: 'text', label: 'Why it stopped', value: reason },
+        ...(check.link === null ? [] : [{ kind: 'link' as const, label: check.name, value: check.link }]),
+        ...(tail.length === 0 ? [] : [{ kind: 'text' as const, label: `${check.name} printed`, value: tail }]),
       ],
       options: [{ id: APPROVE_OPTION, label: 'Retry' }, { id: REJECT_OPTION, label: 'Leave blocked' }],
       recommendedOptionId: null,

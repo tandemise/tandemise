@@ -58,4 +58,6 @@ export const SHIPPED_PLANNER = {
   // Each check's time budget in minutes (#111). A repository's own budget, set
   // in Project settings → Repositories, wins over these.
   checks: { budgets: {} },
+  // What a failing CI check is about (#194), when its name and output don't say: `"deploy-*": code`.
+  ci: { checks: {} },
 } as const;

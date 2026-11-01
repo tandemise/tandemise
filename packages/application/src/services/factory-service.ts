@@ -215,7 +215,7 @@ function shipStage(ship: MissionTask | undefined, prs: number): Pick<ShipView, '
   }
   switch (ship.status) {
     case 'AWAITING_EXTERNAL':
-      if ((ship.statusReason ?? '').startsWith('Waiting for CI')) return { stage: 'ci', headline: ship.statusReason!, status: 'The pull request is open; Tandemise decides once CI is green on its head commit.' };
+      if (/^Waiting for (?:CI|checks|the checks)\b/.test(ship.statusReason ?? '')) return { stage: 'ci', headline: ship.statusReason!, status: 'The pull request is open; Tandemise decides once CI is green on its head commit.' };
       return { stage: 'review', headline: ship.statusReason ?? 'Waiting for you to merge it in GitHub.', status: 'Tandemise finishes when GitHub says it merged.' };
     case 'AWAITING_APPROVAL':
       return { stage: 'review', headline: 'Waiting for your review', status: ship.statusReason ?? 'The merge policy asks for a review.' };
@@ -229,7 +229,8 @@ function shipStage(ship: MissionTask | undefined, prs: number): Pick<ShipView, '
       return { stage: 'cancelled', headline: 'No pull request', status: 'The mission stopped before the pull request opened.' };
     case 'BLOCKED':
     case 'FAILED':
-      return { stage: 'blocked', headline: "Couldn't open the pull request", status: ship.statusReason ?? "The pull request couldn't be opened." };
+      // With the pull request open, what stopped is CI or a person's call on it (#194), not opening it.
+      return { stage: 'blocked', headline: prs > 0 ? 'The pull request needs you' : "Couldn't open the pull request", status: ship.statusReason ?? "The pull request couldn't be opened." };
     default:
       return { stage: 'waiting', headline: 'Pull request not open yet', status: 'The pull request opens once the steps before it are done.' };
   }

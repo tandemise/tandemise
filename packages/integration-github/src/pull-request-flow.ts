@@ -138,7 +138,7 @@ export class GhPullRequestFlow implements PullRequestPort {
     const state: PullRequestChecks['state'] = total === 0 && waitingSuites === 0 ? 'NONE'
       : failing.length > 0 ? 'FAIL'
         : finished < total || waitingSuites > 0 ? 'PENDING' : 'PASS';
-    return { state, done: finished, total: total + waitingSuites, failing };
+    return { state, done: finished, total: total + waitingSuites, registered: total, failing };
   }
 
   /**
@@ -200,6 +200,10 @@ export class GhPullRequestFlow implements PullRequestPort {
   async requestReviewers(cwd: string, repo: string, number: number, reviewers: readonly string[]): Promise<void> {
     if (reviewers.length === 0) return;
     await gh(this.#ctx(cwd), ['pr', 'edit', String(number), '--repo', repo, ...reviewers.flatMap((r) => ['--add-reviewer', r])]);
+  }
+
+  async editTitle(cwd: string, repo: string, number: number, title: string): Promise<void> {
+    await gh(this.#ctx(cwd), ['pr', 'edit', String(number), '--repo', repo, '--title', title]);
   }
 
   async reviews(cwd: string, repo: string, number: number): Promise<readonly { state: string; author: string }[]> {
