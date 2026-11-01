@@ -1,5 +1,5 @@
 import type {
-  ArtifactType, CheckOutcome, CriterionResult, Evaluation, Finding, FindingSeverity,
+  ArtifactType, CriterionOutcome, CriterionResult, Evaluation, Finding, FindingSeverity,
 } from '@tandemise/domain';
 import type { Clock, MissionId, RunId, TaskId } from '@tandemise/shared';
 import { ids } from '@tandemise/shared';
@@ -123,7 +123,7 @@ function qaFindings(criteria: readonly CriterionResult[], declaredDefects: numbe
 // ------------------------------------------------------------------ narrowing
 
 const SEVERITIES: readonly FindingSeverity[] = ['blocking', 'major', 'minor', 'nit'];
-const OUTCOMES: readonly CheckOutcome[] = ['PASS', 'FAIL', 'SKIP'];
+const OUTCOMES: readonly CriterionOutcome[] = ['PASS', 'FAIL', 'SKIP'];
 
 function readArray(v: unknown): readonly unknown[] {
   return Array.isArray(v) ? v : [];
@@ -141,7 +141,7 @@ function readSeverity(v: unknown): FindingSeverity {
   return SEVERITIES.find((s) => s === v) ?? 'major';
 }
 
-function readOutcome(v: unknown): CheckOutcome {
+function readOutcome(v: unknown): CriterionOutcome {
   return OUTCOMES.find((o) => o === v) ?? 'SKIP';
 }
 

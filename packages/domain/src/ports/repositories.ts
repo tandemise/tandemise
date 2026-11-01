@@ -216,6 +216,12 @@ export interface EvaluationRepositoryPort {
   /** One row per check name - the newest measurement. What a person is shown. */
   latestChecksForTask(taskId: TaskId): readonly CheckResult[];
   latestChecks(missionId: MissionId): readonly CheckResult[];
+  /**
+   * The newest finished measurement (PASS or FAIL) of this command on this git
+   * tree, by any task (#106). A tree is content-addressed: the same tree is the
+   * same code, so its test result holds for every step that measures it.
+   */
+  reusableCheck(treeSha: string, name: string, command: string): CheckResult | undefined;
 }
 
 export interface CheckpointRepositoryPort {

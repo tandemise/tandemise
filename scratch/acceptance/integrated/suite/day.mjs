@@ -4,7 +4,8 @@
 //   while the step runs, Hold → type in the terminal → Continue (#72) → the ship step opens a pull request on the
 //   fake gh and asks for review, auto-merge being off by default (#71) → the tracker item follows: In Progress,
 //   then In Review, its activity comment linking the pull request (#73) → Home's "Who's working on what" shows
-//   the claim as yours (#69).
+//   the claim as yours (#69). Then a docs-only item goes Start → pull request in the quick lane without the test
+//   suite running and within a time budget (#106, #111).
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
 import { calls, pullRequests } from '../../../fake-gh.mjs';
@@ -35,12 +36,18 @@ const CHANGESET = [
   'branch: fix/settings-title', 'commits: []', 'filesChanged: 1', 'testsRun: []', 'knownLimitations: []', '---', '',
   '# Settings title', '', 'Fixed the typo in {{runId}}.', '',
 ].join('\n');
+const DOCS_TITLE = 'docs: say how to add a runtime';
+const DOCS_CHANGESET = CHANGESET.replaceAll('Settings title typo fixed', 'Quickstart says how to add a runtime');
 // The Coding agent's fake: it fixes the title and writes its ChangeSet, then works on (ten minutes), so there is
-// time to hold it; the pass that continues a hold finishes at once.
+// time to hold it; the pass that continues a hold finishes at once. Given the docs item, it edits one Markdown
+// file and finishes at once.
 const SCRIPT = {
   resume: 'ok',
   steps: [
     { kind: 'checkpoint', sessionId: 'sess-day-{{runId}}', label: 'session.init' },
+    { kind: 'write-file', path: 'docs/QUICKSTART.md', content: '# Quickstart\n\nAdd a runtime with Discover runtimes.\n', when: { promptIncludes: DOCS_TITLE } },
+    { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: DOCS_CHANGESET, when: { promptIncludes: DOCS_TITLE } },
+    { kind: 'complete', summary: 'docs', when: { promptIncludes: DOCS_TITLE } },
     { kind: 'message', text: 'Fixing the settings title' },
     { kind: 'write-file', path: 'settings-title.txt', content: 'Settings\n' },
     { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: CHANGESET },
@@ -171,6 +178,33 @@ try {
   const who = await until(async () => { const t = await page.evaluate(`document.querySelector('section[aria-label="Who\\'s working on what"]')?.innerText ?? ''`); return t.includes(key) && t; }, { label: 'the claim row', timeoutMs: 20_000 }).catch(async () => page.evaluate(`document.querySelector('section[aria-label="Who\\'s working on what"]')?.innerText ?? ''`));
   ev.check(`Home → Who's working on what: ${key} (${TITLE}), yours`, who.includes(key) && who.includes(TITLE) && who.includes('You'), who);
   await shot('home-who');
+
+  // ------------------------------------------------------------ a docs-only item, fast and without the test suite (#106)
+  // The project's test command appends to tests-ran.log (run-all.mjs), so every run of it is counted.
+  const RAN = `${c.env.scratch}/tests-ran.log`;
+  const testRuns = () => (existsSync(RAN) ? readFileSync(RAN, 'utf8').split('\n').filter(Boolean).length : 0);
+  ev.check('the code change above ran the test suite exactly once (the gate\'s run; nothing ran it twice)', testRuns() === 1, testRuns());
+  // Filed in the tracker as Docs, the way a person files a documentation task (a web-form signal is always a Bug).
+  const docsKey = 'GAR-50';
+  await yt.put({ idReadable: docsKey, summary: DOCS_TITLE, description: 'The quickstart should say runtimes are added with Discover runtimes.', type: 'Docs', state: 'Open' });
+  await openBoard(c);
+  await until(async () => { await page.evaluate(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Check sources now')?.click()`); await sleep(1500); return boardRow(c, docsKey); }, { label: `${docsKey} on the Board`, timeoutMs: 60_000 });
+  const before = testRuns();
+  const startedAt = Date.now();
+  await page.evaluate(`document.querySelector('[data-board-item=${JSON.stringify(docsKey)}] .board__start').click()`);
+  const docsId = await until(async () => { const h = await page.evaluate('location.hash'); return /#\/missions\/msn_/.test(h) && h.split('/')[2] !== id && h.split('/')[2]; }, { label: 'the docs mission opens', timeoutMs: 30_000 });
+  const docsShip = await until(async () => { const v = await api.get(`/v1/missions/${docsId}/ship`); return v.stage === 'review' && v.prs[0]?.decision && v; }, { label: 'the docs pull request asks', timeoutMs: 180_000 });
+  const elapsed = Date.now() - startedAt;
+  const docsMission = await api.get(`/v1/missions/${docsId}`);
+  const docsImplement = docsMission.tasks.find((x) => x.key === 'implement');
+  ev.check('docs: the factory picks the quick lane (one step, then the pull request)', docsMission.tasks.filter((x) => x.executor === 'agent').length === 1, docsMission.tasks.map((x) => x.key));
+  ev.check('docs: Start → pull request without a person stepping in', docsShip.prs.length === 1 && docsImplement?.attempts === 1 && holdsOf(c, docsImplement.id).length === 0, { prs: docsShip.prs.length, attempts: docsImplement?.attempts });
+  ev.check('docs: the test suite did not run for a docs-only change', testRuns() === before, { before, after: testRuns() });
+  const docsChecks = { checks: docsImplement?.checks ?? [] };
+  const tests = (docsChecks?.checks ?? []).find((x) => x.name === 'checks.tests' && x.taskId === docsImplement?.id);
+  ev.check('docs: the tests fact says why it was not run', tests === undefined ? null : /^Not run: this change touches only the docs area/.test(tests.detail), tests?.detail ?? docsChecks);
+  ev.check(`docs: Start → pull request in ${Math.round(elapsed / 1000)} s, under the 60 s budget for the fake runtime`, elapsed < 60_000, elapsed);
+  ev.note(`timing: docs-only quick lane, Start → pull request asking for review: ${elapsed} ms`);
 } catch (e) {
   ev.check(`scenario ran to the end (${e.message.split('\n')[0]})`, false);
   await page.screenshot(ev.shot('failure')).catch(() => {});

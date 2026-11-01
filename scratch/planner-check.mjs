@@ -266,7 +266,7 @@ await attempt('persistence', async () => {
     plans: container.resolve(P.PLAN_DECISION_REPOSITORY), merges: container.resolve(P.MERGE_DECISION_REPOSITORY),
     outcomes: container.resolve(P.OUTCOME_REPOSITORY),
   };
-  check('schema version is the planner migration', P.schemaVersion(db) === P.SCHEMA_VERSION && P.MIGRATIONS.at(-1).name === 'planner_and_merge', P.MIGRATIONS.at(-1)?.name);
+  check('schema version is current and includes the planner migration', P.schemaVersion(db) === P.SCHEMA_VERSION && P.MIGRATIONS.some((m) => m.name === 'planner_and_merge'), P.MIGRATIONS.at(-1)?.name);
   const ws = R.workspaces.create({ id: ids.workspace(), name: 'W', defaultRepositoryId: null, autonomy: { planApproval: 'ask', localCodeChanges: 'auto', externalWrites: 'policy', productionRelease: 'ask', financialActions: 'deny' }, concurrency: { maxTotalWorkers: 2, perRuntime: {} }, routing: {}, defaultAutonomyLevel: 'balanced', knowledge: { productVision: null, architecturePrinciples: null, codingStandards: null, designSystem: null, glossary: null } });
   const mission = R.missions.create({ id: ids.mission(), workspaceId: ws.id, repositoryId: null, title: 'fix: typo', goal: 'g', laneRequest: 'quick' });
   check('a mission keeps its lane request', R.missions.get(mission.id).laneRequest === 'quick');

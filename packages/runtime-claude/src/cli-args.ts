@@ -296,6 +296,17 @@ function sessionHookCommand(sessionFile: string): string {
   return `ELECTRON_RUN_AS_NODE=1 ${shellQuote(process.execPath)} -e ${shellQuote(script)}`;
 }
 
+/**
+ * The script a UserPromptSubmit hook runs: append the person's message, with
+ * the time, as one JSON line to the prompts file. Same runtime and quoting
+ * rules as {@link sessionHookCommand}; it prints nothing, so it adds nothing to
+ * the conversation.
+ */
+function promptHookCommand(promptsFile: string): string {
+  const script = `let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const p=JSON.parse(d).prompt;if(typeof p==="string"&&p.trim()){require("fs").appendFileSync(${JSON.stringify(promptsFile)},JSON.stringify({at:new Date().toISOString(),prompt:p})+"\\n")}}catch{}})`;
+  return `ELECTRON_RUN_AS_NODE=1 ${shellQuote(process.execPath)} -e ${shellQuote(script)}`;
+}
+
 /** One word for a POSIX shell: single-quoted, with each single quote closed, escaped and reopened. */
 function shellQuote(word: string): string {
   return `'${word.replaceAll("'", "'\\''")}'`;
@@ -310,11 +321,17 @@ function shellQuote(word: string): string {
 export function buildInteractiveInvocation(
   request: RunRequest,
   sessionRef: string | null,
-  opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+  opts: { readonly sessionFile: string; readonly initialPrompt: string | null; readonly promptsFile?: string },
 ): Pick<InteractiveInvocation, 'args' | 'sessionFile'> {
   const args = sharedFlags(request, true);
   args.push('--settings', JSON.stringify({
-    hooks: { SessionStart: [{ hooks: [{ type: 'command', command: sessionHookCommand(opts.sessionFile) }] }] },
+    hooks: {
+      SessionStart: [{ hooks: [{ type: 'command', command: sessionHookCommand(opts.sessionFile) }] }],
+      // What the person types is kept for the step's later attempts (#117).
+      ...(opts.promptsFile === undefined ? {} : {
+        UserPromptSubmit: [{ hooks: [{ type: 'command', command: promptHookCommand(opts.promptsFile) }] }],
+      }),
+    },
     // A profile that pinned bypassPermissions chose it for Tandemise's own
     // worktree: the warning is acknowledged in this session's flag settings,
     // never in the person's Claude Code config. Verified on Claude Code 2.1.316.

@@ -40,7 +40,7 @@ export type OrchestrationEvent =
   | { readonly type: 'task.status'; readonly from: string; readonly to: string; readonly reason?: string }
   | { readonly type: 'run.started'; readonly attempt: number; readonly runtime: string; readonly target: string }
   | { readonly type: 'run.finished'; readonly status: string; readonly durationMs: number }
-  | { readonly type: 'check.result'; readonly name: string; readonly outcome: 'PASS' | 'FAIL' | 'SKIP'; readonly detail?: string }
+  | { readonly type: 'check.result'; readonly name: string; readonly outcome: 'PASS' | 'FAIL' | 'SKIP' | 'TIMEOUT'; readonly detail?: string }
   | { readonly type: 'gate.evaluated'; readonly gate: string; readonly passed: boolean; readonly detail?: string }
   | { readonly type: 'approval.resolved'; readonly approvalId: ApprovalId; readonly status: string; readonly option?: string }
   | { readonly type: 'policy.denied'; readonly capability: string; readonly reason: string }

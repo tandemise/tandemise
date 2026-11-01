@@ -37,6 +37,7 @@ export const SHIPPED_MERGE = {
     { when: 'review.independent != PASS', points: 1, why: 'no independent review' },
     { when: 'process.holds > 0 || process.changes_requested > 0', points: 1, why: 'a person had to step in' },
     { when: 'process.escalations > 1', points: 1, why: 'needed a stronger model twice' },
+    { when: 'process.retry_out_of_scope', points: 2, why: 'a retry changed files outside the change' },
     { when: 'process.lightened_by_person', points: 2, why: 'you made it quick' },
     { when: 'history.area_recent_revert', points: 3, why: 'this area had a revert in the last 14 days' },
   ],

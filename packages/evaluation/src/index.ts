@@ -1,4 +1,4 @@
-export { checkSpecsFor, createCommandCheckRunner } from './checks.js';
+export { checkSpecsFor, createCommandCheckRunner, formatBudget } from './checks.js';
 export type {
   CheckContext, CheckRunnerPort, CheckSpec, CommandCheckRunnerOptions, CommandExecutor, CommandOutcome,
 } from './checks.js';

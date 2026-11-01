@@ -1169,6 +1169,25 @@ try {
   check('…and the written state is remembered', BD.items.byKey(boardWs, 'GAR-1')?.writtenState === 'In Progress', BD.items.byKey(boardWs, 'GAR-1'));
   const row = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1');
   check('…the board shows its mission, and it cannot be started again', row?.mission?.id === mission.id && row?.startable.ok === false && row?.startable.reason === 'Has a mission', row);
+  // #101: a mission whose next step waits on a saturated runtime says so on the Board,
+  // not only "Mission: Executing". The reason is the executor's own deferral words.
+  {
+    const R = await import('@tandemise/runtimes-core');
+    const tasks = BD.container.resolve(pipeline.app.TASK_REPOSITORY);
+    const step = tasks.listByMission(mission.id)[0];
+    check('…its mission has a step to wait', step !== undefined, tasks.listByMission(mission.id).map((t) => t.status));
+    const before = row?.mission?.waiting;
+    check('…a mission with nothing waiting says no slot wait', before === null, row?.mission);
+    const saved = { status: step.status, statusReason: step.statusReason };
+    const busy = R.describeRejections([{ profileId: 'rtp_x', profileName: 'Claude Code', reason: 'saturated: 1/1 runs in flight', busy: true }]);
+    tasks.update(step.id, { status: 'READY', statusReason: `Waiting for a runtime slot. ${busy}` });
+    const waiting = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1')?.mission;
+    check('…a READY step waiting for a runtime slot: "Waiting for a free slot on Claude Code"', waiting?.waiting === 'Waiting for a free slot on Claude Code', waiting);
+    tasks.update(step.id, { statusReason: 'Waiting for you: sign in again' });
+    const person = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1')?.mission;
+    check('…a step waiting on something else is no slot wait', person?.waiting === null, person);
+    tasks.update(step.id, saved);
+  }
 
   const second = await refusal('GAR-1');
   check(`a second Start of GAR-1 is refused: "GAR-1 already has a mission: ${SAFARI}."`, second?.code === 'CONFLICT' && second?.message === `GAR-1 already has a mission: ${SAFARI}.` && fromTracker().length === 1, { code: second?.code, message: second?.message });

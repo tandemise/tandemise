@@ -316,6 +316,7 @@ rule may also read `checks.tests` and the `review.*` facts of the mission's last
 | `process.escalations` | number | merge rule | Times a step moved to a stronger model. | ship step |
 | `process.gate_retries` | number | merge rule | Attempts after a failed gate across the mission. | ship step |
 | `process.person_commits` | number | merge rule | Commits on the pull request not made by Tandemise or its agents. | ship step |
+| `process.retry_out_of_scope` | boolean | merge rule | A retry changed files its step had not touched before (the scope.retry check). | ship step |
 | `process.revert_of_auto` | boolean | merge rule | The pull request reverts a change Tandemise merged on its own. | ship step |
 | `history.area_reverts_90d` | number | merge rule | Reverts in the areas touched over the last 90 days. | ship step |
 | `history.area_recent_revert` | boolean | merge rule | An area touched had a revert or broke main in the last 14 days. | ship step |

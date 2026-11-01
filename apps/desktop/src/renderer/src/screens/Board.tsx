@@ -173,6 +173,13 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
               Mission: {humanizeStatus(item.mission.status)}
             </Link>
           ) : null}
+          {/* The daemon's sentence: a mission whose next step waits for a runtime slot is not stuck (#101). */}
+          {item.mission?.waiting ? (
+            <span className="board__waiting" data-board-waiting="">
+              <Icon name="clock" size={12} />
+              {item.mission.waiting}
+            </span>
+          ) : null}
         </div>
         {start.isError ? <ErrorState error={start.error} /> : null}
       </div>
