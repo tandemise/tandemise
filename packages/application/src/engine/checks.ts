@@ -274,8 +274,17 @@ export class CheckService {
   }
 
   /** The tree the step's commit holds; null when the target is not a git tree. */
+  /**
+   * The tree a result may be reused by: only a worktree (the executor commits
+   * everything there before the checks) whose files all match HEAD. A step
+   * working in place, or with anything uncommitted, measures files the tree
+   * does not hold, so its result is never stamped for reuse.
+   */
   async #tree(target: ExecutionTarget, signal: AbortSignal): Promise<string | null> {
+    if (target.kind !== 'worktree') return null;
     try {
+      const status = await target.exec({ command: 'git', args: ['status', '--porcelain', '--untracked-files=all'], signal });
+      if (status.exitCode !== 0 || status.stdout.trim().length > 0) return null;
       const r = await target.exec({ command: 'git', args: ['rev-parse', 'HEAD^{tree}'], signal });
       const sha = r.stdout.trim();
       return r.exitCode === 0 && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null;
@@ -290,9 +299,10 @@ export class CheckService {
    * in full: not knowing never narrows a check.
    */
   async #changedPaths(target: ExecutionTarget, signal: AbortSignal): Promise<readonly string[] | null> {
-    const record = target.describe();
-    if (target.kind !== 'worktree' || record.baseBranch === null) return null;
+    if (target.kind !== 'worktree') return null;
     try {
+      const record = target.describe();
+      if (record.baseBranch === null) return null;
       const r = await target.exec({ command: 'git', args: ['diff', '--name-only', `${record.baseBranch}...HEAD`], signal });
       if (r.exitCode !== 0) return null;
       return r.stdout.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
