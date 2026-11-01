@@ -62,6 +62,12 @@ export interface IntakeDeps {
   readonly members: MemberRepositoryPort;
   readonly clock: Clock;
   readonly log: Logger;
+  /**
+   * `TrackerService.trackerChanged`: the tracker's token, address or mapping
+   * was saved, so the board's cached problem is stale and it is read again
+   * (#134). Resolved per call; optional for harnesses.
+   */
+  readonly trackerChanged?: (workspaceId: WorkspaceId) => void;
 }
 
 /** Spec §2: each token, 60 signals a minute by default. */
@@ -657,6 +663,7 @@ export class IntakeService {
     const moved = this.deps.trackers.originMismatch(workspaceId);
     this.deps.trackers.confirmOrigin(workspaceId);
     this.deps.log.info('intake.tracker_origin_confirmed', { workspaceId, from: moved?.saved ?? null, to: moved?.current ?? null });
+    this.#trackerChanged(workspaceId);
     return this.config(workspaceId);
   }
 
@@ -728,6 +735,7 @@ export class IntakeService {
       ...(request.tracker === undefined ? {} : { tracker: request.tracker }),
       ...(request.intake === undefined ? {} : { intake: request.intake }),
     });
+    if (request.tracker !== undefined) this.#trackerChanged(workspaceId);
     return this.config(workspaceId);
   }
 
@@ -780,6 +788,16 @@ export class IntakeService {
     requireSeat(this.deps, workspaceId, caller);
     await this.deps.trackers.saveCredential(workspaceId, value);
     this.deps.log.info('intake.tracker_secret_saved', { workspaceId });
+    this.#trackerChanged(workspaceId);
+  }
+
+  /** Never fails the save it follows: the board is only a cache of the tracker. */
+  #trackerChanged(workspaceId: WorkspaceId): void {
+    try {
+      this.deps.trackerChanged?.(workspaceId);
+    } catch (e) {
+      this.deps.log.warn('intake.board_refresh_after_save_failed', { workspaceId, error: errorMessage(e) });
+    }
   }
 
   // ------------------------------------------------------------------ tokens
