@@ -19,6 +19,14 @@ export async function context() {
   const ui = makeUi(page);
   // A freshly launched window takes a while to find its daemon; nothing a scenario does is meaningful before that.
   await page.waitForText('Daemon connected', { timeoutMs: 90_000 });
+  // The window on this port must be the one this run launched. Another Tandemise window on the same
+  // CDP port (a person's own app, another run) talks to another daemon, and every step would act on it.
+  const shownPort = (await page.evaluate('document.body.innerText')).match(/Daemon connected\s*·\s*(\d+)/)?.[1];
+  const ownPort = new URL(env.url).port;
+  if (shownPort !== undefined && shownPort !== ownPort) {
+    page.close();
+    throw new Error(`the window on CDP port ${process.env.CDP_PORT ?? 9333} is connected to the daemon on ${shownPort}, not this run's (${ownPort}); another Tandemise window holds that port`);
+  }
   const me = (await api.get('/v1/me')).memberships.find((m) => m.workspaceId === env.workspaceId).memberId;
   const team = async () => (await api.get(`/v1/workspaces/${env.workspaceId}/team`)).members;
   const id = async (name) => { const m = (await team()).find((x) => x.name === name); if (!m) throw new Error(`no member ${name}`); return m.id; };
