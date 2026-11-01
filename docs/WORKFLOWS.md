@@ -58,6 +58,16 @@ A **wait** step holds no model and no worker slot. The obvious alternative — a
 agent polling in a loop — re-sends its whole context on every poll, so a
 ten-minute CI wait is billed as a ten-minute conversation.
 
+`waitFor` is one command with its arguments, run without a shell: quotes keep a
+word whole, but pipes, `&&` and variables do not apply. Exit 0 ends the wait.
+A `gh pr checks …` wait is the exception: once its pull request can be found,
+the pull request's state on GitHub decides, not the exit code. Every check
+passed, or none is reported, passes the wait; a failed check sends the code
+step back with the log; a pull request merged on GitHub finishes the mission as
+merged by a person; one closed without merging blocks the step and says so. A
+wait still going after half its timeout (30 minutes at most), or whose command
+can't run at all, shows as Stalled on Home and in the Inbox.
+
 ## Worktrees
 
 You do not ask for one. A step's isolation comes from the step if it says so,
