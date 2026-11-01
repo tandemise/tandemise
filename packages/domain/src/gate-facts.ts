@@ -108,6 +108,7 @@ const SHIP_FACTS: readonly FactDefinition[] = [
   shipFact('process.escalations', 'number', 'Times a step moved to a stronger model.', 'process.escalations > 1'),
   shipFact('process.gate_retries', 'number', 'Attempts after a failed gate across the mission.', 'process.gate_retries > 2'),
   shipFact('process.person_commits', 'number', 'Commits on the pull request not made by Tandemise or its agents.', 'process.person_commits > 0'),
+  shipFact('process.retry_out_of_scope', 'boolean', 'A retry changed files its step had not touched before (the scope.retry check).', 'process.retry_out_of_scope'),
   shipFact('process.revert_of_auto', 'boolean', 'The pull request reverts a change Tandemise merged on its own.', 'process.revert_of_auto'),
   shipFact('history.area_reverts_90d', 'number', 'Reverts in the areas touched over the last 90 days.', 'history.area_reverts_90d > 1'),
   shipFact('history.area_recent_revert', 'boolean', 'An area touched had a revert or broke main in the last 14 days.', 'history.area_recent_revert'),

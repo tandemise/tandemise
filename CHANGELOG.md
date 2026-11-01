@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.11.0](https://github.com/tandemise/tandemise/compare/v0.10.0...v0.11.0) (2026-11-01)
+
+
+### Features
+
+* a readable mission header and a pull request that says what changed ([#124](https://github.com/tandemise/tandemise/issues/124)) ([deb11a7](https://github.com/tandemise/tandemise/commit/deb11a7f049b506bbda07e63970a0d2fa9cd080c))
+* give agent runs their own home and, when asked, a display ([#126](https://github.com/tandemise/tandemise/issues/126)) ([83aae66](https://github.com/tandemise/tandemise/commit/83aae665877a395acad291edbf9a03d908e555d2))
+* size work from what the item says, and show which signal set it ([#123](https://github.com/tandemise/tandemise/issues/123)) ([61c9851](https://github.com/tandemise/tandemise/commit/61c98512b6629190dcb90cdbcce76d651c238add))
+
+
+### Bug Fixes
+
+* bind a step's approval to the calls it names and park runs waiting on a tool card ([#146](https://github.com/tandemise/tandemise/issues/146)) ([ffc3d25](https://github.com/tandemise/tandemise/commit/ffc3d2531d4c56d4fa218e870f1f7fdd78a2f60f))
+* decide a ci wait by its pull request and say when it stalls ([#148](https://github.com/tandemise/tandemise/issues/148)) ([1327177](https://github.com/tandemise/tandemise/commit/1327177869e799f16daa17ebf8d635d4621d7df1))
+* free the window port from the daemon and smooth the first setup ([#125](https://github.com/tandemise/tandemise/issues/125)) ([f7bfadd](https://github.com/tandemise/tandemise/commit/f7bfaddd7dbad7e4bde8760ed3d6202e4d0ebd5a))
+* keep the person's github credentials out of a worker's shell ([#149](https://github.com/tandemise/tandemise/issues/149)) ([c47c8d1](https://github.com/tandemise/tandemise/commit/c47c8d1dd0a9b7ffbd218256bd6d50f10e434824))
+* make the factory loop fast and self-unblocking ([#133](https://github.com/tandemise/tandemise/issues/133)) ([67905a3](https://github.com/tandemise/tandemise/commit/67905a39db773043e08b4f2d5442c5fa86534749))
+* open a held session without the bypass warning and answer trust in one click ([#122](https://github.com/tandemise/tandemise/issues/122)) ([9d49b49](https://github.com/tandemise/tandemise/commit/9d49b49370aef2521510d6b5075adbd547a35e50))
+* run redone review and qa steps on the upstream step's new work ([#140](https://github.com/tandemise/tandemise/issues/140)) ([674e476](https://github.com/tandemise/tandemise/commit/674e47602e126931cf07eb8be85bd4af326e7dde))
+* share a brain into an existing empty repository ([#115](https://github.com/tandemise/tandemise/issues/115)) ([145ce99](https://github.com/tandemise/tandemise/commit/145ce99a524715315920c5c2871a3dbd508c6a08))
+* tell a retry which check failed and why ([#114](https://github.com/tandemise/tandemise/issues/114)) ([31a1b51](https://github.com/tandemise/tandemise/commit/31a1b514d25451e455637827fa922e9949f41a42))
+* wait for every check on the pull request, not only required ones ([#144](https://github.com/tandemise/tandemise/issues/144)) ([07086e4](https://github.com/tandemise/tandemise/commit/07086e4483e35b37033b84b9a3c0260d1a25a8f1))
+
+
+### Documentation
+
+* describe building tandemise with tandemise ([#98](https://github.com/tandemise/tandemise/issues/98)) ([3585d31](https://github.com/tandemise/tandemise/commit/3585d317b0d00347c572ca311e58424c65e673be))
+* report on dogfooding tandemise as its own factory ([#119](https://github.com/tandemise/tandemise/issues/119)) ([629871a](https://github.com/tandemise/tandemise/commit/629871ab6426e19c696fc62f4777cc897964fd76))
+* say runtimes are added with Discover in the quickstart ([#110](https://github.com/tandemise/tandemise/issues/110)) ([380ac82](https://github.com/tandemise/tandemise/commit/380ac82c9b1a00199ac3a7376241b74f3d2049f9))
+
 ## [0.10.0](https://github.com/tandemise/tandemise/compare/v0.9.0...v0.10.0) (2026-10-31)
 
 

@@ -37,9 +37,10 @@ if (!REAL_YOUTRACK) {
 
 await openBoard(c);
 const started = await until(async () => (await boardGroups(c)).inProgress?.rows.find((r) => r.key === sentryKey), { label: 'the row under In progress', timeoutMs: 20_000 });
-const disabled = await page.evaluate(`(() => { const b = document.querySelector('[data-board-item=${JSON.stringify(sentryKey)}] .board__start'); return b ? { disabled: b.disabled, title: b.title } : null; })()`);
+const actions = await page.evaluate(`(() => { const row = document.querySelector('[data-board-item=${JSON.stringify(sentryKey)}]'); const open = row?.querySelector('.board__open'); return { start: !!row?.querySelector('.board__start'), open: open ? { text: open.innerText.trim(), href: open.getAttribute('href') } : null }; })()`);
 ev.check(`${sentryKey} moved under In progress, with its mission's status in words`, /Mission: (Planning|Awaiting plan approval|Executing)/.test(started.text), started.text);
-ev.check('…and Start is off, with the reason as its title', disabled?.disabled === true && disabled.title === 'Has a mission', disabled);
+// #108: an item with a mission offers Open mission, not a Start that can only be refused.
+ev.check('…and offers Open mission instead of Start', actions.start === false && actions.open?.text.startsWith('Open mission') && actions.open.href.endsWith(`/missions/${id}`), actions);
 await page.screenshot(ev.shot('board-started'));
 writeScenarioState({ missionId: id, missionTitle: mission.title });
 c.close(); ev.save();

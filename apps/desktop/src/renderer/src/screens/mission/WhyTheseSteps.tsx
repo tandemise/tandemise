@@ -54,6 +54,13 @@ export function WhyTheseSteps({ missionId, decision }: { missionId: string; deci
 
       <p className="why__profile" aria-label="Profile">{decision.profileLine}</p>
 
+      {/* Which signal set each of type, size and risk, said plainly (#103), so a keyword or a default is visible at a glance. */}
+      {decision.decidedBy.length > 0 ? (
+        <ul className="why__list why__decided" aria-label="What decided it">
+          {decision.decidedBy.map((line) => <li key={line}>{line}</li>)}
+        </ul>
+      ) : null}
+
       {chip !== null ? (
         <ul className="why__signals" aria-label={`Why ${chip.label}`}>
           {chip.signals.length === 0 ? <li className="why__muted">Nothing set this; it is the default.</li> : null}

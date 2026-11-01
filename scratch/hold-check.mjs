@@ -47,6 +47,31 @@ section('pure: holdRefusal');
   check('a pending step is refused with some reason', typeof r({}, { status: 'PENDING' }) === 'string');
 }
 
+section('pure: Claude Code start-up questions (#102)');
+{
+  const { claudePromptOnScreen } = await import('@tandemise/domain/claude-prompts');
+  // As Claude Code 2.1.316 draws them (scratch/claude-prompt-probe.mjs).
+  const trust = (selected) => [
+    'Accessing workspace:', '/tmp/home/missions/m/worktrees/build-1',
+    'Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source',
+    "project, or work from your team). If not, take a moment to review what's in this folder first.",
+    "Claude Code'll be able to read, edit, and execute files here.", 'Security guide',
+    `${selected === 'no' ? '❯ ' : '  '}No, exit`, `${selected === 'yes' ? '❯ ' : '  '}Yes, I trust this folder`,
+    'Enter to confirm · Esc to cancel',
+  ].join('\n');
+  const atNo = claudePromptOnScreen(trust('no'));
+  check('the trust question with "No, exit" selected is answered Down then Enter',
+    atNo?.kind === 'trust' && atNo.keys === '\u001b[B\r' && atNo.answer === 'Yes, I trust this folder', atNo);
+  check('with "Yes" already selected, Enter alone', claudePromptOnScreen(trust('yes'))?.keys === '\r');
+  check('with no readable selection, no answer is offered (a blind key could pick "No, exit")', claudePromptOnScreen(trust('none')) === null);
+  const bypass = [
+    'WARNING: Claude Code running in Bypass Permissions mode', 'In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous',
+    '❯ 1. No, exit', '  2. Yes, I accept', 'Enter to confirm · Esc to cancel',
+  ].join('\n');
+  check('the bypass warning is read too (numbered options)', claudePromptOnScreen(bypass)?.kind === 'bypass' && claudePromptOnScreen(bypass)?.keys === '\u001b[B\r', claudePromptOnScreen(bypass));
+  check('an ordinary screen asks nothing', claudePromptOnScreen('❯ Try "fix typecheck errors"\n⏵⏵ accept edits on (shift+tab to cycle)') === null);
+}
+
 section('pure: nowLine and describeHoldEnd');
 {
   const tool = (name, input) => ({ type: 'tool.started', tool: name, inputSummary: JSON.stringify(input) });
@@ -172,6 +197,22 @@ section('runtime: interactive invocations');
     sh.on('close', done);
   });
   check('the hook writes session_id to the session file, with nothing on PATH', existsSync(sf) && readFileSync(sf, 'utf8') === 'sess_hook');
+  // #117: what the person types is kept, so a retry after the hold never undoes it.
+  const pf = join(dir, "person's said.jsonl");
+  const withPrompts = JSON.parse(after(buildInteractiveInvocation(r, null, { sessionFile: sf, initialPrompt: null, promptsFile: pf }).args, '--settings'));
+  check('no promptsFile, no UserPromptSubmit hook', JSON.parse(after(buildInteractiveInvocation(r, null, { sessionFile: sf, initialPrompt: null }).args, '--settings')).hooks.UserPromptSubmit === undefined);
+  const promptCmd = withPrompts.hooks.UserPromptSubmit?.[0]?.hooks?.[0]?.command ?? '';
+  for (const prompt of ['Make it "System follows your desktop setting." on Linux', "it's fine\nsecond line"]) {
+    await new Promise((done) => {
+      const sh = spawn('/bin/sh', ['-c', promptCmd], { stdio: ['pipe', 'ignore', 'ignore'], env: { PATH: '' } });
+      sh.stdin.end(JSON.stringify({ session_id: 'sess_hook', hook_event_name: 'UserPromptSubmit', prompt }));
+      sh.on('close', done);
+    });
+  }
+  const said = existsSync(pf) ? readFileSync(pf, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
+  check('the UserPromptSubmit hook appends each message the person sends, with the time, nothing on PATH',
+    said.length === 2 && said[0].prompt === 'Make it "System follows your desktop setting." on Linux' && said[1].prompt === "it's fine\nsecond line"
+      && !Number.isNaN(Date.parse(said[0].at)), said);
   const whole = new ClaudeCodeAdapter().interactive('sess_1', req({ ...p, executablePath: process.execPath }), opts);
   check('env carries CLAUDE_CONFIG_DIR and TERM', whole.env.CLAUDE_CONFIG_DIR === '/tmp/cfg-x' && whole.env.TERM === 'xterm-256color', whole.env);
   check('cwd is the worktree and sessionFile is passed through',
@@ -181,10 +222,31 @@ section('runtime: interactive invocations');
     fresh.at(-1) === 'start here' && !fresh.includes('--resume'), fresh.slice(-3));
   check('adapter declares interactive_resume', new ClaudeCodeAdapter().baseCapabilities.includes('interactive_resume'));
 
+  // #102: Claude Code shows a "Bypass Permissions mode" warning whose default is
+  // "No, exit". A person is at the keyboard during a hold, so the session runs
+  // in acceptEdits with the granted shell tools allowed by rule instead.
+  const full = req(p, { grants: ['filesystem.write', 'shell'] });
+  const fullHeadless = buildInvocation(full, 'sess_1').args;
+  const fullInter = buildInteractiveInvocation(full, 'sess_1', opts).args;
+  check('a write+shell step runs headless in bypassPermissions', after(fullHeadless, '--permission-mode') === 'bypassPermissions', fullHeadless);
+  check('the same step, held, opens in acceptEdits (no bypass warning)', after(fullInter, '--permission-mode') === 'acceptEdits', fullInter);
+  check('held, its granted shell tools are allowed by rule',
+    ['Bash', 'BashOutput', 'KillShell'].every((t) => after(fullInter, '--allowed-tools').split(',').includes(t)), after(fullInter, '--allowed-tools'));
+  check('held, nothing it was granted is disallowed', !fullInter.includes('--disallowed-tools'), fullInter);
+  check('held without a pinned bypass, the settings acknowledge no warning',
+    JSON.parse(after(fullInter, '--settings')).skipDangerousModePermissionPrompt === undefined);
+  const pinned = buildInteractiveInvocation(req(profile('claude-code', { permissionMode: 'bypassPermissions' }), { grants: ['filesystem.write', 'shell'] }), null, opts).args;
+  check('a profile that pins bypassPermissions keeps it when held', after(pinned, '--permission-mode') === 'bypassPermissions', pinned);
+  check('and its session settings acknowledge the warning (never the person\'s own settings)',
+    JSON.parse(after(pinned, '--settings')).skipDangerousModePermissionPrompt === true, after(pinned, '--settings'));
+  const strict = buildInteractiveInvocation(req(profile('claude-code', { permissionMode: 'plan' }), { grants: ['filesystem.write', 'shell'] }), null, opts).args;
+  check('a profile pinned to a stricter mode keeps it when held', after(strict, '--permission-mode') === 'plan', strict);
+
   const fake = new FakeRuntimeAdapter();
   check('the fake declares interactive_resume', fake.baseCapabilities.includes('interactive_resume'));
   const fsf = join(dir, 'fake.session');
-  const inv = fake.interactive('abc', req(profile('fake'), { workingDirectory: dir }), { sessionFile: fsf, initialPrompt: null });
+  const fpf = join(dir, 'fake-said.jsonl');
+  const inv = fake.interactive('abc', req(profile('fake'), { workingDirectory: dir }), { sessionFile: fsf, initialPrompt: null, promptsFile: fpf });
   const out = await new Promise((done) => {
     const c = spawn(inv.file, inv.args, { cwd: inv.cwd, env: { ...process.env, ...inv.env }, stdio: ['pipe', 'pipe', 'inherit'] });
     let buf = '';
@@ -196,6 +258,8 @@ section('runtime: interactive invocations');
     out.code === 0 && out.buf.includes('Fake session abc') && out.buf.includes('> hello') && out.buf.includes('> write a.txt')
     && existsSync(join(dir, 'a.txt')), out);
   check('the fake records its session id', /^fake-session-/.test(readFileSync(fsf, 'utf8')));
+  const fakeSaid = existsSync(fpf) ? readFileSync(fpf, 'utf8').trim().split('\n').map((l) => JSON.parse(l).prompt) : [];
+  check('the fake records what the person typed, not /exit', fakeSaid.join('|') === 'hello|write a.txt', fakeSaid);
   rmSync(dir, { recursive: true, force: true });
 
   const { RuntimeManager, RuntimeRegistry } = await import('@tandemise/runtimes-core');

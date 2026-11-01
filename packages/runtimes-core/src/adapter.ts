@@ -159,13 +159,14 @@ export interface AgentRuntimeAdapter {
   /**
    * The runtime's own interactive CLI for a hold: the process a person drives
    * in a terminal, resumed in `sessionRef` or (null) started fresh with
-   * `initialPrompt`. It records its session id to `sessionFile`. Absent means
-   * the runtime cannot be held.
+   * `initialPrompt`. It records its session id to `sessionFile`, and each
+   * message the person sends to `promptsFile` when given. Absent means the
+   * runtime cannot be held.
    */
   interactive?(
     sessionRef: string | null,
     request: RunRequest,
-    opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
+    opts: InteractiveOptions,
   ): InteractiveInvocation;
 
   /**
@@ -195,3 +196,15 @@ export function describeAdapter(adapter: AgentRuntimeAdapter): RuntimeAdapterDes
  * ever imports a runtime package (MVP.md §26.1).
  */
 export const RUNTIME_ADAPTERS = multiToken<AgentRuntimeAdapter>('RuntimeAdapter');
+
+/** What a hold's interactive session is started with. */
+export interface InteractiveOptions {
+  readonly sessionFile: string;
+  readonly initialPrompt: string | null;
+  /**
+   * Where the session appends what the person types, one JSON line
+   * `{ "at": ISO time, "prompt": text }` per message (#117). Every later
+   * attempt of the step is told it, so a retry never undoes what a person said.
+   */
+  readonly promptsFile?: string;
+}

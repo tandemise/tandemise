@@ -3,7 +3,7 @@ import { DaemonStopping } from '../support/shutdown.js';
 /** The reason a task carries when it is blocked only by a dead dependency. */
 const DEPENDENCY_BLOCK_PREFIX = 'Blocked by ';
 import type {
-  ApprovalRepositoryPort, MemberRepositoryPort, Mission, MissionRepositoryPort, MissionStatus, MissionTask,
+  ApprovalRepositoryPort, MemberRepositoryPort, Mission, MissionRepositoryPort, MissionStatus, MissionTask, PullRequestRef,
   TaskRepositoryPort, WorkspaceRepositoryPort,
   RepoRepositoryPort,
 } from '@tandemise/domain';
@@ -13,7 +13,8 @@ import {
 import type { Clock, Logger, MissionId, TaskId } from '@tandemise/shared';
 import { errorMessage } from '@tandemise/shared';
 import type { LifecycleComponent } from '@tandemise/kernel';
-import type { Waiter } from './waiter.js';
+import type { WaitOutcome, Waiter } from './waiter.js';
+import { ciWaitTarget, type PullRequestWait } from './pr-wait.js';
 import type { ShipService } from './ship.js';
 import type { OutcomeRecorder } from './outcomes.js';
 import type { EventRecorder, EventScope } from '../support/event-recorder.js';
@@ -37,6 +38,12 @@ export interface SchedulerDeps {
   /** Repositories, so a wait polls in the right checkout. */
   readonly repositories: RepoRepositoryPort;
   readonly waiter: Waiter;
+  /**
+   * Decides a `gh pr checks` wait by its pull request's state on GitHub
+   * (#143). Optional so harnesses built before it still compose; without it,
+   * every wait is decided by its command.
+   */
+  readonly prWait?: PullRequestWait;
   /** The daemon-owned ship step (#53 §8). Optional so harnesses built before it still compose. */
   readonly ship?: ShipService;
   /** How often a waiting ship step is looked at again. */
@@ -132,6 +139,8 @@ export class SchedulerService implements LifecycleComponent {
   readonly #shipFailures = new Map<TaskId, number>();
   /** What a waiting ship step said before GitHub started failing, said again once it answers. */
   readonly #shipReasonBefore = new Map<TaskId, string | null>();
+  /** A CI wait's head whose red CI already sent the work back: not sent back again for the same commit. */
+  readonly #failedHead = new Map<TaskId, string>();
   /** Missions whose task branches have already been merged, so it happens once. */
   readonly #integrated = new Set<MissionId>();
   #timer: NodeJS.Timeout | undefined;
@@ -204,6 +213,8 @@ export class SchedulerService implements LifecycleComponent {
   /** `reason` tells the run why it stopped: a hold (`TaskHeld`) keeps its session; a plain cancel does not. */
   cancelTask(taskId: TaskId, reason?: Error): void {
     this.#active.get(taskId)?.abort(reason);
+    // A wait has no worker, only its poll: stopping it is what lets a retry or a skip stand.
+    if (this.deps.tasks.get(taskId)?.executor === 'wait') this.#waiting.get(taskId)?.abort(reason);
   }
 
   /**
@@ -464,33 +475,107 @@ export class SchedulerService implements LifecycleComponent {
 
     const controller = new AbortController();
     this.#waiting.set(task.id, controller);
-    this.#setStatus(task, scopeOf(mission), 'AWAITING_EXTERNAL', `Waiting: ${policy.command}`);
+    // Adopted after a restart, a wait keeps what it last said and when it started: that is how long it has waited.
+    if (task.status !== 'AWAITING_EXTERNAL') {
+      this.#setStatus(task, scopeOf(mission), 'AWAITING_EXTERNAL', `Waiting: ${policy.command}`, { startedAt: this.deps.clock.now() });
+    } else if (task.startedAt === null) {
+      this.deps.tasks.update(task.id, { startedAt: this.deps.clock.now() });
+    }
 
     const repository = task.repositoryId === null
       ? (mission.repositoryId === null ? null : this.deps.repositories.get(mission.repositoryId) ?? null)
       : this.deps.repositories.get(task.repositoryId) ?? null;
 
-    void this.deps.waiter
-      .wait(task, policy, repository, controller.signal)
-      .then((outcome) => {
-        const current = this.deps.tasks.get(task.id) ?? task;
-        if (outcome.kind === 'cancelled') return;
-        if (outcome.kind === 'passed') {
-          this.#setStatus(current, scopeOf(mission), 'SUCCEEDED', outcome.detail);
-          this.deps.tasks.update(task.id, { finishedAt: this.deps.clock.now() });
-        } else {
-          this.#setStatus(current, scopeOf(mission), 'FAILED', outcome.detail);
-          this.deps.tasks.update(task.id, { finishedAt: this.deps.clock.now() });
-        }
+    // A CI wait on a pull request is decided by the pull request (#143), on every look, so a wait planned before this recovers too.
+    const target = ciWaitTarget(policy.command);
+    const prWait = this.deps.prWait;
+    const options = {
+      ...(target === null || prWait === undefined ? {} : {
+        look: (waitedMs: number) => prWait.look({ mission, target, repository, waitedMs, failedHead: this.#failedHead.get(task.id) ?? null }),
+      }),
+      progress: (detail: string, pr: PullRequestRef | null) => {
+        if (pr !== null) this.deps.ship?.found(mission, task, pr);
+        const current = this.deps.tasks.get(task.id);
+        if (current === undefined || current.status !== 'AWAITING_EXTERNAL' || current.statusReason === detail) return;
+        this.deps.tasks.update(task.id, { statusReason: detail });
         this.deps.recorder.invalidate('tasks', mission.id);
+      },
+    };
+
+    void this.deps.waiter
+      .wait(task, policy, repository, controller.signal, options)
+      .then(async (outcome) => {
+        if (outcome.kind === 'cancelled') return;
+        // Retried, skipped or cancelled while the last look was out: what a person did stands.
+        if (controller.signal.aborted || this.deps.tasks.get(task.id)?.status !== 'AWAITING_EXTERNAL') return;
+        await this.#waitSettled(mission, task, outcome);
+        this.deps.recorder.invalidate('tasks', mission.id);
+        this.wake();
       })
       .catch((e: unknown) => {
         this.#setStatus(this.deps.tasks.get(task.id) ?? task, scopeOf(mission), 'BLOCKED',
           `The wait failed outside the poll: ${errorMessage(e)}`);
       })
       .finally(() => {
-        this.#waiting.delete(task.id);
+        if (this.#waiting.get(task.id) === controller) this.#waiting.delete(task.id);
       });
+  }
+
+  /** Where a wait's outcome leaves its step, and for a pull request, the mission (#143). */
+  async #waitSettled(mission: Mission, task: MissionTask, outcome: Exclude<WaitOutcome, { kind: 'cancelled' }>): Promise<void> {
+    const scope = scopeOf(mission);
+    const current = (): MissionTask => this.deps.tasks.get(task.id) ?? task;
+    const finish = (status: 'SUCCEEDED' | 'FAILED', reason: string): void => {
+      this.#setStatus(current(), scope, status, reason, { finishedAt: this.deps.clock.now() });
+    };
+    if (outcome.pr !== undefined) this.deps.ship?.found(mission, task, outcome.pr);
+    switch (outcome.kind) {
+      case 'passed':
+        this.#failedHead.delete(task.id);
+        finish('SUCCEEDED', outcome.detail);
+        return;
+      case 'timedOut':
+        finish('FAILED', outcome.detail);
+        return;
+      case 'closed':
+        this.#setStatus(current(), scope, 'BLOCKED', outcome.detail);
+        return;
+      case 'ciFailed': {
+        const ship = this.deps.ship;
+        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : ship.ciFailed(mission, current(), outcome.failing);
+        if (sent.kind === 'reopened') {
+          this.#failedHead.set(task.id, outcome.pr.headSha);
+          this.#setStatus(current(), scope, 'PENDING', sent.reason);
+        } else {
+          this.#setStatus(current(), scope, 'BLOCKED', sent.kind === 'blocked' ? sent.reason : outcome.detail);
+        }
+        return;
+      }
+      case 'merged': {
+        this.#failedHead.delete(task.id);
+        // Merged by a person on GitHub: the mission is done. The ship step records it as theirs,
+        // and what was still to come only led up to that merge. The wait finishes last, so no pass
+        // starts the ship step in between.
+        const tasks = this.deps.tasks.listByMission(mission.id);
+        const shipTask = tasks.find((t) => t.executor === 'ship' && !isTaskFinished(t.status));
+        const shipped = this.deps.ship === undefined ? null : await this.deps.ship.mergedOnGitHub(mission, shipTask ?? null, outcome.pr);
+        if (shipTask !== undefined) {
+          const reason = shipped?.kind === 'merged' ? shipped.reason : outcome.detail;
+          this.#setStatus(this.deps.tasks.get(shipTask.id) ?? shipTask, scope, 'SUCCEEDED', reason, { finishedAt: this.deps.clock.now() });
+        }
+        const after = downstreamOf(task, this.deps.tasks.listByMission(mission.id));
+        for (const t of after) {
+          if (!['PENDING', 'READY', 'AWAITING_HUMAN'].includes(t.status)) continue;
+          this.#setStatus(t, scope, 'SKIPPED', `Not needed: the pull request was merged in GitHub (${outcome.pr.url}).`, { finishedAt: this.deps.clock.now() });
+          for (const card of this.deps.approvals.list({ missionId: mission.id, statuses: ['PENDING'] }).filter((a) => a.taskId === t.id)) {
+            this.deps.approvals.update(card.id, { status: 'CANCELLED', decidedAt: this.deps.clock.now() });
+          }
+        }
+        this.deps.recorder.invalidate('approvals', mission.id);
+        finish('SUCCEEDED', outcome.detail);
+        return;
+      }
+    }
   }
 
   /** Runs the ship step outside the ceiling, tracked like a wait so `stop()` can cancel it. */
@@ -864,6 +949,20 @@ export class SchedulerService implements LifecycleComponent {
       this.deps.log.error('scheduler.tick_failed', { error: errorMessage(e) });
     }
   }
+}
+
+/** Every step that depends on `task`, directly or through others. */
+function downstreamOf(task: MissionTask, tasks: readonly MissionTask[]): readonly MissionTask[] {
+  const found = new Set<string>([task.key]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const t of tasks) {
+      if (found.has(t.key) || !t.dependsOn.some((d) => found.has(d))) continue;
+      found.add(t.key);
+      grew = true;
+    }
+  }
+  return tasks.filter((t) => t.key !== task.key && found.has(t.key));
 }
 
 function scopeOf(mission: Mission): EventScope {

@@ -1,0 +1,26 @@
+{
+  "id": "I12",
+  "title": "Setup papercuts: a pasted repository path, no Fake Runtime outside developer mode",
+  "ok": true,
+  "checks": [
+    {
+      "label": "Repositories offers a path field beside the folder picker",
+      "ok": true
+    },
+    {
+      "label": "proof (API): the pasted path is now one of the project's repositories",
+      "ok": true,
+      "observed": "/tmp/tdm-intake-ux/pasted-mvx5pe9d"
+    },
+    {
+      "label": "with developer mode off, Discover runtimes does not offer the Fake Runtime",
+      "ok": true,
+      "observed": "Runtimes on this machine\nClaude Code\nv2.1.316 · /home/demogar/.local/bin/claude\nAdd\nCodex CLI\nCodex CLI not found on PATH, in ~/.local/bin, /usr/local/bin, /opt/homebrew/bin, or an nvm bin directory. Install it with `npm i -g @openai/codex`, then set the executable path on this profile. A Codex sign"
+    }
+  ],
+  "notes": [],
+  "shots": [
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I12-pasted-path.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I12-discover-no-fake.png"
+  ]
+}

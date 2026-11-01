@@ -110,4 +110,15 @@ export const CLAUDE_SETTINGS_SCHEMA: readonly RuntimeSettingField[] = [
     ],
     hint: 'Overrides what Tandemise would infer. The policy engine still gates every tool call regardless.',
   },
+  {
+    key: 'display',
+    label: 'Display for agents',
+    kind: 'select',
+    options: [
+      { value: '', label: 'None' },
+      { value: 'virtual', label: 'A virtual display (xvfb-run, Linux)' },
+      { value: 'host', label: 'This computer\u2019s display' },
+    ],
+    hint: 'Lets a step open the app it changed and prove a UI change on screen. A virtual display needs xvfb-run installed; this computer\u2019s display lets agents open windows you can see. Every run also gets its own empty TANDEMISE_HOME, never yours.',
+  },
 ] as const;

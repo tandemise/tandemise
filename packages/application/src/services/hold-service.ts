@@ -23,6 +23,7 @@ import { actorFor, type Caller } from '../support/identity.js';
 import { assertMayTake } from '../support/take-rule.js';
 import { TaskHeld, heldWaitingReason } from '../support/held.js';
 import { withdrawApproval } from '../support/withdraw.js';
+import { HOLD_PROMPTS_FILE } from '../support/hold-steer.js';
 
 /** How long a hold waits for the run it stopped to end before giving up on opening the terminal. */
 const STOP_WAIT_MS = 10_000;
@@ -372,7 +373,9 @@ export class HoldServiceImpl implements HoldService {
         maxWallTimeMs: task.executionPolicy.maxWallTimeMs, signal: controller.signal,
         log: deps.log.child({ holdId: hold.id, taskId: task.id, missionId: mission.id }),
       };
-      const invocation = deps.runtimeManager.interactive(profile, session, request, { sessionFile: join(hold.dir, 'session-id'), initialPrompt });
+      const invocation = deps.runtimeManager.interactive(profile, session, request, {
+        sessionFile: join(hold.dir, 'session-id'), initialPrompt, promptsFile: join(hold.dir, HOLD_PROMPTS_FILE),
+      });
       // The last look before a process starts: a hold that has ended gets no terminal.
       if (deps.holds.get(hold.id)?.endedAt !== null) {
         controller.abort();

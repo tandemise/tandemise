@@ -181,7 +181,7 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
         ...base,
         icon: body.outcome === 'PASS' ? 'check' : body.outcome === 'FAIL' ? 'x' : 'info',
         tone: body.outcome === 'PASS' ? 'succeeded' : body.outcome === 'FAIL' ? 'failed' : 'pending',
-        title: `${titleCase(body.name.replace(/^checks\./, ''))} ${body.outcome === 'PASS' ? 'passed' : body.outcome === 'FAIL' ? 'failed' : 'skipped'}`,
+        title: `${titleCase(body.name.replace(/^checks\./, ''))} ${body.outcome === 'PASS' ? 'passed' : body.outcome === 'FAIL' ? 'failed' : body.outcome === 'TIMEOUT' ? 'ran out of time' : 'skipped'}`,
         detail: body.detail ?? null,
         link: null,
       };
@@ -297,7 +297,8 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
     case 'plan.decided':
       return { ...base, icon: 'sparkle', tone: 'pending', title: `The factory chose the ${body.lane} lane`, detail: null, link: null };
     case 'ship.pr_opened':
-      return { ...base, icon: 'externalLink', tone: 'succeeded', title: `Pull request #${body.number} opened`, detail: body.url, link: null };
+      // A pull request a step opened, found by the mission's CI wait (#143), is found, not opened.
+      return { ...base, icon: 'externalLink', tone: 'succeeded', title: `Pull request #${body.number} ${body.foundBy === 'wait' ? 'found' : 'opened'}`, detail: body.url, link: null };
     case 'task.outcome':
       return { ...base, icon: 'info', tone: 'pending', title: 'Outcome recorded', detail: null, link: null };
     case 'merge.decided':
@@ -361,7 +362,8 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
       return {
         ...base, icon: 'check', tone: 'running',
         title: body.ending === 'continued' ? 'Hold ended; the agent continues' : 'Hold released',
-        detail: null, link: null,
+        // Holding stopped the agent's run, and with it any command it had left running in the background (#102).
+        detail: 'Commands the agent had left running in the background were stopped by the hold.', link: null,
       };
     case 'task.handed_back':
       return {

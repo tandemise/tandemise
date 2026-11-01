@@ -89,7 +89,8 @@ const TOPIC_KEYS: Readonly<Record<ProjectionTopic, readonly (readonly string[])[
   // A mission's status alone can make it stalled, which is an Inbox row (P9).
   // The Board shows each item's mission status in words (intake), so it follows too.
   missions: [['home'], ['missions'], ['mission'], ['inbox'], ['intake', 'board']],
-  tasks: [['mission'], ['home'], ['inbox'], ['mission-task-feedback']],
+  // A step's reason is the Board's "Waiting for a free slot on …" (#101), so the Board follows tasks too.
+  tasks: [['mission'], ['home'], ['inbox'], ['mission-task-feedback'], ['intake', 'board']],
   // A decided review card or check can record a note, so a task's thread follows approvals too.
   approvals: [['approvals'], ['home'], ['mission'], ['inbox'], ['mission-task-feedback']],
   artifacts: [['artifacts'], ['mission'], ['artifact']],

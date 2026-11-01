@@ -246,8 +246,10 @@ is a mistake that costs the user time and money:
   command run in the repository every \`everyMs\` until it exits 0 (fails after
   \`timeoutMs\`). It holds no model and no worker slot. For CI on a pull request
   whose head branch the plan names, use
-  \`gh pr checks <that-branch> --required\` (exit 0 only when every required
-  check passed). Name that exact branch in the objective of the task that opens
+  \`gh pr checks <that-branch>\` (exit 0 only when every check on the pull
+  request passed). Never add \`--required\`: a repository with no required
+  checks, as on GitHub's free plan for private repositories, makes it fail for
+  ever. Name that exact branch in the objective of the task that opens
   the pull request, so the two agree.
 - \`"executor": "human"\` — a step only a person can do, or a decision only a
   person may make outside this system (approving a pull request on GitHub,
@@ -301,7 +303,7 @@ fence, matching:
       "title": "Wait for CI on the pull request",
       "objective": "Wait for the required checks on feat/example to pass.",
       "executor": "wait",
-      "waitFor": "gh pr checks feat/example --required",
+      "waitFor": "gh pr checks feat/example",
       "everyMs": 30000,
       "timeoutMs": 2700000,
       "dependsOn": ["product_spec"]

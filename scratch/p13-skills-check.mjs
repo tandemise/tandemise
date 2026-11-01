@@ -10,6 +10,11 @@
 // Pure rules first; then a real daemon (startDaemon, in process) whose
 // discovery root is a fixture folder (never the real home), with the scripted
 // agent recording which skills it found in its folder and in its prompt.
+//
+// #129: discovery also lists the skills of each plugin Claude Code installed
+// (`<config>/plugins/installed_plugins.json`; the config folder is the
+// discovery root's parent here), each repository's `.claude/skills`, and the
+// skills inside a folder that only groups them.
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -139,6 +144,20 @@ put(join(found, 'notes-only/README.md'), 'No skill here.\n');
 put(join(found, 'escape/SKILL.md'), '---\nname: escape\ndescription: Links out.\n---\nx\n');
 symlinkSync('/etc/hosts', join(found, 'escape/hosts'));
 put(join(found, 'huge/SKILL.md'), '---\nname: huge\ndescription: Too big.\n---\nx\n');
+// #129: a folder that only groups skills (one level down), with a non-skill beside them.
+put(join(found, 'synced/alpha/SKILL.md'), '---\nname: alpha\ndescription: The first grouped skill.\n---\nA.\n');
+put(join(found, 'synced/beta/SKILL.md'), '---\nname: beta\ndescription: The second grouped skill.\n---\nB.\n');
+put(join(found, 'synced/notes/README.md'), 'Not a skill.\n');
+// #129: a plugin Claude Code installed, recorded the way it records one. The
+// config folder is the discovery root's parent: the fixture root, never ~/.claude.
+const pluginPath = join(root, 'plugins/cache/testmarket/acme/1.2.3');
+put(join(pluginPath, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'acme', version: '1.2.3' }));
+put(join(pluginPath, 'skills/hello/SKILL.md'), '---\nname: hello\ndescription: Say hello the team way.\n---\nHello.\n');
+put(join(pluginPath, 'skills/review/SKILL.md'), '---\nname: review\ndescription: Review a change the team way.\n---\nReview.\n');
+put(join(root, 'plugins/installed_plugins.json'), JSON.stringify({
+  version: 2,
+  plugins: { 'acme@testmarket': [{ scope: 'user', installPath: pluginPath, version: '1.2.3', installedAt: '2026-11-01T00:00:00.000Z' }] },
+}));
 writeFileSync(join(found, 'huge/blob.bin'), Buffer.alloc(5 * 1024 * 1024 + 10, 1));
 // A repository with the lint rules in a subfolder, imported by file:// URL.
 const skillsRepo = join(root, 'skills-repo');
@@ -199,17 +218,52 @@ try {
   const profileId = runtime.body?.profile?.id ?? runtime.body?.id;
   check('a scripted runtime that reads .claude/skills', runtime.status === 200, runtime.body);
 
+  // #129: a skill the repository keeps in its own .claude/skills (left untracked, so no commit holds it).
+  put(join(repo, '.claude/skills/repo-style/SKILL.md'), '---\nname: repo-style\ndescription: How this repository is written.\n---\nKeep it short.\n');
+
   section('discover: the fixture root, never the real home');
   const disc = await api('GET', `/v1/workspaces/${ws}/skills/discover`);
-  const by = (name) => disc.body?.skills?.find((s) => s.folder === name);
+  const by = (name) => disc.body?.skills?.find((s) => s.folder === name && s.originId.startsWith('personal:'));
+  const byInvocation = (name) => disc.body?.skills?.find((s) => s.invocation === name);
   {
     check('the root is the fixture folder', disc.body?.root === found && disc.body?.exists === true, disc.body?.root);
-    check('five folders listed', disc.body?.skills?.length === 5, disc.body?.skills?.map((s) => s.folder));
-    check('tdd: named, described, importable', by('tdd')?.name === 'tdd' && by('tdd')?.description === 'Write the failing test first.' && by('tdd')?.importable === true && by('tdd')?.fileCount === 2, by('tdd'));
+    const personal = disc.body?.skills?.filter((s) => s.originId.startsWith('personal:')).map((s) => s.folder);
+    check('seven personal folders listed, the grouped ones walked', eq(personal, ['escape', 'house-style', 'huge', 'notes-only', 'synced/alpha', 'synced/beta', 'tdd']), personal);
+    check('tdd: named, described, importable', by('tdd')?.name === 'tdd' && by('tdd')?.description === 'Write the failing test first.' && by('tdd')?.importable === true && by('tdd')?.fileCount === 2 && by('tdd')?.invocation === 'tdd', by('tdd'));
     check('a folder without SKILL.md is refused', /No SKILL.md/.test(by('notes-only')?.problem ?? ''), by('notes-only')?.problem);
     check('a link outside the folder is refused', /hosts links outside the skill folder/.test(by('escape')?.problem ?? ''), by('escape')?.problem);
     check('over 5 MB is refused', /limit is 5 MB/.test(by('huge')?.problem ?? ''), by('huge')?.problem);
+    check('a grouping folder is not one broken skill: its skills are importable, named, and not invoked by Claude Code',
+      by('synced/alpha')?.name === 'alpha' && by('synced/alpha')?.importable === true && by('synced/alpha')?.invocation === null && by('synced/beta')?.problem === null && by('synced') === undefined,
+      [by('synced/alpha'), by('synced')]);
+    const hello = byInvocation('acme:hello');
+    check('a plugin skill is listed as plugin:skill and imports as plugin-skill', hello?.name === 'acme-hello' && hello?.description === 'Say hello the team way.' && hello?.importable === true && byInvocation('acme:review')?.name === 'acme-review', hello);
+    const origin = (s) => disc.body?.origins?.find((o) => o.id === s?.originId);
+    check('its origin names the plugin, version, marketplace and folder', origin(hello)?.kind === 'plugin' && origin(hello)?.label === 'Plugin acme 1.2.3' && origin(hello)?.detail === 'testmarket' && origin(hello)?.root === join(pluginPath, 'skills'), origin(hello));
+    const repoSkill = byInvocation('repo-style');
+    check("the repository's own .claude/skills is listed under the repository", repoSkill?.name === 'repo-style' && origin(repoSkill)?.kind === 'project' && origin(repoSkill)?.label === 'Repository s' && origin(repoSkill)?.root === join(repo, '.claude/skills'), [repoSkill, origin(repoSkill)]);
+    check('origins in order: yours, the plugin, the repository', eq(disc.body?.origins?.map((o) => o.kind), ['personal', 'plugin', 'project']), disc.body?.origins);
     check('nothing was executed', !existsSync(witness));
+  }
+
+  section('#129: importing a plugin skill, a grouped skill and a repository skill');
+  {
+    const pv = await api('POST', `/v1/workspaces/${ws}/skills/preview`, { source: { kind: 'claude', path: join(pluginPath, 'skills/hello') } });
+    check('preview of a plugin skill: "acme-hello", a new skill', pv.status === 200 && pv.body?.name === 'acme-hello' && pv.body.outcome === 'New skill' && pv.body.source?.plugin === 'acme', pv.body);
+    const imp = await api('POST', `/v1/workspaces/${ws}/skills`, { source: { kind: 'claude', path: join(pluginPath, 'skills/hello') }, hash: pv.body?.hash });
+    check('imported as acme-hello v1, its source naming the plugin', imp.body?.version === 1 && imp.body.skill?.name === 'acme-hello' && /^Plugin acme · /.test(imp.body.skill?.sourceLabel ?? ''), imp.body);
+    const up = await api('POST', `/v1/skills/${imp.body?.skill?.id}/update`);
+    check('Update reads the plugin folder again under the same name', up.status === 200 && up.body?.created === 'unchanged', up.body);
+    const gpv = await api('POST', `/v1/workspaces/${ws}/skills/preview`, { source: { kind: 'claude', path: join(found, 'synced/alpha') } });
+    check('a grouped skill previews by its own name', gpv.body?.name === 'alpha' && gpv.body.problem === null, gpv.body);
+    const rpv = await api('POST', `/v1/workspaces/${ws}/skills/preview`, { source: { kind: 'claude', path: join(repo, '.claude/skills/repo-style') } });
+    check("a repository's skill previews as a Claude skill", rpv.status === 200 && rpv.body?.name === 'repo-style', rpv.body);
+    const elsewhere = await api('POST', `/v1/workspaces/${ws}/skills/preview`, { source: { kind: 'claude', path: join(pluginPath, '.claude-plugin') } });
+    check('a folder discovery did not list is refused as a Claude skill', elsewhere.status === 400, elsewhere.status);
+    const after = (await api('GET', `/v1/workspaces/${ws}/skills/discover`)).body?.skills?.find((s) => s.invocation === 'acme:hello');
+    check('discovery then says it is in the library', after?.libraryLabel === 'In library as acme-hello v1' && after.importable === false, after);
+    const del = await api('DELETE', `/v1/skills/${imp.body?.skill?.id}`);
+    check('and it can be removed again (the rest of this check counts three skills)', del.status === 204, del.status);
   }
 
   section('preview, then import exactly that');
@@ -324,7 +378,7 @@ try {
     const committed = cwd === undefined ? '' : execFileSync('git', ['log', '--name-only', '--format=', '-n', '5'], { cwd }).toString();
     check('no commit contains .claude/skills', !committed.includes('.claude'), committed);
     check('git status shows nothing of them', cwd !== undefined && !execFileSync('git', ['status', '--porcelain'], { cwd }).toString().includes('.claude'));
-    check('the person\'s own checkout got nothing', !existsSync(join(repo, '.claude')));
+    check('the person\'s own checkout got nothing', !existsSync(join(repo, '.claude/skills/tdd')) && !existsSync(join(repo, '.claude/skills/house-style')));
     check('nothing was executed along the way', !existsSync(witness));
   }
 

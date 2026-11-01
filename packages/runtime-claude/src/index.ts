@@ -6,7 +6,7 @@ export type { ClaudeEventMapperOptions } from './event-mapper.js';
 
 export {
   CAPABILITY_TOOL_GUARDS, MAX_PROMPT_ARG_CHARS, PERMISSION_MODES,
-  buildInteractiveInvocation, buildInvocation, disallowedTools, permissionMode,
+  buildInteractiveInvocation, buildInvocation, disallowedTools, interactivePermissionMode, permissionMode,
   allowedToolRules, ARTIFACT_WRITE_RULE,
 } from './cli-args.js';
 export type { ClaudeInvocation, PermissionMode } from './cli-args.js';

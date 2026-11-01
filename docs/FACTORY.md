@@ -92,6 +92,42 @@ tiebreak: on                 # a cheap model breaks ties only when the rules can
   step class in an area, the next one gets a look from you after it, for that
   task only.
 
+### Checks: what runs, how long it may take
+
+A step's gate names the checks it needs (`checks.tests == PASS`); only those
+run, in the step's worktree, after the agent finishes. The agent's prompt names
+them and tells it not to run the full suite itself.
+
+- **What changed decides what runs.** An area may say what a check runs when
+  every changed file is in it:
+
+  ```yaml
+  areas:
+    - name: docs
+      paths: ["docs/**", "**/*.md"]
+      checks: { tests: none, typecheck: none, lint: none, build: none }
+    - name: design
+      paths: ["packages/design/**"]
+      checks: { tests: "npm run -w @tandemise/design test" }
+  ```
+
+  A docs-only change runs no test suite (the shipped `docs` area says so); a
+  change inside `design` runs that command; a change with any file elsewhere
+  runs the repository's own command. The pull request's CI still runs
+  everything.
+- **Once per tree.** A result is stored with the git tree it measured; a later
+  step on the same tree reuses it instead of running the command again.
+- **Time budgets.** Each check has a budget in minutes: the repository's own
+  (Project settings → Repositories → Checks), else `checks.budgets` here
+  (`checks: { budgets: { tests: 20 } }`), else 10. A check that runs out of
+  time is `TIMEOUT`, not `FAIL`: it runs once more with twice the budget, and
+  if it still does not finish the step asks you (raise the budget, change the
+  command, retry or accept). It never costs the agent an attempt.
+- **Retries keep what you said.** What you type during a Hold is quoted to
+  every later attempt as binding. A retry is told to keep its change scoped;
+  files it adds to the change are recorded as the `scope.retry` check, and the
+  merge score adds points for it (`process.retry_out_of_scope`).
+
 A project file `.tandemise/workflows/<id>.yaml` with a lane's id
 (`quick`, `standard`, `careful`, `fix`, `fix-careful`) replaces that lane.
 
@@ -182,3 +218,58 @@ on `tandemise/promote/<id>`. It never loosens a rule: that is your edit.
 The `item.*` and `profile.*` facts (planning rules) and the `change.*`,
 `ci.*`, `criteria.*`, `process.*` and `history.*` facts (merge rules) are listed
 in [Workflows](WORKFLOWS.md) under "Facts for factory rules".
+
+## What an agent's environment holds
+
+Each agent run (and each held session) gets an empty `TANDEMISE_HOME` of its
+own under the system temp directory, so an agent that starts a dev daemon or
+desktop, for example while working on Tandemise itself, never touches your
+`~/.tandemise`. Other homes agents inherit are unchanged: a Claude Code run
+uses the config directory its profile names, or the one the daemon inherited.
+
+Agents get no display by default. To let a code step prove a UI change in the
+real app, set **Display for agents** on the Claude Code runtime profile:
+
+- **A virtual display**: the agent runs under `xvfb-run -a` (Linux, with
+  `xvfb-run` installed; without it the run goes on with no display and its log
+  says so). Nobody sees its windows.
+- **This computer's display**: `DISPLAY`, `WAYLAND_DISPLAY` and
+  `XDG_RUNTIME_DIR` pass through, so agents can open windows on your screen.
+
+The run's log line `agent environment` names its `TANDEMISE_HOME` and display.
+
+### What a worker's shell can and cannot reach on GitHub
+
+A worker's shell never holds your GitHub credentials. Every external write a
+worker makes on GitHub goes through the tool broker (`github.pr.create`,
+`github.pr.comment`, `github.issue.create`), so the policy engine decides it,
+an approval card asks when the autonomy setting says so, and it is recorded.
+The daemon runs those tools, and the ship step's own pushes and pull
+requests, with its own environment, so they keep working.
+
+In every worker (Claude Code, Codex, a generic CLI):
+
+- `GH_TOKEN`, `GITHUB_TOKEN` and the enterprise token variables are removed.
+- `gh` gets an empty config directory of the run's own (`GH_CONFIG_DIR`), so
+  `gh pr create`, `gh api` and anything else that needs a sign-in fail with
+  "gh auth login". With no token in the environment, `curl` has nothing to
+  send either.
+- git cannot authenticate: its credential helpers are cleared, its prompts and
+  askpass programs are off, and ssh runs without your agent or any key. It can
+  still commit, and fetch from a public remote.
+
+The exception is a step granted `git.push` (the development and release
+roles): it pushes its branch so the broker can open the pull request. Such a
+step keeps git's credentials, meaning your ssh agent and a git credential
+helper that reads your `gh` sign-in, while `gh` itself stays signed out. A
+process in that shell could still read that git credential (`git credential
+fill`). Grant `git.push` only to roles you would trust with it.
+
+This is defence in depth, not a sandbox. A worker runs as you, so a process
+set on reading your files can still read them. The boundary for an untrusted
+agent is the execution target's isolation. The Claude Code tool rules from
+#146 (no `Bash(gh pr create:*)` and similar where the broker has the tool)
+stay as a second layer.
+
+The run's log line `agent environment` says which of the two cases a run had
+(`codeHost`).

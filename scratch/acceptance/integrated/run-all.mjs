@@ -66,7 +66,8 @@ if (resolvedGh !== `${ghBin}/gh`) { console.error(`refusing to run: gh resolves 
 const project = `${LINK}/project`;
 mkdirSync(project, { recursive: true });
 writeFileSync(join(project, 'README.md'), '# Acceptance project\n');
-writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'acceptance-project', private: true, scripts: { test: 'node -e "process.exit(0)"', build: 'node -e "process.exit(0)"' } }, null, 2));
+// The test script counts its runs in tests-ran.log: a docs-only item must not run it, a code change only once (#106).
+writeFileSync(join(project, 'package.json'), JSON.stringify({ name: 'acceptance-project', private: true, scripts: { test: `node -e "require('fs').appendFileSync('${LINK}/tests-ran.log', 'ran\\n')"`, build: 'node -e "process.exit(0)"' } }, null, 2));
 writeFileSync(join(project, '.gitignore'), '.tandemise/out/\nnode_modules/\n');
 git(project, 'init', '-q', '-b', 'main');
 git(project, 'remote', 'add', 'origin', 'git@github.com:acme/web.git');

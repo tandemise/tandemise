@@ -20,6 +20,49 @@ const SOURCE_TYPES: Readonly<Record<string, TaskType>> = {
   sentry: 'fix', posthog: 'fix', dependabot: 'deps', advisory: 'security',
 };
 
+/** A description at most this many words long is short: nothing in it suggests more than a small change (#103). */
+export const SHORT_DESCRIPTION_WORDS = 60;
+
+/** The words a rule's `item.keywords_any(...)` matched in the item, in the rule's order. */
+export function matchedKeywords(when: string, input: ProfileInput): string[] {
+  const text = `${input.item.title}\n${input.item.description}`.toLowerCase();
+  const out: string[] = [];
+  for (const call of when.matchAll(/item\.keywords_any\(([^)]*)\)/g)) {
+    for (const arg of call[1]!.matchAll(/"([^"]*)"|'([^']*)'/g)) {
+      const word = (arg[1] ?? arg[2] ?? '').toLowerCase();
+      if (word !== '' && new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(text) && !out.includes(word)) out.push(word);
+    }
+  }
+  return out;
+}
+
+/** What a matched rule said, in a person's words. */
+function ruleSaid(when: string, input: ProfileInput): string | undefined {
+  const words = matchedKeywords(when, input);
+  if (words.length > 0) return `the item says ${words.map((w) => `"${w}"`).join(' and ')}`;
+  const prefix = /item\.prefix\s*==\s*"([^"]+)"/.exec(when);
+  if (prefix !== null && titlePrefix(input.item.title) === prefix[1]!.toLowerCase()) return `the title starts with "${prefix[1]}:"`;
+  return undefined;
+}
+
+/** A description this short is a title restated, not a description: it says nothing about size. */
+export const MIN_DESCRIPTION_WORDS = 8;
+
+/**
+ * Words in what the item says beyond its title: a tracker item's goal loses
+ * the lead Tandemise wrote around it, and a goal that only repeats the title
+ * has none.
+ */
+function describedWords(item: ProfileInput['item']): number {
+  let text = item.description.replace(/\r\n?/g, '\n');
+  const marker = text.indexOf('The task as written in the tracker:');
+  if (marker >= 0) text = text.slice(marker + 'The task as written in the tracker:'.length);
+  text = text.split(/\n\nSources:\n/)[0]!;
+  const title = item.title.trim();
+  if (title !== '') text = text.replace(title, '');
+  return text.split(/\s+/).filter((w) => /\w/.test(w)).length;
+}
+
 /** History raises risk one level when this share of similar tasks were reverted. */
 export const HISTORY_REVERT_RATE = 0.2;
 /** …or when this share were held by a person. */
@@ -109,29 +152,45 @@ export function profileTask(input: ProfileInput, config: PlannerConfig): TaskPro
   for (const rule of config.profile.rules) {
     const { facts, predicates } = planRuleContext(input, { type, size, risk, areas, repos: input.repos });
     if (!evaluateGate(rule.when, facts, predicates).passed) continue;
+    const said = ruleSaid(rule.when, input);
+    const withSaid = said === undefined ? {} : { said };
     if (rule.set.type !== undefined && !ruleSet.type) {
       ruleSet.type = true;
+      const before = signals.length;
       proposeType(rule.set.type, 'rule', rule.when);
+      if (signals.length > before && said !== undefined) signals[signals.length - 1] = { ...signals[signals.length - 1]!, said };
     }
     if (rule.set.size !== undefined && !ruleSet.size) {
       ruleSet.size = true;
       size = rule.set.size;
       sizeFrom = 'rule';
-      signals.push({ name: 'rule', value: rule.when, effect: `size ${size}` });
+      signals.push({ name: 'rule', value: rule.when, effect: `size ${size}`, ...withSaid });
     }
     if (rule.set.risk !== undefined && !ruleSet.risk) {
       ruleSet.risk = true;
       // A rule can say a task is riskier, never that it is safer than the base.
       risk = atLeast(RISK_LEVELS, risk, rule.set.risk);
-      signals.push({ name: 'rule', value: rule.when, effect: `risk ${risk}` });
+      signals.push({ name: 'rule', value: rule.when, effect: `risk ${risk}`, ...withSaid });
     }
   }
 
   if (size === undefined) {
+    // Nothing set the size, so what can be measured does (#103): one file named
+    // with few Done-when lines is tiny; a short description with no file list
+    // pointing wider is small; otherwise the Done-when count, as before.
     const n = input.item.criteria;
-    size = n <= 1 ? 's' : n <= 4 ? 'm' : 'l';
+    const words = describedWords(input.item);
     sizeFrom = 'criteria';
-    signals.push({ name: 'Done-when lines', value: String(n), effect: `size ${size}` });
+    if (input.paths.length === 1 && n <= 2) {
+      size = 'xs';
+      signals.push({ name: 'files named', value: input.paths[0]!, effect: 'size xs', said: `it names one file (${input.paths[0]!})` });
+    } else if (words >= MIN_DESCRIPTION_WORDS && words <= SHORT_DESCRIPTION_WORDS && input.paths.length <= 3 && n <= 3) {
+      size = 's';
+      signals.push({ name: 'description', value: `${words} words`, effect: 'size s', said: `its description is short (${words} words)${n > 0 ? ` and it has ${n} Done-when ${n === 1 ? 'line' : 'lines'}` : ''}` });
+    } else {
+      size = n <= 1 ? 's' : n <= 4 ? 'm' : 'l';
+      signals.push({ name: 'Done-when lines', value: String(n), effect: `size ${size}`, said: `nothing else set it, and it has ${n} Done-when ${n === 1 ? 'line' : 'lines'}` });
+    }
   }
 
   const repos = [...new Set(input.repos)];

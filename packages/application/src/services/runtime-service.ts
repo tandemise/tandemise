@@ -1,6 +1,7 @@
 import type {
   RuntimeProfile, RuntimeProfileRepositoryPort, WorkspaceRepositoryPort,
 } from '@tandemise/domain';
+import { defaultRuntimeConcurrency } from '@tandemise/domain';
 import type { CreateRuntimeProfileRequest, RuntimeDiscoveryView, RuntimeView } from '@tandemise/api-contract';
 import type { RuntimeManager } from '@tandemise/runtimes-core';
 import type { Clock, RuntimeProfileId } from '@tandemise/shared';
@@ -79,7 +80,7 @@ export class RuntimeServiceImpl implements RuntimeService {
       // fully capable runtime from looking inert.
       capabilities: request.capabilities ?? adapter.baseCapabilities,
       enabled: request.enabled ?? true,
-      maxConcurrent: request.maxConcurrent ?? 1,
+      maxConcurrent: request.maxConcurrent ?? defaultRuntimeConcurrency(this.#workerLimit(request.workspaceId ?? null)),
       createdAt: now,
       updatedAt: now,
     };
@@ -164,6 +165,20 @@ export class RuntimeServiceImpl implements RuntimeService {
       }
       if (changed) this.workspaces.update(workspace.id, { routing, updatedAt: this.clock.now() });
     }
+  }
+
+  /**
+   * The worker limit a new profile's default concurrency is capped by: its
+   * project's, or - for a profile every project shares - the largest any
+   * project allows, since each project's scheduler still holds its own
+   * ceiling. Null when there is no project to read.
+   */
+  #workerLimit(workspaceId: string | null): number | null {
+    if (workspaceId !== null) {
+      return this.workspaces.get(asId<'WorkspaceId'>(workspaceId))?.concurrency.maxTotalWorkers ?? null;
+    }
+    const limits = this.workspaces.list().map((w) => w.concurrency.maxTotalWorkers);
+    return limits.length === 0 ? null : Math.max(...limits);
   }
 
   #require(id: RuntimeProfileId): RuntimeProfile {

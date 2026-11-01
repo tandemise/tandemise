@@ -16,13 +16,14 @@ import { ChecksPane } from './ChecksPane.js';
 import { MetricsPane } from './MetricsPane.js';
 import { ClaimBanner, ClaimRefusal, claimHeld } from '../../components/ClaimBanner.js';
 import { isApprovalForMember, isApprovalWaitingOnMember, isHumanTaskForMember, isPlanUnstarted, planStanding } from '@tandemise/api-contract/for-me';
-import { useApprovals, useDaemonMutation, useMission, useMissionRefinement, useMyMemberId, useIssues, useRoutines } from '../../lib/queries.js';
+import { useApprovals, useDaemonMutation, useMission, useMissionRefinement, useMyMemberId, useIssues, useRoutines, useShip } from '../../lib/queries.js';
 import { missionTone, pluralize } from '../../lib/format.js';
 import { describeError } from '../../lib/daemon.js';
 import { clearMissionNotice, useMissionNotice } from '../../lib/notices.js';
 import { useOpenTerminal } from '../../lib/terminal.js';
 import { TerminalPanel } from '../../components/TerminalPanel.js';
 import { Banner, Button, Card, Tab, Tabs, Tooltip } from '@tandemise/design/react';
+import { parseTrackerGoal } from '@tandemise/domain/tracker-goal';
 
 // Feed first: it is where a mission opens, and the order of the tabs says so.
 export const MISSION_TABS = ['feed', 'plan', 'timeline', 'artifacts', 'checks', 'metrics'] as const;
@@ -87,9 +88,10 @@ export function MissionDetail({ id, tab }: { id: string; tab: MissionTab }): JSX
             <IdChip id={detail.mission.id} />
             <FromRoutine routineId={detail.mission.routineId ?? null} />
             <FromIssue missionId={detail.mission.id} linkId={detail.mission.issueLinkId ?? null} />
+            {factory ? <PullRequestChips missionId={detail.mission.id} /> : null}
           </>
         }
-        subtitle={detail.mission.goal}
+        subtitle={<MissionSubtitle goal={detail.mission.goal} />}
         actions={
           <>
             <StatusBadge status={status} tone={tone} />
@@ -458,6 +460,59 @@ function LimitCardPanel({ approvalId }: { approvalId: string | null }): JSX.Elem
     <section style={{ margin: 'var(--s3) var(--s7) 0' }} aria-label="Limit reached">
       <ApprovalCard view={view} compact headingLevel={2} />
     </section>
+  );
+}
+
+/**
+ * Under the title: a mission from a tracker item reads "GitHub #97 · started by
+ * Ana · Open issue" and a short summary, with the whole task behind a
+ * disclosure (#105); any other mission shows its goal as written.
+ */
+function MissionSubtitle({ goal }: { goal: string }): JSX.Element {
+  const parts = parseTrackerGoal(goal);
+  if (parts === null) return <>{goal}</>;
+  return (
+    <div className="mission-subtitle">
+      <p className="mission-subtitle__lead">
+        <span>{parts.label} {parts.key}</span>
+        <span aria-hidden="true"> · </span>
+        <span>started by {parts.starter}</span>
+        <span aria-hidden="true"> · </span>
+        <Button variant="ghost" size="sm" className="mission-subtitle__open" onClick={() => void window.tandemise.openExternal(parts.url)}>
+          <Icon name="externalLink" size={11} />
+          Open the issue<span className="visually-hidden"> {parts.key} in {parts.label}</span>
+        </Button>
+      </p>
+      {parts.summary !== '' ? <p className="mission-subtitle__summary">{parts.summary}</p> : null}
+      <details className="mission-subtitle__details">
+        <summary>The task as written</summary>
+        <pre className="mission-subtitle__goal">{goal}</pre>
+      </details>
+    </div>
+  );
+}
+
+/** "Pull request #110" once the ship step opened one (#113): the link a reviewer wants, on the mission itself. */
+function PullRequestChips({ missionId }: { missionId: string }): JSX.Element | null {
+  const ship = useShip(missionId);
+  const prs = ship.data?.prs.filter((pr) => pr.state === 'opened') ?? [];
+  if (prs.length === 0) return null;
+  return (
+    <>
+      {prs.map((pr) => (
+        <Tooltip key={pr.url} content={`Open ${pr.repo}#${pr.number} on GitHub`}>
+          <button
+            type="button"
+            className="chip chip--muted"
+            data-pr-link={pr.url}
+            onClick={() => void window.tandemise.openExternal(pr.url)}
+          >
+            <Icon name="externalLink" size={11} />
+            Pull request #{pr.number}
+          </button>
+        </Tooltip>
+      ))}
+    </>
   );
 }
 

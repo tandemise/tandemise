@@ -1,0 +1,61 @@
+{
+  "id": "H13-claude-prompts",
+  "title": "A held code step on the real Claude Code: no bypass warning, trust answered in one click",
+  "ok": true,
+  "checks": [
+    {
+      "label": "Claude asks to trust the folder, and the panel offers \"Answer: Yes, I trust this folder\"",
+      "ok": true,
+      "observed": "buildHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code asks whether to trust this folder. Tandemise created it for this step.Answer: Yes, I trust this folderF6 moves between the terminal and the buttons above it; the terminal keeps Tab and Esc for itself."
+    },
+    {
+      "label": "the question is announced in a status region",
+      "ok": true,
+      "observed": "status"
+    },
+    {
+      "label": "Claude Code is ready for you after one click",
+      "ok": true,
+      "observed": "                                                                                                         ◐ medium · /effort\n──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n❯\n──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ accept edits on (shift+tab to cycle) · ← for agents"
+    },
+    {
+      "label": "it never showed the Bypass Permissions warning",
+      "ok": true
+    },
+    {
+      "label": "it runs in accept-edits mode, with the step's shell tools allowed by rule",
+      "ok": true,
+      "observed": "──────────────────────────────────────────────────────────────────────────────────\n❯\n──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\n  ⏵⏵ accept edits on (shift+tab to cycle) · ← for agents"
+    },
+    {
+      "label": "the one-click answer is gone once answered",
+      "ok": true,
+      "observed": "buildHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F6 moves between the terminal and the buttons above it; the terminal keeps Tab and Esc for itself."
+    },
+    {
+      "label": "proof (DB): the hold was released",
+      "ok": true,
+      "observed": {
+        "id": "hld_01m6a9kbeq7w3xa8rmev",
+        "heldBy": "mem_01m6a9k1p4qgpbksh3fr",
+        "fromStatus": "RUNNING",
+        "profileId": "rt_01m6a9k4epvt98ez6af3",
+        "sessionBefore": "b5293dcc-7493-426f-b71a-d2a00dcd8ab2",
+        "sessionAfter": "b5293dcc-7493-426f-b71a-d2a00dcd8ab2",
+        "endedAt": "2026-11-01T00:54:25.731Z",
+        "ending": "released",
+        "consumedAt": null,
+        "diffStat": "{\"files\":0,\"insertions\":0,\"deletions\":0}",
+        "dir": "/tmp/tdm-hold-ux/home/workspaces/ws_01m6a9k1p3pg52zwjr53/missions/msn_01m6a9k6h7k4zvtvf1cj/holds/hld_01m6a9kbeq7w3xa8rmev"
+      }
+    }
+  ],
+  "notes": [
+    "setup: Code agent runs on Claude Code with its own config dir",
+    "the headless run started: {\"type\":\"run.started\",\"attempt\":1,\"runtime\":\"Claude Code\",\"target\":\"worktree:/tmp/tdm-hold-ux/home/workspaces/ws_01m6a9k1p3pg52zwjr53/missions/msn_01m6a9k6h7k4zvtvf1cj/worktrees/notes-line-on-claude-m"
+  ],
+  "shots": [
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/docs/superpowers/evidence/2026-10-30-hold/H13-claude-prompts-trust-question-with-answer.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/docs/superpowers/evidence/2026-10-30-hold/H13-claude-prompts-claude-ready.png"
+  ]
+}
