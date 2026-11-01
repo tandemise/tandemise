@@ -422,6 +422,30 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
     const missions = (await call('GET', `/v1/missions?workspaceId=${ws}`)).body;
     const list = Array.isArray(missions) ? missions : missions?.missions ?? [];
     check('one mission for GAR-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
+
+    // #185: the write-back only adds. An item with its own Acceptance criteria, and one with its own Done when.
+    const own = {
+      'GAR-20': { body: 'Receipts are hard to read.\n\n## Acceptance criteria\n- AC01: The total is bold\n- AC02: The date is shown\n\n## Notes\nLeave the logo alone.\n', added: ['- AC03: The receipt prints on A4'] },
+      'GAR-21': { body: 'Search is slow.\n\n## Done when\n- [ ] Results show within a second\n', added: ['- [ ] The receipt prints on A4'] },
+    };
+    for (const [key, item] of Object.entries(own)) {
+      fake.putIssue({ idReadable: key, summary: `Own criteria ${key}`, description: item.body, state: 'Draft' });
+      await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+      const m = (await call('POST', `/v1/workspaces/${ws}/board/refine`, { key })).body?.mission?.id;
+      const view = (await call('GET', `/v1/missions/${m}/refinement`)).body;
+      const fromItem = view?.criteria?.filter((c) => c.status === 'accepted') ?? [];
+      check(`${key}: the item's own lines read "From ${key}", not "Added by you"`, fromItem.length > 0 && fromItem.every((c) => c.origin === 'tracker' && c.originLabel === `From ${key}`), fromItem.map((c) => [c.statement, c.origin, c.originLabel]));
+      await call('POST', `/v1/missions/${m}/criteria`, { statement: 'The receipt prints on A4' });
+      const done = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key });
+      const body = fake.issues.get(key)?.description ?? '';
+      const lines = body.split('\n');
+      const mine = item.body.split('\n');
+      let at = 0;
+      const extra = [];
+      for (const l of lines) { if (at < mine.length && l === mine[at]) at++; else extra.push(l); }
+      check(`${key}: every line of the item is kept byte for byte, and only the decided line was added`, done.status === 200 && at === mine.length
+        && JSON.stringify(extra) === JSON.stringify(item.added), { status: done.status, extra, body });
+    }
   } catch (e) {
     check('the refine section ran', false, String(e?.stack ?? e));
   } finally {
