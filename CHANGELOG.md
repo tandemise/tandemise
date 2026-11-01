@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.12.0](https://github.com/tandemise/tandemise/compare/v0.11.0...v0.12.0) (2026-11-01)
+
+
+### Features
+
+* find claude code plugin, project and grouped skills ([#160](https://github.com/tandemise/tandemise/issues/160)) ([2bf48b4](https://github.com/tandemise/tandemise/commit/2bf48b4cda1c9d656cf9b027741725301224304a))
+* refine a tracker draft from the board and write it back as ready ([#161](https://github.com/tandemise/tandemise/issues/161)) ([4620ce8](https://github.com/tandemise/tandemise/commit/4620ce877e233628c8db66c429a5ed9661b2838b))
+* run a team's own claude code skills as factory steps ([#164](https://github.com/tandemise/tandemise/issues/164)) ([aa48f26](https://github.com/tandemise/tandemise/commit/aa48f2694916810df554d33f7de2520b56e2bc3c))
+
+
+### Bug Fixes
+
+* keep mission header actions on the title row and step card meta in full ([#166](https://github.com/tandemise/tandemise/issues/166)) ([15c5467](https://github.com/tandemise/tandemise/commit/15c5467118b88f515c98e990160dcf4ed6bc3c92))
+* keep the brain's tracker after a daemon restart ([#170](https://github.com/tandemise/tandemise/issues/170)) ([cd8bba5](https://github.com/tandemise/tandemise/commit/cd8bba575506c6390393bd1d684e7fcef7230638))
+* read the board again when the tracker token is saved ([#158](https://github.com/tandemise/tandemise/issues/158)) ([c3ee811](https://github.com/tandemise/tandemise/commit/c3ee81154fad7afda58c141c1796545be02e6a88))
+* read the first valid json object in the planner tiebreak reply ([#156](https://github.com/tandemise/tandemise/issues/156)) ([14f939e](https://github.com/tandemise/tandemise/commit/14f939ebbe4c346e798400054e40ff9adcf28e44))
+* read the repository's auto-merge setting through the rest api ([#183](https://github.com/tandemise/tandemise/issues/183)) ([778c458](https://github.com/tandemise/tandemise/commit/778c4588552b4171577d218490d98e0587ab8431))
+
 ## [0.11.0](https://github.com/tandemise/tandemise/compare/v0.10.0...v0.11.0) (2026-11-01)
 
 

@@ -1,6 +1,6 @@
 import {
   FACTORY_WORKFLOW_ID, IMPLICIT_CRITERION, IMPLICIT_CRITERION_KEY,
-  addSkillRefs, applyModules, chooseLane, compileWorkflow, isTrialMission, laneWorkflowId, parseSkillRef,
+  addSkillRefs, applyModules, chooseLane, compileWorkflow, evaluateGate, isTrialMission, laneWorkflowId, parseSkillRef,
   profileRuleContext, profileLine, profileTask, stepClassFor, tiebreakReason, validateMissionPlan, matchGlob,
   type Lane, type MissionPlan, type Mission, type MissionCriteriaRepositoryPort, type MissionRepositoryPort,
   type PlanDecision, type PlanDecisionRepositoryPort, type PlannedTask, type PlannerConfig, type ProfileInput,
@@ -66,6 +66,26 @@ export interface PlannerDeps {
   readonly members?: MemberRepositoryPort;
   /** The outcome fold routes models and adds approvals (#53 §6.2, §5.3). Optional for older harnesses. */
   readonly outcomes?: OutcomeRepositoryPort;
+}
+
+/**
+ * `planner.yaml`'s `stepSkills` (#131): each agent step that names no skill of
+ * its own runs the first rule's skill whose class matches and whose `when`
+ * holds. A workflow step's own `runSkill` wins.
+ */
+export function withStepSkills(
+  plan: MissionPlan, planner: PlannerConfig, facts: Parameters<typeof evaluateGate>[1], predicates: Parameters<typeof evaluateGate>[2],
+): MissionPlan {
+  if (planner.stepSkills.length === 0) return plan;
+  return {
+    ...plan,
+    tasks: plan.tasks.map((task) => {
+      if ((task.runSkill ?? null) !== null || (task.executor ?? 'agent') !== 'agent') return task;
+      const cls = stepClassFor(task);
+      const rule = planner.stepSkills.find((r) => r.class === cls && (r.when === undefined || evaluateGate(r.when, facts, predicates).passed));
+      return rule === undefined ? task : { ...task, runSkill: { name: rule.skill, args: rule.args } };
+    }),
+  };
 }
 
 /** How far back routing stats look. */
@@ -178,7 +198,7 @@ export class PlannerService {
       });
       input = { ...input, tiebreak: ran.answer, tiebreakFailed: ran.answer === null ? ran.error : null };
       profile = profileTask(input, config.planner);
-      tiebreak = { reason, model: ran.model, costUsd: ran.costUsd, answer: ran.answer, error: ran.error };
+      tiebreak = { reason, model: ran.model, costUsd: ran.costUsd, answer: ran.answer, error: ran.error, ...(ran.rawReply === null ? {} : { rawReply: ran.rawReply }) };
       if (ran.error !== null) this.deps.recorder.note(scope, `Couldn't tell what kind of task this is, and the quick check ${ran.error}; planning with careful defaults.`, 'warn');
     }
 
@@ -485,7 +505,7 @@ export class PlannerService {
     for (;;) {
       const applied = applyModules(plan, modules, facts, predicates);
       dropped.push(...applied.dropped.filter((d) => !dropped.some((x) => x.name === d.name)));
-      const withSkills = this.#areaSkills(applied.plan, profile, planner, ctx, dropped);
+      const withSkills = withStepSkills(this.#areaSkills(applied.plan, profile, planner, ctx, dropped), planner, facts, predicates);
       const routed = routePlan(withSkills, { profile, lane, routing: config.routing, stats, holdApproval: planner.holdApproval });
       const issues = this.#validate(routed, ctx);
       if (issues === null) return { plan: routed, applied: [...applied.applied], dropped };

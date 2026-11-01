@@ -208,6 +208,11 @@ function sharedFlags(request: RunRequest, interactive = false): string[] {
   // the role's instructions. Project and local settings - the repository's own
   // .claude - still apply. Verified against Claude Code 2.1.269.
   if (settings['userSettings'] !== 'inherit') args.push('--setting-sources', 'project,local');
+  // The one plugin a step's skill comes from (#131), whether or not the
+  // person's own settings are let in: naming it in a factory rule is the team
+  // asking for it, and nothing else of theirs comes with it. Loaded twice (also
+  // enabled in their settings) it is still one plugin. Verified on 2.1.316.
+  for (const dir of request.skill?.pluginDirs ?? []) args.push('--plugin-dir', dir);
 
   const allowed = [...new Set([
     ...allowedToolRules(request.grants, settings, mode),
@@ -265,20 +270,33 @@ function sharedFlags(request: RunRequest, interactive = false): string[] {
  * without spawning anything.
  */
 export function buildInvocation(request: RunRequest, resumeSessionRef: string | null): ClaudeInvocation {
-  const viaStdin = request.prompt.length > MAX_PROMPT_ARG_CHARS;
+  const prompt = resumeSessionRef === null ? skillPrompt(request) : request.prompt;
+  const viaStdin = prompt.length > MAX_PROMPT_ARG_CHARS;
 
   // The prompt sits immediately after `-p`. It cannot be appended at the end:
   // `--allowed-tools`/`--disallowed-tools`/`--add-dir` are variadic, so a
   // trailing positional is silently absorbed as one more of their values and
   // the CLI then exits complaining that no prompt was given.
-  const args: string[] = viaStdin ? ['-p'] : ['-p', request.prompt];
+  const args: string[] = viaStdin ? ['-p'] : ['-p', prompt];
   args.push('--output-format', 'stream-json', '--verbose');
   args.push(...sharedFlags(request));
 
   if (resumeSessionRef !== null) args.push('--resume', resumeSessionRef);
   args.push(...stringList(request.profile.args));
 
-  return { args, stdin: viaStdin ? request.prompt : null };
+  return { args, stdin: viaStdin ? prompt : null };
+}
+
+/**
+ * A fresh run of a step that runs a skill (#131) starts with the slash
+ * command: Claude Code expands the skill and hands it everything after its
+ * name - the arguments, then the step's context - as its input. A resumed
+ * session already has the skill, so it is not sent again.
+ */
+export function skillPrompt(request: Pick<RunRequest, 'prompt' | 'skill'>): string {
+  if (request.skill === undefined) return request.prompt;
+  const command = `/${request.skill.name}${request.skill.args === '' ? '' : ` ${request.skill.args}`}`;
+  return `${command}\n\n${request.prompt}`;
 }
 
 /**

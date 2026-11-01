@@ -131,6 +131,66 @@ them and tells it not to run the full suite itself.
 A project file `.tandemise/workflows/<id>.yaml` with a lane's id
 (`quick`, `standard`, `careful`, `fix`, `fix-careful`) replaces that lane.
 
+### Your team's own skills as steps
+
+A team that already has its process in Claude Code skills (usually a plugin
+everyone installs: one skill builds a feature, one fixes a bug, one reviews a
+pull request) can have the factory's steps run them instead of the role's
+prompt (#131):
+
+```yaml
+stepSkills:                 # first match per step class
+  - class: implement
+    when: 'profile.type == "fix"'
+    skill: team:fix-bug
+    args: '{{item.key}}'
+  - class: implement
+    skill: team:build-feature
+    args: '{{item.key}}'
+  - class: review
+    skill: team:review-pr
+```
+
+A workflow step can say it for itself, and wins over `stepSkills`:
+`runSkill: { name: team:build-feature, args: '{{item.key}}' }`.
+
+- **The name** is how Claude Code invokes it: `plugin:skill`, or a plain name
+  for a skill in the repository's `.claude/skills` (or pinned to the step from
+  the skills library). In `args`, `{{item.key}}`, `{{item.url}}` and
+  `{{item.title}}` are the tracker item the mission came from (empty without
+  one) and `{{mission.title}}` the mission's title.
+- **The run** starts with the slash command, `/team:build-feature KEY-12`,
+  and the step's usual context follows as the skill's input: its objective,
+  Done-when lines, the outputs to write and where, the checks Tandemise runs
+  after. The role's instructions are replaced by a short note saying the
+  skill drives and what Tandemise owns.
+- **Gates and outputs are unchanged.** The step keeps its class, outputs and
+  gate; Tandemise commits, harvests, runs the checks and judges the gate as
+  for any step. A skill that skips the outputs fails the gate and is retried.
+- **Tandemise ships.** The skill is told to stop before committing, pushing,
+  opening the pull request or moving the tracker item. A worker's shell can't
+  open a pull request anyway (see below), so nothing happens twice.
+- **Where the skill comes from.** Only Claude Code runs a skill as a step.
+  A plugin's skill must be installed in the profile's config folder (its
+  Config directory, else the daemon's `CLAUDE_CONFIG_DIR` or `~/.claude`);
+  the run loads that one plugin with `--plugin-dir`. With **Your Claude
+  settings: Keep them out of workers** (the default) nothing else of yours
+  comes with it, and a personal skill (`~/.claude/skills`) is refused: import
+  it into the library and pin it to the step, or choose **Let workers load
+  them**.
+- **A skill the worker doesn't have stops the step**, with the reason on its
+  card and an Inbox card "‘Implement’ needs a skill that isn’t installed"
+  (Retry, Leave blocked). It never falls back to the role's prompt. It is
+  checked before the run (no attempt spent), and again when the session
+  starts: if Claude Code's own list of loaded skills doesn't have it, the run
+  is stopped at once and the attempt given back.
+
+The step's card shows "Runs /team:build-feature" and its log says where the
+skill came from. A hold opens the step's session as it is; a skill the session
+didn't start with isn't added by the hold. A repository's own gate
+definitions are not read: checks stay the repository's commands narrowed by
+`areas`. Design: `docs/superpowers/specs/2026-11-01-repo-skills-as-steps-design.md`.
+
 ## `routing.yaml`
 
 ```yaml

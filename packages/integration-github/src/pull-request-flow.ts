@@ -222,8 +222,10 @@ export class GhPullRequestFlow implements PullRequestPort {
   }
 
   async repoSettings(cwd: string, repo: string): Promise<{ allowAutoMerge: boolean }> {
-    const view = await ghJson(this.#ctx(cwd), ['repo', 'view', repo, '--json', 'autoMergeAllowed'], z.object({ autoMergeAllowed: z.boolean().optional() }));
-    return { allowAutoMerge: view.autoMergeAllowed === true };
+    // The REST field, not `gh repo view --json autoMergeAllowed`: that JSON field is not in
+    // every gh release (2.103 refuses it), and a refused read must never stop an approved merge.
+    const view = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}`], z.object({ allow_auto_merge: z.boolean().optional() }).passthrough());
+    return { allowAutoMerge: view.allow_auto_merge === true };
   }
 
   async commits(cwd: string, repo: string, branch: string, sinceIso: string): Promise<readonly { sha: string; subject: string }[]> {

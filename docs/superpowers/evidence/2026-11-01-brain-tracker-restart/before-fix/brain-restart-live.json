@@ -1,0 +1,124 @@
+{
+  "when": "2026-11-01T10:40:27.793Z",
+  "build": "f2903b0",
+  "results": [
+    {
+      "label": "the project has a tracker of its own first",
+      "ok": true,
+      "observed": {
+        "status": 200,
+        "body": {
+          "origin": "local",
+          "editable": true,
+          "tracker": {
+            "kind": "github-issues",
+            "repo": "acme/app",
+            "board": "is:open",
+            "states": {
+              "ready": [
+                "open"
+              ],
+              "in_progress": "in progress",
+              "done": [
+                "closed"
+              ],
+              "wont_do": []
+            },
+            "onComplete": "done"
+          },
+          "sources": [],
+          "dailyCap": 20,
+          "similarity": {
+            "link": 0.85,
+            "ask": 0.55
+          },
+          "enabled": {},
+          "originMismatch": {
+            "tracker": null,
+            "sources": {}
+          }
+        }
+      }
+    },
+    {
+      "label": "the project is linked to a brain on this machine",
+      "ok": true,
+      "observed": "local_only"
+    },
+    {
+      "label": "before the restart, intake reads the tracker from the brain",
+      "ok": true,
+      "observed": {
+        "origin": "brain",
+        "editable": false,
+        "tracker": {
+          "kind": "github-issues",
+          "repo": "acme/app",
+          "board": "is:open",
+          "states": {
+            "ready": [
+              "open"
+            ],
+            "in_progress": "in progress",
+            "done": [
+              "closed"
+            ],
+            "wont_do": []
+          },
+          "onComplete": "done"
+        },
+        "sources": [],
+        "dailyCap": 20,
+        "similarity": {
+          "link": 0.85,
+          "ask": 0.55
+        },
+        "enabled": {},
+        "originMismatch": {
+          "tracker": null,
+          "sources": {}
+        }
+      }
+    },
+    {
+      "label": "the daemon restarted",
+      "ok": true,
+      "observed": "http://127.0.0.1:36833"
+    },
+    {
+      "label": "…with the brain where it was",
+      "ok": true,
+      "observed": "b50c242de29f0e12e5a3a0f97021d313a5c79763"
+    },
+    {
+      "label": "after the restart the Board does not ask for a tracker",
+      "ok": false,
+      "observed": "Connected to the daemon.\nSkip to main content\nTandemise\nBrain tracker\n1 repository\nHome\nBoard\nMissions\nInbox\nArtifacts\nBRAIN TRACKER\nRepositories\nBrain\nTeam\nSkills\nEvals\nRuntimes\nIntegrations\nAPP\nSettings\nDaemon connected · 36833\nBoard\nThe work in your tracker. Start an item to make it a mission.\nBoard\n0\nIntake\n0\nSet this project's tracker first.\n\nYour board is your tracker's own list of work. Tandemise files what comes in there, once, and you start items from here.\n\nOpen Settings → Intake"
+    },
+    {
+      "label": "…and lists the item from the brain's tracker",
+      "ok": false,
+      "observed": "Connected to the daemon.\nSkip to main content\nTandemise\nBrain tracker\n1 repository\nHome\nBoard\nMissions\nInbox\nArtifacts\nBRAIN TRACKER\nRepositories\nBrain\nTeam\nSkills\nEvals\nRuntimes\nIntegrations\nAPP\nSettings\nDaemon connected · 36833\nBoard\nThe work in your tracker. Start an item to make it a mission.\nBoard\n0\nIntake\n0\nSet this project's tracker first.\n\nYour board is your tracker's own list of work. Tandemise files what comes in there, once, and you start items from here.\n\nOpen Settings → Intake"
+    },
+    {
+      "label": "intake config after the restart has the tracker",
+      "ok": false,
+      "observed": {
+        "origin": "brain",
+        "editable": false,
+        "tracker": null,
+        "sources": [],
+        "dailyCap": 20,
+        "similarity": {
+          "link": 0.85,
+          "ask": 0.55
+        },
+        "enabled": {},
+        "originMismatch": {
+          "tracker": null,
+          "sources": {}
+        }
+      }
+    }
+  ]
+}

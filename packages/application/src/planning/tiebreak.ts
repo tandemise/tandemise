@@ -27,6 +27,69 @@ const answerSchema = z.object({
   why: z.string().trim().min(1).max(400),
 });
 
+/** How much of an unusable reply the plan decision keeps, so the failure can be diagnosed. */
+export const RAW_REPLY_LIMIT = 500;
+
+/** Where the balanced `{...}` opening at `start` ends, or -1. Braces in JSON strings don't count. */
+function balancedEnd(text: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+    } else if (c === '"') inString = true;
+    else if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * The JSON objects in a reply, in order, as `{ text, value }` (`value` is
+ * undefined when the balanced span isn't JSON). A brace that doesn't open a
+ * readable object (prose like `{areas}`, or an unclosed `{`) is skipped and
+ * the scan goes on from the next one, so prose around the answer can't hide
+ * it. Text in a code fence is scanned like any other.
+ */
+export function jsonObjectCandidates(text: string): { readonly text: string; readonly value: unknown }[] {
+  const out: { text: string; value: unknown }[] = [];
+  let i = text.indexOf('{');
+  while (i !== -1) {
+    const end = balancedEnd(text, i);
+    if (end !== -1) {
+      const span = text.slice(i, end + 1);
+      try {
+        out.push({ text: span, value: JSON.parse(span) as unknown });
+        i = text.indexOf('{', end + 1);
+        continue;
+      } catch {
+        out.push({ text: span, value: undefined });
+      }
+    }
+    i = text.indexOf('{', i + 1);
+  }
+  return out;
+}
+
+/** The first object that passes `answerSchema`, or why none did. */
+function pickAnswer(text: string): { answer: z.infer<typeof answerSchema>; error: null } | { answer: null; error: string } {
+  const candidates = jsonObjectCandidates(text);
+  if (candidates.length === 0) return { answer: null, error: 'it did not answer with JSON' };
+  let invalid: string | null = null;
+  for (const { value } of candidates) {
+    if (value === undefined) continue;
+    const parsed = answerSchema.safeParse(value);
+    if (parsed.success) return { answer: parsed.data, error: null };
+    // An object that fails the schema says more than a span that won't parse.
+    invalid ??= `its answer was not valid (${parsed.error.issues[0]?.message ?? 'invalid'})`;
+  }
+  return { answer: null, error: invalid ?? 'its JSON could not be read' };
+}
+
 export function tiebreakPrompt(input: ProfileInput, areaNames: readonly string[], repoNames: readonly string[]): string {
   return [
     'Classify one software task. Answer with only a JSON object, no prose:',
@@ -46,26 +109,26 @@ export async function runTiebreak(
   input: ProfileInput,
   runner: TiebreakRunnerPort,
   ctx: { readonly model: string | null; readonly areaNames: readonly string[]; readonly repoNames: readonly string[]; readonly workspaceId?: string },
-): Promise<{ answer: TiebreakAnswer | null; error: string | null; costUsd: number | null; model: string | null }> {
+): Promise<{ answer: TiebreakAnswer | null; error: string | null; costUsd: number | null; model: string | null; rawReply: string | null }> {
   try {
     const reply = await runner.run({
       prompt: tiebreakPrompt(input, ctx.areaNames, ctx.repoNames), model: ctx.model, signal: AbortSignal.timeout(TIEBREAK_TIMEOUT_MS),
       ...(ctx.workspaceId === undefined ? {} : { workspaceId: ctx.workspaceId }),
     });
-    const json = /\{[\s\S]*\}/.exec(reply.text)?.[0];
-    if (json === undefined) return { answer: null, error: 'it did not answer with JSON', costUsd: reply.costUsd, model: reply.model };
-    let raw: unknown;
-    try { raw = JSON.parse(json); } catch { return { answer: null, error: 'its JSON could not be read', costUsd: reply.costUsd, model: reply.model }; }
-    const parsed = answerSchema.safeParse(raw);
-    if (!parsed.success) return { answer: null, error: `its answer was not valid (${parsed.error.issues[0]?.message ?? 'invalid'})`, costUsd: reply.costUsd, model: reply.model };
+    const picked = pickAnswer(reply.text);
+    if (picked.answer === null) {
+      return { answer: null, error: picked.error, costUsd: reply.costUsd, model: reply.model, rawReply: reply.text.slice(0, RAW_REPLY_LIMIT) };
+    }
+    const answer = picked.answer;
     const known = new Set(ctx.areaNames.map((a) => a.toLowerCase()));
     return {
-      answer: { ...parsed.data, areas: parsed.data.areas.filter((a) => known.has(a.toLowerCase())) },
+      answer: { ...answer, areas: answer.areas.filter((a) => known.has(a.toLowerCase())) },
       error: null,
       costUsd: reply.costUsd,
       model: reply.model,
+      rawReply: null,
     };
   } catch (e) {
-    return { answer: null, error: `it failed (${errorMessage(e)})`, costUsd: null, model: ctx.model };
+    return { answer: null, error: `it failed (${errorMessage(e)})`, costUsd: null, model: ctx.model, rawReply: null };
   }
 }

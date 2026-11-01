@@ -26,7 +26,7 @@
 //   gh pr merge N --repo o/r --squash|--merge|--rebase --match-head-commit SHA [--auto] --subject S --body B
 //   gh pr update-branch N --repo o/r
 //   gh pr checks B|N [--required] [--repo o/r]   (a plan's CI wait step, with gh's exit codes)
-//   gh repo view o/r --json autoMergeAllowed
+//   gh api repos/o/r                       (allow_auto_merge; `repo view --json autoMergeAllowed` fails, as in gh 2.103)
 //   gh api repos/o/r/commits/SHA/check-runs
 //   gh api repos/o/r/branches/B/protection
 //   gh api repos/o/r/commits?sha=B&since=…
@@ -35,7 +35,7 @@
 //
 //   gh issue create --repo o/r --title T --body B [--label L]…   (prints the URL)
 //   gh issue list --repo o/r --search Q --state open|closed|all --limit N --json …
-//   gh issue edit N --repo o/r [--add-label L]… [--remove-label L]… [--add-assignee x]
+//   gh issue edit N --repo o/r [--add-label L]… [--remove-label L]… [--add-assignee x] [--body B]
 //   gh issue reopen N --repo o/r
 //   gh search issues "<text>" --repo o/r [--state open|closed] --limit N --json …
 //   gh label list --repo o/r --limit N --json name
@@ -232,8 +232,9 @@ function main(argv) {
   const [group, verb] = args;
   if (group === 'pr') { prCommand(dir, state, args, out); return; }
   if (group === 'repo' && verb === 'view') {
-    const r = repoOf(args[2]);
-    out({ autoMergeAllowed: r.autoMergeAllowed === true });
+    // Like gh 2.103: `autoMergeAllowed` is not a JSON field `repo view` knows.
+    if (args.includes('autoMergeAllowed')) fail('Unknown JSON field: "autoMergeAllowed"');
+    out({ name: args[2] });
     return;
   }
   if (group === 'auth' && verb === 'status') { process.stderr.write(`Logged in to github.com account ${state.login}\n`); return; }
@@ -297,6 +298,8 @@ function main(argv) {
       issue.labels = kept;
       const assignees = flags(args, '--add-assignee');
       if (assignees.length > 0) issue.assignees = [...(issue.assignees ?? []), ...assignees.map((login) => ({ login }))];
+      const body = flag(args, '--body');
+      if (body !== undefined) issue.body = body;
       issue.updatedAt = new Date().toISOString();
       writeState(dir, state);
       process.stdout.write(`${issue.url}\n`);
@@ -345,6 +348,8 @@ function main(argv) {
     const body = rest.find((a, i) => rest[i - 1] === '-f' && a.startsWith('body='))?.slice('body='.length);
     if (endpoint === 'user') { out({ login: state.login }); return; }
     const path = (endpoint ?? '').split('?')[0];
+    const repoRead = /^repos\/([^/]+\/[^/]+)$/.exec(path);
+    if (repoRead && method === 'GET') { out({ full_name: repoRead[1], allow_auto_merge: repoOf(repoRead[1]).autoMergeAllowed === true }); return; }
     let c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]+)\/check-runs$/.exec(path);
     if (c) {
       // A repository's `defaultChecks` stand for every commit that has none of its own;

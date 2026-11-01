@@ -1,0 +1,176 @@
+{
+  "id": "I15",
+  "title": "Refine a tracker Draft from the Board, write it back as ready, then Start it",
+  "ok": true,
+  "checks": [
+    {
+      "label": "Settings → Intake has a Draft field beside the other states",
+      "ok": true
+    },
+    {
+      "label": "proof (API): the tracker maps Draft after Save tracker",
+      "ok": true,
+      "observed": {
+        "ready": [
+          "Open",
+          "Submitted"
+        ],
+        "in_progress": "In Progress",
+        "in_review": "In Review",
+        "done": [
+          "Fixed",
+          "Done"
+        ],
+        "wont_do": [
+          "Won't fix",
+          "Duplicate",
+          "Obsolete"
+        ],
+        "draft": [
+          "Draft"
+        ]
+      }
+    },
+    {
+      "label": "the Board shows a Draft group with GAR-50, offering Refine and no Start",
+      "ok": true,
+      "observed": {
+        "heading": "Draft\n1",
+        "label": "Draft",
+        "buttons": [
+          "GAR-50",
+          "Refine\nGAR-50"
+        ]
+      }
+    },
+    {
+      "label": "Refine opens a draft mission linked to the item",
+      "ok": true,
+      "observed": {
+        "status": "DRAFT",
+        "title": "Greet visitors by name"
+      }
+    },
+    {
+      "label": "the scripted product agent proposed Done-when lines and asked a question",
+      "ok": true,
+      "observed": {
+        "criteria": [
+          [
+            "P1",
+            "proposed"
+          ],
+          [
+            "P2",
+            "proposed"
+          ],
+          [
+            "P3",
+            "proposed"
+          ]
+        ],
+        "questions": [
+          [
+            "Q1",
+            "open"
+          ]
+        ]
+      }
+    },
+    {
+      "label": "proof (fake YouTrack): Refine wrote nothing; the item is still Draft with no comment",
+      "ok": true,
+      "observed": {
+        "writes": [],
+        "state": "Draft"
+      }
+    },
+    {
+      "label": "two accepted, one rejected, the question answered: ready",
+      "ok": true,
+      "observed": {
+        "ready": true,
+        "criteria": 2,
+        "openQuestions": 0,
+        "proposedPending": 0,
+        "label": "Plan",
+        "detail": "All gate conditions met."
+      }
+    },
+    {
+      "label": "proof (fake YouTrack): still nothing written while the person decided",
+      "ok": true
+    },
+    {
+      "label": "the card says it is ready to write, with Open refinement and the write button",
+      "ok": true,
+      "observed": "GAR-50\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 2 Done-when lines.\nOpen refinement\nfor GAR-50\nWrite to YouTrack and mark ready\nGAR-50"
+    },
+    {
+      "label": "…and the write button is enabled",
+      "ok": true
+    },
+    {
+      "label": "proof (fake YouTrack): the description keeps its text and gains the Done-when and Decisions sections",
+      "ok": true,
+      "observed": "Visitors see a generic page. Make it feel personal.\n\n## Done when\n- [ ] Visiting the home page shows \"Hello, <name>\" for a signed-in visitor\n- [ ] A visitor who is not signed in sees \"Hello, friend\" instead of an empty name\n\n## Decisions\n- Which pages should greet the visitor by name? — Only the home page"
+    },
+    {
+      "label": "proof (fake YouTrack): GAR-50 moved from Draft to Open",
+      "ok": true,
+      "observed": "Open"
+    },
+    {
+      "label": "proof (fake YouTrack): the activity comment says who refined it and what was written",
+      "ok": true,
+      "observed": [
+        "<!-- tandemise:activity -->\n\nRefined in Tandemise by Demostenes Garcia: 2 Done-when lines, 1 answered question. Moved from Draft to Open."
+      ]
+    },
+    {
+      "label": "GAR-50 is in Ready with Start offered",
+      "ok": true,
+      "observed": {
+        "text": "GAR-50\nGreet visitors by name\nMission: Draft\nStart",
+        "start": true
+      }
+    },
+    {
+      "label": "Start opens the same mission, not a second one",
+      "ok": true,
+      "observed": "#/missions/msn_01m6b64r47gank10k2zz"
+    },
+    {
+      "label": "proof (fake YouTrack): Start moved GAR-50 to In Progress",
+      "ok": true,
+      "observed": "In Progress"
+    },
+    {
+      "label": "proof (API): the refined mission left draft for planning",
+      "ok": true,
+      "observed": "PLANNING"
+    },
+    {
+      "label": "proof (fake YouTrack): one activity comment, the refined line on top of Started",
+      "ok": true,
+      "observed": [
+        "<!-- tandemise:activity -->\n\nRefined in Tandemise by Demostenes Garcia: 2 Done-when lines, 1 answered question. Moved from Draft to Open.\n\nStarted in Tandemise by Demostenes Garcia: Greet visitors by name."
+      ]
+    },
+    {
+      "label": "proof (SQL): one mission for the item",
+      "ok": true,
+      "observed": 1
+    }
+  ],
+  "notes": [
+    "mission msn_01m6b64r47gank10k2zz"
+  ],
+  "shots": [
+    "I15-draft-group.png",
+    "I15-decided-on-mission.png",
+    "I15-ready-to-write.png",
+    "I15-ready-with-start.png",
+    "I15-started.png"
+  ]
+}
