@@ -1,7 +1,7 @@
 {
   "name": "tandemise",
   "private": true,
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "A local-first operating system for running a software company with interchangeable AI workers.",
   "license": "Apache-2.0",
   "repository": {
