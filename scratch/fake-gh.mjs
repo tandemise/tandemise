@@ -30,6 +30,9 @@
 //   gh api repos/o/r/commits/SHA/check-runs
 //   gh api repos/o/r/branches/B/protection
 //   gh api repos/o/r/commits?sha=B&since=…
+//   gh api repos/o/r/commits/SHA                      (its parent: `parents` in the state, else git's)
+//   gh api repos/o/r/actions/runs?head_sha=SHA        (`workflowRuns` in the state, by sha)
+//   gh api repos/o/r/actions/runs/ID/jobs
 //
 // and, for intake's GitHub Issues tracker (intake plan Task 5):
 //
@@ -184,6 +187,17 @@ function setChecksUnlocked(dir, repo, sha, checks) {
   writeState(dir, state);
 }
 
+/**
+ * The GitHub Actions workflow runs on a commit:
+ * `[{ id, name, path, event, head_branch, status, conclusion, html_url, jobs: [{ name, status, conclusion, html_url }] }]`.
+ */
+function setRunsUnlocked(dir, repo, sha, runs) {
+  const state = readState(dir);
+  const r = (state.repos[repo] ??= { issues: [], comments: {} });
+  (r.workflowRuns ??= {})[sha] = runs;
+  writeState(dir, state);
+}
+
 function setRepoUnlocked(dir, repo, patch) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
@@ -196,6 +210,7 @@ export const patchIssue = locked(patchIssueUnlocked);
 export const addComment = locked(addCommentUnlocked);
 export const putPullRequest = locked(putPullRequestUnlocked);
 export const setChecks = locked(setChecksUnlocked);
+export const setRuns = locked(setRunsUnlocked);
 export const setRepo = locked(setRepoUnlocked);
 export const putLabels = locked(putLabelsUnlocked);
 
@@ -416,6 +431,32 @@ function main(argv) {
       out({ total_count: runs.length, check_runs: slice.map((k, i) => ({ id: k.id ?? (page - 1) * per + i + 1, started_at: k.startedAt ?? null, app: { id: k.appId ?? 15368, slug: k.app ?? 'github-actions' }, name: k.name, status: k.status ?? 'completed', conclusion: k.conclusion ?? null, details_url: k.link ?? null, output: { summary: null, text: k.logTail ?? null } })) });
       return;
     }
+    // GitHub Actions: a commit's workflow runs (`workflowRuns` per sha), their jobs, and a commit's parent.
+    c = /^repos\/([^/]+\/[^/]+)\/actions\/runs$/.exec(path);
+    if (c) {
+      const sha = new URLSearchParams((endpoint ?? '').split('?')[1] ?? '').get('head_sha');
+      const runs = (repoOf(c[1]).workflowRuns ?? {})[sha] ?? [];
+      out({ total_count: runs.length, workflow_runs: runs.map(({ jobs, ...run }) => run) });
+      return;
+    }
+    c = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)\/jobs$/.exec(path);
+    if (c) {
+      const run = Object.values(repoOf(c[1]).workflowRuns ?? {}).flat().find((x) => String(x.id) === c[2]);
+      out({ total_count: run?.jobs?.length ?? 0, jobs: run?.jobs ?? [] });
+      return;
+    }
+    c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]{7,40})$/.exec(path);
+    if (c) {
+      let parent = (repoOf(c[1]).parents ?? {})[c[2]];
+      if (parent === undefined) {
+        try {
+          execFileSync('git', ['fetch', '-q', 'origin'], { stdio: 'ignore' });
+          parent = execFileSync('git', ['rev-parse', `${c[2]}^`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        } catch { parent = null; }
+      }
+      out({ sha: c[2], parents: parent === null ? [] : [{ sha: parent }] });
+      return;
+    }
     c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]+)\/check-suites$/.exec(path);
     if (c) {
       // `defaultSuites` stand for every commit with none of its own: a workflow queued that hasn't created its runs.
@@ -497,6 +538,15 @@ function prCommand(dir, state, args, out) {
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   const prs = (r.prs ??= []);
   const save = () => writeState(dir, state);
+  // `followPushes`: an open pull request's head is wherever its branch is on `origin` now, as on GitHub.
+  if (r.followPushes) {
+    for (const p of prs.filter((x) => x.state === 'OPEN')) {
+      try {
+        const sha = execFileSync('git', ['ls-remote', 'origin', `refs/heads/${p.headRefName}`], { encoding: 'utf8' }).trim().split(/\s+/)[0];
+        if (/^[0-9a-f]{40}$/.test(sha ?? '') && sha !== p.headRefOid) { p.headRefOid = sha; save(); }
+      } catch { /* not a branch here */ }
+    }
+  }
   if (verb === 'list') {
     const head = flag(args, '--head');
     out(prs.filter((p) => head === undefined || p.headRefName === head).map((p) => pick(p, flag(args, '--json'))));

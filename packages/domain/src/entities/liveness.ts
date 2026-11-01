@@ -137,7 +137,9 @@ export type StalledAction =
   | { readonly kind: 'retry'; readonly label: string; readonly taskId: string; readonly taskKey: string }
   | { readonly kind: 'replan'; readonly label: 'Re-plan'; readonly taskId: null; readonly taskKey: null }
   | { readonly kind: 'refine'; readonly label: 'Refine'; readonly taskId: null; readonly taskKey: null }
-  | { readonly kind: 'cancel'; readonly label: 'Cancel mission'; readonly taskId: null; readonly taskKey: null };
+  | { readonly kind: 'cancel'; readonly label: 'Cancel mission'; readonly taskId: null; readonly taskKey: null }
+  /** The tracker refused Start's move to in progress (#187): try it again now. */
+  | { readonly kind: 'tracker-move'; readonly label: 'Try the move again'; readonly taskId: null; readonly taskKey: null; readonly itemKey: string };
 
 export interface LivenessVerdict {
   readonly kind: LivenessKind;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PullRequestChecks, PullRequestPort, PullRequestRef } from '@tandemise/domain';
+import type { PullRequestChecks, PullRequestPort, PullRequestRef, WorkflowRunSummary } from '@tandemise/domain';
 import type { CommandExecutor } from '@tandemise/integrations-core';
 import { TandemiseError } from '@tandemise/shared';
 import { gh, ghJson, type GhContext } from './gh.js';
@@ -138,7 +138,42 @@ export class GhPullRequestFlow implements PullRequestPort {
     const state: PullRequestChecks['state'] = total === 0 && waitingSuites === 0 ? 'NONE'
       : failing.length > 0 ? 'FAIL'
         : finished < total || waitingSuites > 0 ? 'PENDING' : 'PASS';
-    return { state, done: finished, total: total + waitingSuites, registered: total, failing };
+    const runs = all.map((r) => ({
+      name: r.name,
+      passed: r.status.toLowerCase() !== 'completed' ? null : ['success', 'neutral', 'skipped'].includes((r.conclusion ?? '').toLowerCase()),
+      link: r.details_url ?? null,
+    }));
+    return { state, done: finished, total: total + waitingSuites, registered: total, failing, runs };
+  }
+
+  /** The Actions workflow runs on one commit, each with its jobs (#186). A run whose jobs can't be read keeps none. */
+  async workflowRuns(cwd: string, repo: string, sha: string): Promise<readonly WorkflowRunSummary[]> {
+    const res = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/actions/runs?head_sha=${sha}&per_page=100`], z.object({
+      workflow_runs: z.array(z.object({
+        id: z.number(), name: z.string().nullable().optional(), path: z.string().nullable().optional(), event: z.string(),
+        head_branch: z.string().nullable().optional(), status: z.string().nullable().optional(), conclusion: z.string().nullable().optional(),
+        html_url: z.string().nullable().optional(),
+      }).passthrough()).optional(),
+    }));
+    const passedOf = (status: string | null | undefined, conclusion: string | null | undefined): boolean | null =>
+      (status ?? '').toLowerCase() !== 'completed' ? null : ['success', 'neutral', 'skipped'].includes((conclusion ?? '').toLowerCase());
+    const out: WorkflowRunSummary[] = [];
+    for (const run of res.workflow_runs ?? []) {
+      const jobs = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`], z.object({
+        jobs: z.array(z.object({ name: z.string(), status: z.string().nullable().optional(), conclusion: z.string().nullable().optional(), html_url: z.string().nullable().optional() }).passthrough()).optional(),
+      })).catch(() => ({ jobs: [] }));
+      out.push({
+        id: run.id, workflow: run.name ?? run.path ?? `run ${run.id}`, path: run.path ?? '', event: run.event, headBranch: run.head_branch ?? null,
+        passed: passedOf(run.status, run.conclusion), link: run.html_url ?? null,
+        jobs: (jobs.jobs ?? []).map((j) => ({ name: j.name, passed: passedOf(j.status, j.conclusion), link: j.html_url ?? null })),
+      });
+    }
+    return out;
+  }
+
+  async parentOf(cwd: string, repo: string, sha: string): Promise<string | null> {
+    const res = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/commits/${sha}`], z.object({ parents: z.array(z.object({ sha: z.string() }).passthrough()).optional() }).passthrough());
+    return res.parents?.[0]?.sha ?? null;
   }
 
   /**

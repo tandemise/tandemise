@@ -161,6 +161,8 @@ section('a fix task clears the failure of the task it remediates');
     mkTask(missionId, 'address_review', { orderHint: 1 }),
   ]);
   changeSet(missionId, broken.id);
+  // A step's own output types count only its own artifacts (#191): the fix task wrote its ChangeSet too.
+  changeSet(missionId, fix.id);
   // The implementer's tests failed and it never ran again - its own latest
   // measurement stays FAIL for good.
   recordCheck(missionId, broken.id, 'checks.tests', 'FAIL', at());
@@ -286,6 +288,7 @@ section('naming the mission repository explicitly is the same scope as leaving i
     mkTask(missionId, 'address_review', { orderHint: 1, repositoryId: repoA }),
   ]);
   changeSet(missionId, implicit.id);
+  changeSet(missionId, explicit.id);
   recordCheck(missionId, implicit.id, 'checks.tests', 'FAIL', at());
   recordCheck(missionId, explicit.id, 'checks.tests', 'PASS', at());
   check('the later measurement wins across the two spellings of one repository',
