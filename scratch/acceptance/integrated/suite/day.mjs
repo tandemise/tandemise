@@ -184,11 +184,9 @@ try {
   const RAN = `${c.env.scratch}/tests-ran.log`;
   const testRuns = () => (existsSync(RAN) ? readFileSync(RAN, 'utf8').split('\n').filter(Boolean).length : 0);
   ev.check('the code change above ran the test suite exactly once (the gate\'s run; nothing ran it twice)', testRuns() === 1, testRuns());
-  const docsPushed = await cli(['intake', 'push', '--source', 'web-form', '--title', DOCS_TITLE, '--url', 'https://forms.example.com/replies/8', '--key', 'form-8', '--description', 'The quickstart should say runtimes are added with Discover runtimes.'], shell);
-  ev.check('a second signal, docs-only, is pushed', docsPushed.code === 0, docsPushed);
-  await openBoard(c, 'intake');
-  const docsFiled = await intakeStatus(c, 'custom:web-form:form-8', (s) => s.startsWith('Filed as'), 'Filed as …');
-  const docsKey = docsFiled.status.slice('Filed as '.length);
+  // Filed in the tracker as Docs, the way a person files a documentation task (a web-form signal is always a Bug).
+  const docsKey = 'GAR-50';
+  await yt.put({ idReadable: docsKey, summary: DOCS_TITLE, description: 'The quickstart should say runtimes are added with Discover runtimes.', type: 'Docs', state: 'Open' });
   await openBoard(c);
   await until(async () => { await page.evaluate(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Check sources now')?.click()`); await sleep(1500); return boardRow(c, docsKey); }, { label: `${docsKey} on the Board`, timeoutMs: 60_000 });
   const before = testRuns();

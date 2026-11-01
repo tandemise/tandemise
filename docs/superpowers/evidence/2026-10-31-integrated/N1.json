@@ -24,7 +24,7 @@
     {
       "label": "Settings → Intake: Make a token shows a tdi_ token",
       "ok": true,
-      "observed": "tdi_mXbt…"
+      "observed": "tdi_F9tL…"
     },
     {
       "label": "Settings → Intake, with a brain: Save token saves this computer's YouTrack token",
@@ -113,17 +113,17 @@
     {
       "label": "Hold opens the terminal panel, \"Held by You\"",
       "ok": true,
-      "observed": "Implement the changeHeld by YouContinueReleaseClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task."
+      "observed": "Implement the changeHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F"
     },
     {
       "label": "what you type reaches the session (it writes notes.txt)",
       "ok": true,
-      "observed": "Fake session sess-day-run_01m68t98638rh78a03tz\nwrite notes.txt\n> write notes.txt\nwrote notes.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-day-run_01m6abh98s812qvfzs8e\nwrite notes.txt\n> write notes.txt\nwrote notes.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "proof (disk): notes.txt is in the step's worktree",
       "ok": true,
-      "observed": "/tmp/tdm-integrated/home/workspaces/ws_01m68t8zb58xm1s25etc/missions/msn_01m68t981zjqwttrz7te/worktrees/typo-in-the-settings-title-implement-dy0tnm9d"
+      "observed": "/tmp/tdm-integrated/home/workspaces/ws_01m6abh0470srs7ezgp9/missions/msn_01m6abh94rff4b005g6s/worktrees/typo-in-the-settings-title-implement-4jpw0smj"
     },
     {
       "label": "Continue: the step finishes on a resumed pass, no attempt spent",
@@ -160,9 +160,9 @@
       "observed": {
         "headline": "Waiting for your review",
         "decision": {
-          "id": "mrg_01m68t9fxghxwvhv0n8s",
+          "id": "mrg_01m6abhgpq9yzhg9myjd",
           "verdict": "ask",
-          "headSha": "ebefff3cc3f30c39e3c57d2cff7279ac8131323a",
+          "headSha": "1b55e69d082ec2975b29ab19bc905117a9ac8af6",
           "scoreLine": "Risk score 4 of 2 allowed",
           "reasons": [
             "Auto-merge is off for this project.",
@@ -176,7 +176,7 @@
           ],
           "wouldHave": "would still ask: score 4 of 2",
           "policyRef": "shipped",
-          "cardId": "apr_01m68t9fyxqtsec3n1jk",
+          "cardId": "apr_01m6abhgr4cfwk1t9ykv",
           "mergedBy": null,
           "mergeSha": null,
           "canRevert": false
@@ -187,7 +187,7 @@
       "label": "fake gh: one `pr create`, and no `pr merge`",
       "ok": true,
       "observed": [
-        "pr create --repo acme/web --head tandemise/typo-in-the-settings-title/typo-in-the-settings-title-implement-dy0tnm9d --base main --title fix: typo in the settings title --body-file -"
+        "pr create --repo acme/web --head tandemise/typo-in-the-settings-title/typo-in-the-settings-title-implement-4jpw0smj --base main --title fix: typo in the settings title --body-file -"
       ]
     },
     {
@@ -195,7 +195,7 @@
       "ok": true,
       "observed": {
         "title": "fix: typo in the settings title",
-        "head": "tandemise/typo-in-the-settings-title/typo-in-the-settings-title-implement-dy0tnm9d",
+        "head": "tandemise/typo-in-the-settings-title/typo-in-the-settings-title-implement-4jpw0smj",
         "files": [
           ".gitignore",
           ".tandemise/workflows/build-only.yaml",
@@ -235,7 +235,7 @@
     {
       "label": "the ship card says \"Waiting for your review\" with Open in GitHub",
       "ok": true,
-      "observed": "Waiting for your review\n\nWaiting for your review: Auto-merge is off for this project.\n\nacme/web #1\nOpen in GitHub\nMerge\nAuto-merge is off for this project.\nThis repository has no CI checks, so Tandemise never merges it on its own.\nRisk score 4 of 2 allowed: no tests changed, no independent review, a person had to step in.\n\nRisk score 4 of 2 allowed: no tests changed (+2), no independent review (+1), a person had to step in (+1)\n\nWhat would have happened with auto-merge on: would still ask: score 4 of 2\n\nChecked ebefff3 · policy shipped"
+      "observed": "Waiting for your review\n\nWaiting for your review: Auto-merge is off for this project.\n\nacme/web #1\nOpen in GitHub\nMerge\nAuto-merge is off for this project.\nThis repository has no CI checks, so Tandemise never merges it on its own.\nRisk score 4 of 2 allowed: no tests changed, no independent review, a person had to step in.\n\nRisk score 4 of 2 allowed: no tests changed (+2), no independent review (+1), a person had to step in (+1)\n\nWhat would have happened with auto-merge on: would still ask: score 4 of 2\n\nChecked 1b55e69 · policy shipped"
     },
     {
       "label": "fake YouTrack: GAR-2 moved to In Review while the pull request waits for you",
@@ -250,33 +250,73 @@
           "id": "4-1",
           "text": "<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: Typo in the settings title.\n\nPlan:\n- [x] Implement the change\n- [ ] Ship — waiting for a person\n\nPull request: https://github.com/acme/web/pull/1",
           "author": "tandemise-bot",
-          "created": 1793444847726
+          "created": 1793496491207
         }
       ]
     },
     {
       "label": "Board: GAR-2 shows its mission",
       "ok": true,
-      "observed": "GAR-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nStart"
+      "observed": "GAR-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nHas a mission\nStart"
     },
     {
       "label": "Home → Who's working on what: GAR-2 (Typo in the settings title), yours",
       "ok": true,
-      "observed": "Who's working on what\nYou\nGAR-2\nTypo in the settings title\nsince 06:07"
+      "observed": "Who's working on what\nYou\nGAR-2\nTypo in the settings title\nsince 20:28"
+    },
+    {
+      "label": "the code change above ran the test suite exactly once (the gate's run; nothing ran it twice)",
+      "ok": true,
+      "observed": 1
+    },
+    {
+      "label": "docs: the factory picks the quick lane (one step, then the pull request)",
+      "ok": true,
+      "observed": [
+        "implement",
+        "ship"
+      ]
+    },
+    {
+      "label": "docs: Start → pull request without a person stepping in",
+      "ok": true,
+      "observed": {
+        "prs": 1,
+        "attempts": 1
+      }
+    },
+    {
+      "label": "docs: the test suite did not run for a docs-only change",
+      "ok": true,
+      "observed": {
+        "before": 1,
+        "after": 1
+      }
+    },
+    {
+      "label": "docs: the tests fact says why it was not run",
+      "ok": true,
+      "observed": "Not run: this change touches only the docs area (1 file), which planner.yaml says needs no such check. CI runs the full suite on the pull request."
+    },
+    {
+      "label": "docs: Start → pull request in 5 s, under the 60 s budget for the fake runtime",
+      "ok": true,
+      "observed": 5023
     }
   ],
   "notes": [
     "setup: the Coding agent (development) runs on a fake runtime that resumes and opens an interactive session on a PTY",
-    "mission msn_01m68t981zjqwttrz7te"
+    "mission msn_01m6abh94rff4b005g6s",
+    "timing: docs-only quick lane, Start → pull request asking for review: 5023 ms"
   ],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-settings-tokens.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-intake-filed.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-board-ready.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-why-these-steps.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-held-terminal.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-ship-card.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-board-after.png",
-    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a9687dc3bcf2b48e5/docs/superpowers/evidence/2026-10-31-integrated/N1-home-who.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-settings-tokens.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-intake-filed.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-board-ready.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-why-these-steps.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-held-terminal.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-ship-card.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-board-after.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-aa41b37440a699a98/docs/superpowers/evidence/2026-10-31-integrated/N1-home-who.png"
   ]
 }

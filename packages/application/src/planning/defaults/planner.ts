@@ -15,7 +15,7 @@ export const SHIPPED_PLANNER = {
     // A change that touches only these files needs no test run, type check,
     // lint or build (#106): CI still runs everything on the pull request.
     {
-      name: 'docs', paths: ['docs/**', '**/*.md', '**/*.mdx', '**/*.txt'], sensitivity: 'none',
+      name: 'docs', paths: ['docs/**', '**/*.md', '**/*.mdx'], sensitivity: 'none',
       checks: { tests: 'none', typecheck: 'none', lint: 'none', build: 'none' },
     },
   ],
