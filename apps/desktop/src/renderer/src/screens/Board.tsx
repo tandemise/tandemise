@@ -192,6 +192,12 @@ function Row({ item, tracker }: { item: BoardItemView; tracker: string }): JSX.E
             </span>
           ) : null}
         </div>
+        {/* The tracker refused Start's move (#187): said here, not only on the mission's timeline. */}
+        {item.moveProblem ? (
+          <Banner tone="warn" live="polite" className="board__move-problem" data-board-move-problem="">
+            {item.moveProblem} Tandemise tries again every minute.
+          </Banner>
+        ) : null}
         {start.isError ? <ErrorState error={start.error} /> : null}
       </div>
       <div className="list__aside">

@@ -700,6 +700,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       readiness: r.resolve(t.READINESS_SERVICE),
       limits: r.resolve(t.LIMIT_SERVICE),
       liveness: r.resolve(t.LIVENESS_SERVICE),
+      // Start moves the tracker refused (#187), resolved per call: the tracker service reads missions through these.
+      trackerStalled: (workspaceId) => r.resolve(it.TRACKER_SERVICE).moveRefusals(workspaceId),
       // Resolved per call: the desk reads the inbox and the backlog, which are built on projections.
       desk: {
         metrics: (workspaceId) => r.resolve(t.DESK_SERVICE).metrics(workspaceId),
@@ -1051,6 +1053,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       gates: r.resolve(t.GATE_SERVICE),
       limits: r.resolve(t.LIMIT_SERVICE),
       liveness: r.resolve(t.LIVENESS_SERVICE),
+      // Start moves the tracker refused (#187), resolved per call: the tracker service reads missions through these.
+      trackerStalled: (workspaceId) => r.resolve(it.TRACKER_SERVICE).moveRefusals(workspaceId),
       readiness: r.resolve(t.READINESS_SERVICE),
       backlog: (workspaceId) => r.resolve(t.BACKLOG_SERVICE).view(workspaceId),
       recorder: r.resolve(t.EVENT_RECORDER),

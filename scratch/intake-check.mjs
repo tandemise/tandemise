@@ -809,7 +809,7 @@ try {
   check('1. a signal over the bar is created as GAR-1', s1.status === 'created' && s1.link?.status === 'done' && s1.link?.itemRef === 'youtrack:GAR-1' && s1.link?.linkedBy === 'created', { status: s1.status, reason: s1.reason, link: s1.link });
   check('…its description has the Sources line', gar1?.description.includes('## Sources\n- Sentry · acme/web · 132 events, 41 users · https://acme.sentry.io/issues/4501234567/'), gar1?.description);
   check('…and who recorded it', gar1?.description.includes('Recorded by Tandemise from Sentry, reported by Sam Ortiz.'), gar1?.description);
-  check('…the type comes from the source (command Type Bug)', fake.commands.some((c) => c.query === 'Type Bug' && c.issues[0].idReadable === 'GAR-1'), fake.commands);
+  check('…the type comes from the source (Type=Bug, set as data)', fake.fieldSets.some((c) => c.issue === 'GAR-1' && c.fields.includes('Type=Bug')), fake.fieldSets);
   check('…copied text never pings anyone (@mentions broken)', gar1?.description.includes('cc @​ana') && !gar1?.description.includes('cc @ana'), gar1?.description);
   check('…and the item is in the board cache', PA.items.byRef(ws, 'youtrack:GAR-1')?.key === 'GAR-1');
 
@@ -1490,13 +1490,13 @@ try {
   const coupon = await tracker.start(WD.caller, ws, 'GAR-3');
   await tracker.settle();
   fakeW.setState('GAR-3', 'Fixed');
-  const commandsBefore = fakeW.commands.length;
+  const commandsBefore = fakeW.fieldSets.length;
   w.complete(coupon.id, (await w.approvePlan(coupon.id))[0].id);
   pipeline.advance(61_000);
   await w.pass();
   pipeline.advance(61_000);
   await w.pass();
-  const gar3Moves = fakeW.commands.slice(commandsBefore).filter((c) => c.issues.some((i) => i.idReadable === 'GAR-3'));
+  const gar3Moves = fakeW.fieldSets.slice(commandsBefore).filter((c) => c.issue === 'GAR-3' && c.fields.some((f) => f.startsWith('State=')));
   check("a person's 'Fixed' before COMPLETE: Tandemise writes no transition", fakeW.issues.get('GAR-3')?.state === 'Fixed' && gar3Moves.length === 0, { state: fakeW.issues.get('GAR-3')?.state, gar3Moves });
   check('…but the comment still follows the mission', activity('GAR-3')[0]?.text.includes('Done in Tandemise — ') === true, activity('GAR-3'));
 
