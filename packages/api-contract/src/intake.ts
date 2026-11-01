@@ -425,7 +425,17 @@ export interface BoardItemView {
   readonly state: string;
   readonly assignee: string | null;
   readonly sources: readonly { readonly label: string; readonly detail: string }[];
-  readonly mission: { readonly id: string; readonly status: string; readonly title: string } | null;
+  readonly mission: {
+    readonly id: string;
+    readonly status: string;
+    readonly title: string;
+    /**
+     * Set when the mission's next step is queued on a saturated runtime:
+     * "Waiting for a free slot on Claude Code" (#101). Null otherwise; absent
+     * from a daemon older than this field.
+     */
+    readonly waiting?: string | null;
+  } | null;
   readonly startable: { readonly ok: true } | { readonly ok: false; readonly reason: string };
 }
 
