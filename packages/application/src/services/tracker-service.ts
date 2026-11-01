@@ -8,7 +8,7 @@ import {
   FACTORY_WORKFLOW_ID, activityCommentBody, activityMilestone, activityMilestoneOf, activityStepState, decideTrackerWriteBack, isTerminalMissionStatus, parseCriteria,
   parseSourcesSection, readinessTodo, refinedActivityLine, refinedDescription, refinedLineOf, runtimeSlotWait, sourceLabel, startRefusal, trackerGoal, trackerLabel, trackerRef,
 } from '@tandemise/domain';
-import type { BoardItemView, BoardView, CreateMissionRequest, RefinementView } from '@tandemise/api-contract';
+import type { BoardItemView, BoardView, CreateMissionRequest, InboxStalledView, RefinementView } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, TrackerItemId, WorkspaceId } from '@tandemise/shared';
 import { TandemiseError, asId, errorMessage, ids } from '@tandemise/shared';
 import type { SettingsStorePort } from '../ports.js';
@@ -126,6 +126,11 @@ export class TrackerService {
   readonly #lastWriteBackMs = new Map<WorkspaceId, number>();
   /** Per item: no write-back before this, after a failure. */
   readonly #writeBackRetryAfter = new Map<TrackerItemId, number>();
+  /**
+   * Per item: why the last move to in progress was refused, in the tracker's
+   * words (#187). The Board says it on the card; the Start retry clears it.
+   */
+  readonly #moveProblems = new Map<TrackerItemId, { readonly sentence: string; readonly since: string }>();
   /** Finished missions whose last state has landed: no pass reads them again until a restart. */
   readonly #settled = new Set<MissionId>();
 
@@ -422,6 +427,7 @@ export class TrackerService {
       sources,
       type: item.type ?? null,
       mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title, waiting: active ? this.#slotWait(mission) : null },
+      moveProblem: active ? this.#moveProblems.get(item.id)?.sentence ?? null : null,
       // The Start refusals, read from the cache without asking the tracker.
       startable: isDraft ? { ok: false, reason: 'Refine it first' }
         : active && !unstarted ? { ok: false, reason: 'Has a mission' }
@@ -596,6 +602,55 @@ export class TrackerService {
     return this.deps.missions.get(mission.id) ?? mission;
   }
 
+  /**
+   * The Inbox's Stalled rows for Start moves the tracker refused (#187): the
+   * mission runs, but its item never left ready, and only the tracker can say
+   * why. One row per item, while its mission is open.
+   */
+  moveRefusals(workspaceId: WorkspaceId): readonly InboxStalledView[] {
+    if (this.#moveProblems.size === 0) return [];
+    const missions = this.#missionsByItem(workspaceId);
+    const rows: InboxStalledView[] = [];
+    for (const [itemId, problem] of this.#moveProblems) {
+      const item = this.deps.items.get(itemId);
+      const mission = (missions.get(itemId) ?? []).find((m) => !isTerminalMissionStatus(m.status));
+      if (item === undefined || item.workspaceId !== workspaceId || mission === undefined) continue;
+      rows.push({
+        missionId: mission.id,
+        missionTitle: mission.title,
+        missionStatus: mission.status,
+        rule: 'tracker-move',
+        reason: `${problem.sentence} Tandemise tries again every minute.`,
+        action: { kind: 'tracker-move', label: 'Try the move again', taskId: null, taskKey: null, itemKey: item.key },
+        forIds: mission.createdBy === null || mission.createdBy === undefined ? [] : [mission.createdBy],
+        since: problem.since,
+      });
+    }
+    return rows;
+  }
+
+  /** "Try the move again" (#187): Start's tracker writes for an item whose move was refused, now. */
+  async retryMove(caller: Caller, workspaceId: WorkspaceId, key: string): Promise<BoardView> {
+    this.#requireWorkspace(workspaceId);
+    requireSeat(this.deps, workspaceId, caller);
+    await this.#serial(workspaceId, async () => {
+      const { tracker, config } = await this.deps.trackers.for(workspaceId);
+      const cached = this.deps.items.byKey(workspaceId, key.trim());
+      const fresh = await tracker.get(cached?.ref ?? refForKey(config, key.trim()));
+      const item = this.deps.items.upsert(workspaceId, fresh);
+      const mission = this.#activeMission(workspaceId, item);
+      if (mission === undefined || isUnstarted(mission, item)) throw new TandemiseError('CONFLICT', `${fresh.key} has no started mission to move it for.`);
+      if (!config.states.ready.includes(fresh.state)) {
+        // Someone moved it meanwhile: a person's move always wins, so there is nothing left to try.
+        this.#moveProblems.delete(item.id);
+        return;
+      }
+      await this.#writeStart(workspaceId, tracker, config, item, mission);
+    });
+    this.#invalidate();
+    return this.board(workspaceId);
+  }
+
   // ------------------------------------------------------------------ Refine a draft (#135)
 
   /**
@@ -704,15 +759,7 @@ export class TrackerService {
     const scope = { workspaceId, missionId: mission.id };
     const label = trackerLabel(config.kind);
     const target = config.states.in_progress;
-    try {
-      await tracker.transition(item.ref, target);
-      this.deps.unitOfWork.transaction(() => {
-        this.deps.items.upsert(workspaceId, { ...item, state: target });
-        this.deps.items.setWrittenState(item.id, target);
-      });
-    } catch (e) {
-      this.deps.recorder.note(scope, `Couldn't move ${item.key} to ${target} in ${label}: ${sentence(e)}.`, 'warn');
-    }
+    // The assignee first (#187): a tracker workflow may refuse in progress to an unassigned item.
     const login = this.#trackerLogin(workspaceId);
     if (login !== null && tracker.assign !== undefined) {
       try {
@@ -720,6 +767,24 @@ export class TrackerService {
       } catch (e) {
         this.deps.recorder.note(scope, `Couldn't assign ${item.key} to ${login} in ${label}: ${sentence(e)}.`, 'warn');
       }
+    }
+    try {
+      await tracker.transition(item.ref, target);
+      this.deps.unitOfWork.transaction(() => {
+        this.deps.items.upsert(workspaceId, { ...item, state: target });
+        this.deps.items.setWrittenState(item.id, target);
+      });
+      this.#moveProblems.delete(item.id);
+    } catch (e) {
+      const problem = `Couldn't move ${item.key} to ${target} in ${label}: ${sentence(e)}.`;
+      // Said once on the mission; the Board card and the Inbox's Stalled keep saying it while the retry fails.
+      const known = this.#moveProblems.get(item.id);
+      if (known?.sentence !== problem) {
+        this.deps.recorder.note(scope, problem, 'warn');
+        this.#moveProblems.set(item.id, { sentence: problem, since: this.deps.clock.now() });
+      }
+      this.#invalidate();
+      this.deps.recorder.invalidate('missions', mission.id);
     }
   }
 
@@ -738,6 +803,8 @@ export class TrackerService {
       if (mission === undefined || item === undefined) return [];
       // A draft no Start has taken (a refinement, #135) is never moved on Tandemise's own initiative.
       if (isUnstarted(mission, item)) return [];
+      // Moved out of ready by someone else: the refusal is no longer true (#187).
+      if (!config.states.ready.includes(item.state)) this.#moveProblems.delete(item.id);
       return item.writtenState === null && config.states.ready.includes(item.state) ? [{ item, mission }] : [];
     });
     if (waiting.length === 0) return;
