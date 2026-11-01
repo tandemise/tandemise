@@ -95,7 +95,19 @@ const homeText = async () => {
   return page.evaluate('document.body.innerText');
 };
 
+const creates = () => ghCalls().filter((x) => x.args[0] === 'pr' && x.args[1] === 'create');
+const createdBefore = creates().length;
+
 try {
+  // An earlier scenario (PM3) turns auto-merge on, and then a low-risk change merges on its own,
+  // which is right. This scenario is about the person being asked, so the project asks again.
+  const policy = (await api.get(`/v1/workspaces/${c.env.workspaceId}/merge-policy`)).policy;
+  if (policy.autoMerge !== 'off') {
+    await api.put(`/v1/workspaces/${c.env.workspaceId}/merge-policy`, { policy: { ...policy, autoMerge: 'off' } });
+    ev.note('auto-merge was on from an earlier scenario; turned it off so the merge asks');
+  }
+  ev.check('auto-merge is off for this project', (await api.get(`/v1/workspaces/${c.env.workspaceId}/merge-policy`)).policy.autoMerge === 'off');
+
   // ------------------------------------------------------------ a green pull request
   const a = await plannedWithLegacyWait('fix: the settings title is wrong', 'feat/settings-title', green);
   const ciA = await until(async () => { const t = await c.task(a.id, 'ci'); return t?.status === 'SUCCEEDED' && t; }, { label: 'ci passes', timeoutMs: 120_000 });
@@ -103,7 +115,9 @@ try {
   const card = await until(async () => (await c.approvals(a.id, 'PENDING')).find((x) => x.title.startsWith('Review and merge')), { label: 'Review and merge', timeoutMs: 120_000 });
   ev.check('"Review and merge" is filed for it', card !== undefined, card?.title);
   ev.check('…linking the pull request the step opened', card?.evidence.some((e) => e.value === a.pr.url), card?.evidence);
-  ev.check('no second pull request was opened', !ghCalls().some((x) => x.args[0] === 'pr' && x.args[1] === 'create'), ghCalls().filter((x) => x.args[1] === 'create').map((x) => x.args));
+  // Earlier scenarios open their own pull requests: only the creates since this scenario started count.
+  const created = creates().slice(createdBefore);
+  ev.check('no second pull request was opened', created.length === 0, created.map((x) => x.args));
   const shipA = await ship(c, a.id);
   ev.check('the mission shows the pull request', shipA.prs.some((p) => p.url === a.pr.url), shipA.prs);
 
@@ -119,13 +133,14 @@ try {
 
   // ------------------------------------------------------------ Home
   // Nothing else happens to the mission: the daemon's own pass notices the wait is overdue and refreshes the window.
-  const home = await until(async () => { const t = await homeText(); return t.includes('Stalled: fix: the footer link is broken') && t; }, { label: 'Home stalled row', timeoutMs: 45_000 }).catch(() => homeText());
+  const home = await until(async () => { const t = await homeText(); return /Stalled\s*\n\s*1/.test(t) && t; }, { label: 'Home stalled', timeoutMs: 45_000 }).catch(() => homeText());
+  // "Needs you now" shows the first few items, oldest first; after the earlier scenarios the rest sit behind "N more requests".
+  const crowded = /\d+ more requests? in your inbox/.test(home);
   ev.check('Home: Needs you counts the review', /Needs you\s*\n\s*[1-9]/.test(home) && !home.includes('Nothing waits on you'), home.slice(0, 400));
   ev.check('Home: Stalled counts the wait', /Stalled\s*\n\s*1/.test(home) && !home.includes('Everything can move'), home.slice(0, 400));
   ev.check('Home "Needs you now": Review and merge', home.includes('Review and merge'), home);
-  ev.check('Home "Needs you now": the stalled wait, with what it waits for', home.includes('Stalled: fix: the footer link is broken') && home.includes("'ci' is still waiting: Waiting for CI on #"), home);
-  const rowButtons = await page.evaluate(`[...document.querySelectorAll('[aria-label="Stalled: fix: the footer link is broken"] button')].map((b) => b.innerText.trim())`);
-  ev.check('…with Open the pull request, Retry ci and Cancel mission', ['Open the pull request', 'Retry ci', 'Cancel mission'].every((l) => rowButtons.includes(l)), rowButtons);
+  ev.check('Home "Needs you now": the stalled wait, with what it waits for (or behind "more requests" when the list is full)',
+    crowded || (home.includes('Stalled: fix: the footer link is broken') && home.includes("'ci' is still waiting: Waiting for CI on #")), home);
   await shot('home');
 
   // ------------------------------------------------------------ Inbox
@@ -135,8 +150,13 @@ try {
   ev.check('Inbox: Review and merge', inbox.includes('Review and merge'), inbox.slice(0, 600));
   ev.check('Inbox: the stalled wait', inbox.includes('Stalled: fix: the footer link is broken'), inbox.slice(0, 600));
   await shot('inbox');
+  // Home's Stalled number links here.
   await page.navigate('#/inbox/stalled');
   await sleep(1500);
+  const stalledText = await page.evaluate('document.body.innerText');
+  ev.check('Inbox → Stalled: the wait says what it waits for', stalledText.includes("'ci' is still waiting: Waiting for CI on #"), stalledText.slice(0, 600));
+  const rowButtons = await page.evaluate(`[...document.querySelectorAll('[aria-label="Stalled: fix: the footer link is broken"] button')].map((b) => b.innerText.trim())`);
+  ev.check('…with Open the pull request, Retry ci and Cancel mission', ['Open the pull request', 'Retry ci', 'Cancel mission'].every((l) => rowButtons.includes(l)), rowButtons);
   await shot('inbox-stalled');
 
   // ------------------------------------------------------------ merged on GitHub during the wait

@@ -5,7 +5,7 @@
 // request, the header links it.
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
-import { boardRow, openBoard, yt } from '../common.mjs';
+import { boardRow, openBoard, yt, ytB } from '../common.mjs';
 
 const c = await context();
 const { page, until, sleep } = c;
@@ -13,7 +13,11 @@ const ev = new Evidence('I11', 'The factory explains itself: lane before Start, 
 const KEY = 'GAR-50';
 const CRITERION = 'The receipt says **Total** next to `amount`';
 
-await yt.put({
+// I10 leaves the project's tracker moved to fake YouTrack B, so the item goes where the Board reads now.
+const urlB = (() => { try { return ytB.url().replace(/\/+$/, ''); } catch { return null; } })();
+const trackerUrl = ((await c.api.get(`/v1/workspaces/${c.env.workspaceId}/intake/config`)).tracker?.url ?? '').replace(/\/+$/, '');
+const tracker = urlB !== null && trackerUrl === urlB ? ytB : yt;
+await tracker.put({
   // A Feature: this project maps its Bugs and Tasks to its own workflow, so a Feature is the one the factory plans.
   idReadable: KEY, summary: 'Receipt total label', type: 'Feature', state: 'Open',
   description: `## What happened\n\nThe receipt shows the **sum** without a label, so people cannot tell it is the \`amount\` they paid. The copy should say Total.\n\n## Done when\n- [ ] ${CRITERION}`,

@@ -34,9 +34,11 @@ ev.note(`the headless run started: ${JSON.stringify(headless).slice(0, 200)}`);
 await holdFromCard(c, missionId, KEY);
 
 // Everything Claude draws until it is ready for input, so a warning shown and answered in between is still seen.
+// Ready can come first: after H3-claude the config dir may trust the folder already, and an accept-edits
+// session shows "accept edits on" where a default one shows "? for shortcuts".
 const seen = [];
 const look = async () => { const t = await screenText(c); seen.push(t); return t; };
-const first = await until(async () => { const t = await look(); return /for shortcuts|trust this folder|Quick safety check|Bypass Permissions/i.test(t) && t; }, { label: 'Claude on screen', timeoutMs: 60_000 });
+const first = await until(async () => { const t = await look(); return /for shortcuts|accept edits on|trust this folder|Quick safety check|Bypass Permissions/i.test(t) && t; }, { label: 'Claude on screen', timeoutMs: 60_000 });
 
 if (/trust this folder|Quick safety check/i.test(first)) {
   const shown = await until(async () => { const t = await panelText(c); return t.includes('Answer: Yes, I trust this folder') && t; }, { label: 'the one-click answer', timeoutMs: 10_000 }).catch(() => panelText(c));
