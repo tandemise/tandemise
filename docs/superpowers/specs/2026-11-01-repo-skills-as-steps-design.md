@@ -80,6 +80,8 @@ session loaded:
 - **Other runtimes.** Codex and generic CLIs have no slash-command skills. A
   step that runs a skill routes only to Claude Code; on anything else it is
   refused with a reason.
+- **Holds.** A hold opens the step's session as it is; it doesn't add a skill
+  the session didn't start with.
 - **Copying a whole plugin into the library.** Importing a plugin skill copies
   that skill's folder only (see #129 below).
 

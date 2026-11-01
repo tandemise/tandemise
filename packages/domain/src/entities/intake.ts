@@ -132,6 +132,11 @@ export interface TrackerStatesConfig {
   /** The first one is what Tandemise writes. At least one. */
   readonly done: readonly string[];
   readonly wont_do: readonly string[];
+  /**
+   * Optional (#135): the tracker's states for work still to be refined. The
+   * Board lists them in a Draft group and offers Refine on them, never Start.
+   */
+  readonly draft?: readonly string[];
 }
 
 /** Spec §6.2 `factory/tracker.yaml`'s `tracker`. */

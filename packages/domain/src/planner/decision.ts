@@ -26,6 +26,8 @@ export interface PlanDecisionTiebreak {
   readonly costUsd: number | null;
   readonly answer: { readonly type: string; readonly size: string; readonly areas: readonly string[]; readonly why: string } | null;
   readonly error: string | null;
+  /** The first 500 characters of a reply nothing usable could be read from; absent or null otherwise. */
+  readonly rawReply?: string | null;
 }
 
 export interface PlanDecision {
