@@ -215,6 +215,7 @@ for (const width of [1100, 1440]) {
       tops[state] = m;
       const mid = m.firstAction.top + m.firstAction.height / 2;
       ok(`${label}: the actions are level with the title`, mid >= m.title.top && mid <= m.title.bottom, { actionMid: mid, title: [m.title.top, m.title.bottom] });
+      ok(`${label}: the actions start on the title's row`, Math.abs(m.actions.top - m.title.top) < 1, [m.actions.top, m.title.top]);
       ok(`${label}: the header is top-aligned`, m.alignItems === 'flex-start', m.alignItems);
       ok(`${label}: the header holds its actions`, m.actions.bottom <= m.bar.bottom && m.actions.right <= m.width, { actionsBottom: m.actions.bottom, barBottom: m.bar.bottom });
       ok(`${label}: by and responsible are both there, in full`, m.chips.length === 2 && m.chips[0].text.startsWith('by Coding agent') && /^responsible .*(You|Sam Rivera)/.test(m.chips[1].text) && m.chips.every((c) => !c.clipped) && !m.attributionClipped, m.chips);
@@ -230,12 +231,29 @@ for (const width of [1100, 1440]) {
   }
 }
 
+// However tall the crumbs get (wrapped crumbs, larger text), the actions stay on the title's row.
+await page.setWidth(1100);
+for (const [what, css] of [['taller crumbs', 'padding-bottom: 40px'], ['larger crumb text', 'font-size: 26px']]) {
+  await page.evaluate(`(() => { const s = document.createElement('style'); s.id = 'h132-grow'; s.textContent = '.topbar__eyebrow { ${css}; }'; document.head.append(s); })()`);
+  await sleep(200);
+  const m = await measure();
+  const eyebrow = await page.evaluate(`document.querySelector('.topbar__eyebrow').getBoundingClientRect().height`);
+  ok(`${what} (${eyebrow}px): the actions start on the title's row`, Math.abs(m.actions.top - m.title.top) < 1, [m.actions.top, m.title.top]);
+  await page.screenshot(join(OUT, `header-1100-${what.replace(/ /g, '-')}.png`));
+  await page.evaluate(`document.getElementById('h132-grow').remove()`);
+}
+// The titles have no box in the grid, so their children must opt out of the drag region themselves, or their links stop working.
+const regions = await page.evaluate(`['.topbar__eyebrow', '.topbar__title', '.topbar__subtitle', '.topbar__actions'].map((q) => getComputedStyle(document.querySelector(q)).webkitAppRegion)`);
+ok('the crumbs, title, subtitle and actions are outside the drag region', regions.every((r) => r === 'no-drag'), regions);
+const subtitleLink = await page.evaluate(`(() => { const b = document.querySelector('.mission-subtitle__open').getBoundingClientRect(); return document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('.mission-subtitle__open') !== null; })()`);
+ok('Open the issue can still be hit', subtitleLink);
+
 // Below the reflow breakpoint the actions wrap to their own row: the step past the crumbs must not follow them there.
 await page.setWidth(700);
 await page.evaluate(`document.querySelector('.mission-subtitle__details').open = false`);
 await sleep(300);
 const narrow = await page.evaluate(`(() => { const a = document.querySelector('.topbar__actions'); return { margin: getComputedStyle(a).marginTop, below: a.getBoundingClientRect().top >= document.querySelector('.topbar__titles').getBoundingClientRect().bottom, overflow: document.documentElement.scrollWidth > window.innerWidth }; })()`);
-ok('700px: the actions wrap below the titles, with no extra step', narrow.margin === '0px' && narrow.below && !narrow.overflow, narrow);
+ok('700px: the actions wrap below the titles', narrow.margin === '0px' && narrow.below && !narrow.overflow, narrow);
 await page.setWidth(1440);
 await sleep(300);
 const wide = await measure();

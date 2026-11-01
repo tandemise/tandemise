@@ -71,10 +71,12 @@
   }
 
   .topbar__inner {
+    display: flex;
     flex-wrap: wrap;
   }
 
   .topbar__titles {
+    display: block;
     flex-basis: 100%;
   }
 
@@ -87,11 +89,6 @@
   .topbar__actions {
     flex-wrap: wrap;
     flex: 1 1 auto;
-  }
-
-  /* Here the actions wrap to a row of their own, with no crumbs beside them to step past. */
-  .topbar__inner:has(.topbar__eyebrow) > .topbar__actions {
-    margin-top: 0;
   }
 
   .topbar__actions > * {

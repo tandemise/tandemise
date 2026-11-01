@@ -197,11 +197,15 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Top-aligned: a subtitle can grow (a task's disclosure, #105), and the actions stay level with the title. */
+/*
+ * A grid, so the actions sit on the title's own row however tall the crumbs above it are, and stay
+ * there, top-aligned, when a subtitle grows (a task's disclosure, #105). Rows: crumbs, title, subtitle.
+ */
 .topbar__inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: flex-start;
-  gap: var(--s3);
+  column-gap: var(--s3);
   width: 100%;
 }
 
@@ -212,13 +216,31 @@
   margin: 0 auto;
 }
 
-.topbar__inner > * {
+/* The titles have no box of their own here, so their children opt out of the window's drag region themselves. */
+.topbar__inner > *,
+.topbar__titles > * {
   -webkit-app-region: no-drag;
 }
 
 .topbar__titles {
-  flex: 1;
+  display: contents;
+}
+
+.topbar__titles > * {
+  grid-column: 1;
   min-width: 0;
+}
+
+.topbar__eyebrow {
+  grid-row: 1;
+}
+
+.topbar__title {
+  grid-row: 2;
+}
+
+.topbar__subtitle {
+  grid-row: 3;
 }
 
 .topbar__eyebrow {
@@ -256,13 +278,9 @@
   justify-content: flex-end;
   gap: var(--s2);
   /* Shrinks and wraps rather than pushing an action out of the window. */
-  flex: 0 1 auto;
+  grid-column: 2;
+  grid-row: 2 / span 2;
   min-width: 0;
-}
-
-/* Crumbs sit above the title, so the actions step down past them to stay level with the title row. */
-.topbar__inner:has(.topbar__eyebrow) > .topbar__actions {
-  margin-top: var(--s4);
 }
 
 .page {

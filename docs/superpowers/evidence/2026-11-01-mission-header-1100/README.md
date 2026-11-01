@@ -8,7 +8,9 @@ round 2, so the card has its full action row).
 on Electron's headless platform, so the preload bridge is shimmed. Run the script without
 `H132_BROWSER` on a machine with a display to prove it in the window itself.
 
-- `header-{1100,1440}-{light,dark}-{closed,open}.png`: after the fix; 61 of 61 checks pass.
-- `before-header-1100-light-open.png`: the same run with the CSS change reverted. The actions sit
-  in the middle of the open header (their centre at y=202, the title at y=32 to 54).
+- `header-{1100,1440}-{light,dark}-{closed,open}.png`: after the fix; 73 of 73 checks pass.
+- `header-1100-taller-crumbs.png`, `header-1100-larger-crumb-text.png`: the crumbs grown to 58 and
+  39px; the action row's top still equals the title's top.
+- `before-header-1100-light-open.png`: the same run with all of this change's CSS reverted (38 of 73
+  fail). The actions sit in the middle of the open header.
 - `other-missions-1100.png`: a page that shares the header and has no crumbs.
