@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   FACTORY_WORKFLOW_ID, activityCommentBody, activityMilestone, activityMilestoneOf, activityStepState, decideTrackerWriteBack, isTerminalMissionStatus, parseCriteria,
-  parseSourcesSection, readinessTodo, refinedActivityLine, refinedDescription, refinedLineOf, runtimeSlotWait, sourceLabel, trackerGoal, trackerLabel, trackerRef,
+  parseSourcesSection, readinessTodo, refinedActivityLine, refinedDescription, refinedLineOf, runtimeSlotWait, sourceLabel, startRefusal, trackerGoal, trackerLabel, trackerRef,
 } from '@tandemise/domain';
 import type { BoardItemView, BoardView, CreateMissionRequest, RefinementView } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, TrackerItemId, WorkspaceId } from '@tandemise/shared';
@@ -177,6 +177,22 @@ export class TrackerService {
     this.#requireWorkspace(workspaceId);
     if (this.deps.config.read(workspaceId).tracker !== null) await this.#serial(workspaceId, () => this.#refresh(workspaceId));
     return this.board(workspaceId);
+  }
+
+  /**
+   * The project's tracker token, address or mapping was just saved (#134):
+   * the board's last problem was about the tracker as it was, so it is
+   * dropped at once and the board is read again in the background, rather
+   * than on the next 2-minute tick. A read that still fails sets its own
+   * problem again.
+   */
+  trackerChanged(workspaceId: WorkspaceId): void {
+    const last = this.#refreshes.get(workspaceId);
+    if (last !== undefined) this.#refreshes.set(workspaceId, { at: last.at, problem: null });
+    this.#invalidate();
+    if (this.deps.config.read(workspaceId).tracker === null) return;
+    this.#lastRefreshMs.set(workspaceId, this.deps.clock.epochMs());
+    this.#background(workspaceId, () => this.#refresh(workspaceId));
   }
 
   /**
@@ -404,11 +420,12 @@ export class TrackerService {
       state: item.state,
       assignee: item.assignee,
       sources,
+      type: item.type ?? null,
       mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title, waiting: active ? this.#slotWait(mission) : null },
       // The Start refusals, read from the cache without asking the tracker.
       startable: isDraft ? { ok: false, reason: 'Refine it first' }
         : active && !unstarted ? { ok: false, reason: 'Has a mission' }
-          : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : { ok: true },
+          : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : startableOf(item, config),
       ...(isDraft ? {
         refine: active && !unstarted
           ? { ok: false, reason: 'Has a mission', refinement: null }
@@ -472,6 +489,9 @@ export class TrackerService {
         ? `${fresh.key} is already in progress.`
         : `${fresh.key} is already in progress (${fresh.assignee}).`);
     }
+    // A container, a type this project does not build, another repository's item (#136): the Board's sentence.
+    const refusal = startRefusal(fresh, config);
+    if (refusal !== null) throw new TandemiseError('CONFLICT', refusal);
     const refined = this.#unstartedMission(workspaceId, item);
     if (refined !== undefined) return this.#startRefined(workspaceId, tracker, config, item, refined);
     // Claimed before the mission exists (spec §7 step 1), under the id it will
@@ -912,6 +932,12 @@ export class TrackerService {
   #invalidate(): void {
     this.deps.projections?.invalidate('intake');
   }
+}
+
+/** Whether the project starts this item at all (#136), from the cached item and the tracker config. */
+function startableOf(item: TrackedItem, config: TrackerConfig): BoardItemView['startable'] {
+  const reason = startRefusal(item, config);
+  return reason === null ? { ok: true } : { ok: false, reason };
 }
 
 /** A source chip: `Sentry · 132 events`, `Slack · thread`. */

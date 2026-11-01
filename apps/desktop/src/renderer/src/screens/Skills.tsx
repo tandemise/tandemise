@@ -98,6 +98,7 @@ export function Skills(): JSX.Element {
                 <Truncate as="div" className="list__subtitle">{skill.description || 'No description'}</Truncate>
                 <div className="list__subtitle dim" style={{ fontSize: 'var(--fs-xs)' }}>
                   v{skill.latest.version} · {skill.latest.sizeLabel}
+                  {skill.source.kind === 'claude' && skill.source.plugin !== undefined ? ` · Plugin ${skill.source.plugin}` : ''}
                   {skill.usedBy.length > 0 ? ` · Used by ${skill.usedBy.map((u) => `${u.roleName} v${u.version}`).join(', ')}` : ''}
                 </div>
               </div>

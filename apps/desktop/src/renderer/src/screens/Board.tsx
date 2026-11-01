@@ -13,7 +13,7 @@ import { humanizeStatus, missionTone, relativeTime } from '../lib/format.js';
 import { showFlash } from '../lib/notices.js';
 import { IntakeList } from './board/IntakeList.js';
 import './Board.css';
-import { Banner, Button, Card, Tab, Tabs, Tooltip } from '@tandemise/design/react';
+import { Banner, Button, Card, Chip, Tab, Tabs, Tooltip } from '@tandemise/design/react';
 
 export type BoardTab = 'board' | 'intake';
 export const BOARD_TABS: readonly BoardTab[] = ['board', 'intake'];
@@ -169,6 +169,8 @@ function Row({ item, tracker }: { item: BoardItemView; tracker: string }): JSX.E
               {item.key}
             </button>
           </Tooltip>
+          {/* The tracker's own type (#136), as it names it. */}
+          {item.type ? <Chip muted className="board__type" data-board-type={item.type}>{item.type}</Chip> : null}
           <span className="list__title board__title">{item.title}</span>
         </div>
         <div className="list__subtitle board__meta">

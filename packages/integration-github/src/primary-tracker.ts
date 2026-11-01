@@ -264,6 +264,12 @@ export class GhPrimaryTracker implements PrimaryTracker {
     const labels = new Set((raw.labels ?? []).map((l) => l.name));
     const state = isClosed(raw) ? 'closed' : (this.#stateLabels.find((l) => labels.has(l)) ?? 'open');
     const updatedAt = raw.updatedAt ?? raw.createdAt ?? new Date(0).toISOString();
+    // #136: the labels that are not states are the item's tags, which `repoTag`
+    // reads. Sub-issues and issue types are left out: only recent `gh` versions
+    // know `subIssuesSummary` and `issueType`, and an older one refuses the
+    // whole read for an unknown field. So on GitHub a container is not told
+    // apart, and `buildTypes` has no type to compare.
+    const tags = [...labels].filter((l) => !this.#stateLabels.includes(l));
     return {
       ref: this.#ref(raw.number),
       key: `#${raw.number}`,
@@ -274,6 +280,7 @@ export class GhPrimaryTracker implements PrimaryTracker {
       assignee: raw.assignees?.[0]?.login ?? null,
       updatedAt,
       createdAt: raw.createdAt ?? updatedAt,
+      tags,
     };
   }
 

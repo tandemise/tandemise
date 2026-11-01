@@ -58,6 +58,11 @@
   min-width: 0;
 }
 
+/* The tracker's type (#136): never squeezed by a long title. */
+.board__type {
+  flex: none;
+}
+
 .board__key {
   flex: none;
   padding: 0;

@@ -278,6 +278,10 @@ const trackerConfigFile = z
     states: trackerStates,
     onComplete: z.enum(['in_review', 'done']),
     workflows: z.record(z.string().max(INTAKE_MAX_TEXT)).optional(),
+    // #136: what Start offers. Every type is buildable without `buildTypes`.
+    buildTypes: z.array(z.string().trim().min(1).max(INTAKE_MAX_TEXT)).max(50).optional(),
+    repoTag: z.string().trim().max(INTAKE_MAX_TEXT)
+      .regex(/^[^:]+:.+$/, 'Give the repository tag as prefix:name, like repo:web.').optional(),
   })
   .strict()
   .superRefine((t, ctx) => {
@@ -438,6 +442,8 @@ export interface BoardItemView {
      */
     readonly waiting?: string | null;
   } | null;
+  /** The tracker's own type (`Bug`, `Spike`), or null when it has none; absent from a daemon older than #136. */
+  readonly type?: string | null;
   readonly startable: { readonly ok: true } | { readonly ok: false; readonly reason: string };
   /**
    * A draft item (#135): whether Refine is offered, and the refinement under

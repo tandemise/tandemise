@@ -60,6 +60,27 @@ section('pure: refs, markers and the Sources section');
   check('sourcesCommentBody renders entries as the Sources section', typeof D.sourcesCommentBody === 'function' && eq(D.parseSourcesSection?.(D.sourcesCommentBody([{ url: 'https://a.test/1', title: 'A', context: '' }])), ['https://a.test/1']));
 }
 
+section('pure: what Start refuses (#136)');
+{
+  const cfg = { buildTypes: ['Bug', 'Task'], repoTag: 'repo:web' };
+  const refuse = (item, config = cfg) => D.startRefusal?.(item, config);
+  check('a plain Task with no tags or subtasks may start', refuse({ type: 'Task' }) === null);
+  check('a container: Has 4 subtasks. Start one of them.', refuse({ type: 'Task', subtasks: 4 }) === 'Has 4 subtasks. Start one of them.', refuse({ type: 'Task', subtasks: 4 }));
+  check('one subtask is said in the singular', refuse({ type: 'Task', subtasks: 1 }) === 'Has 1 subtask. Start it instead.', refuse({ type: 'Task', subtasks: 1 }));
+  check('no open subtasks is not a container', refuse({ type: 'Task', subtasks: 0 }) === null);
+  check('a Spike: this project starts Bug and Task items.', refuse({ type: 'Spike' }) === 'Spike: this project starts Bug and Task items.', refuse({ type: 'Spike' }));
+  check('three build types read as a list', refuse({ type: 'Epic' }, { buildTypes: ['Bug', 'Task', 'Story'] }) === 'Epic: this project starts Bug, Task and Story items.');
+  check('types match without regard to case', refuse({ type: 'bug' }) === null);
+  check('no buildTypes: every type is buildable', refuse({ type: 'Spike' }, {}) === null && refuse({ type: 'Spike' }, { buildTypes: [] }) === null);
+  check('an item with no type is not refused for its type', refuse({}) === null);
+  check('another repository: Belongs to another repository (repo:api).', refuse({ type: 'Bug', tags: ['urgent', 'repo:api'] }) === 'Belongs to another repository (repo:api).', refuse({ type: 'Bug', tags: ['repo:api'] }));
+  check("an item carrying this project's tag may start, even with another", refuse({ type: 'Bug', tags: ['repo:api', 'Repo:Web'] }) === null);
+  check('an item with no repository tag may start', refuse({ type: 'Bug', tags: ['urgent'] }) === null);
+  check('no repoTag: another repository tag refuses nothing', refuse({ type: 'Bug', tags: ['repo:api'] }, {}) === null);
+  check("another repository's Spike container is refused for the repository first",
+    refuse({ type: 'Spike', subtasks: 2, tags: ['repo:api'] }) === 'Belongs to another repository (repo:api).');
+}
+
 // ------------------------------------------------------------------ youtrack
 section('pure: the mission header for a tracker item (#105)');
 {
@@ -211,6 +232,24 @@ try {
   const withFile = await yt.create({ title: 'With a file', description: 'x', attachments: [{ name: 'trace.txt', mediaType: 'text/plain', content: new TextEncoder().encode('stack') }] });
   check('an attachment with content is uploaded to the item', eq((fake.attachments.get(withFile.key) ?? []).map((a) => a.name), ['trace.txt']), fake.attachments.get(withFile.key));
 
+  // #136: tags and open subtasks, as the board and a fresh read report them.
+  const parent = fake.putIssue({ summary: 'Container of work', state: 'Open', type: 'Task', tags: ['repo:web'] });
+  fake.putIssue({ summary: 'First part', state: 'Open', type: 'Task', parent: parent.idReadable });
+  fake.putIssue({ summary: 'Second part', state: 'Open', type: 'Task', parent: parent.idReadable });
+  fake.putIssue({ summary: 'Third part, done', state: 'Done', type: 'Task', parent: parent.idReadable });
+  const spike = fake.putIssue({ summary: 'Research the cache', state: 'Open', type: 'Spike', tags: ['repo:api', 'research'] });
+  const read = await yt.get(D.trackerRef('youtrack', parent.idReadable));
+  check('get() counts the open subtasks: 2 of 3', read.subtasks === 2, read);
+  check('get() reports the tags', eq(read.tags, ['repo:web']), read.tags);
+  check('every issue read asks for the tags and the subtasks', fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('tags(name)')
+    && fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('subtasks(issues(idReadable,resolved))'));
+  const onBoard = await yt.board({ query: 'project: GAR #Unresolved', limit: 50 });
+  const boardSpike = onBoard.find((i) => i.key === spike.idReadable);
+  const plain = onBoard.find((i) => i.title === 'First part');
+  check('board() reports the type, tags and subtasks too', boardSpike?.type === 'Spike' && eq(boardSpike?.tags, ['repo:api', 'research']) && boardSpike?.subtasks === 0
+    && onBoard.find((i) => i.key === parent.idReadable)?.subtasks === 2, boardSpike);
+  check('an item with neither has no tags and no open subtasks', plain !== undefined && eq(plain.tags, []) && plain.subtasks === 0, plain);
+
   // The composition seam: the module contributes a factory for `kind: youtrack`.
   check('integrations-core exports PRIMARY_TRACKER_FACTORIES', I.PRIMARY_TRACKER_FACTORIES !== undefined && K.isMultiToken(I.PRIMARY_TRACKER_FACTORIES));
   const container = K.compose(new K.Container(), Y.youtrackIntegrationModule);
@@ -296,6 +335,7 @@ try {
 
   await gt.transition(made.ref, 'status: in progress');
   const inProgress = await gt.get(made.ref);
+  check('the state label is not among the tags (#136)', Array.isArray(inProgress.tags) && !inProgress.tags.includes('status: in progress'), inProgress.tags);
   check("transition(#1, 'status: in progress'): the labels have it and state reads it",
     readState(GH).repos['acme/web'].issues[0].labels.some((l) => l.name === 'status: in progress') && inProgress.state === 'status: in progress', inProgress);
   await gt.transition(made.ref, 'status: in review');

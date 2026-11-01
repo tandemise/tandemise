@@ -182,6 +182,37 @@ section('daemon: intake config, tokens, pushes and the CLI');
     check('POST board/start with a lane starts the mission with it', quick.status === 200 && quick.body?.mission?.laneRequest === 'careful', quick.body?.mission ?? quick);
     const badLane = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'fast' });
     check('a lane that is not quick or careful is a 400', badLane.status === 400, badLane);
+
+    // #136: a container, a type the project does not build and another repository's item are on the board, not startable.
+    const scoped = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: fake.url, buildTypes: ['Bug', 'Task'], repoTag: 'repo:web' } });
+    check('PUT intake/config keeps buildTypes and repoTag', scoped.status === 200 && JSON.stringify(scoped.body?.tracker?.buildTypes) === '["Bug","Task"]' && scoped.body?.tracker?.repoTag === 'repo:web', scoped.body?.tracker ?? scoped);
+    const badTag = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: fake.url, repoTag: 'web' } });
+    check('a repoTag without a prefix is a 400', badTag.status === 400, badTag);
+    const container = fake.putIssue({ summary: 'Container of the checkout work', state: 'Open', type: 'Task' });
+    for (const n of [1, 2, 3, 4]) fake.putIssue({ summary: `Checkout part ${n}`, state: 'Open', type: 'Task', parent: container.idReadable });
+    const spike = fake.putIssue({ summary: 'Research a faster cache', state: 'Open', type: 'Spike' });
+    const elsewhereItem = fake.putIssue({ summary: 'Fix the API timeout', state: 'Open', type: 'Bug', tags: ['repo:api'] });
+    const plainTask = fake.putIssue({ summary: 'Add the web footer', description: '## Done when\n- [ ] The footer shows', state: 'Open', type: 'Task', tags: ['repo:web'] });
+    const scopedBoard = await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+    const ready = scopedBoard.body?.groups?.ready ?? [];
+    const card = (key) => ready.find((i) => i.key === key);
+    check('the container shows: Has 4 subtasks. Start one of them.', card(container.idReadable)?.startable?.reason === 'Has 4 subtasks. Start one of them.', card(container.idReadable));
+    check('the Spike shows: Spike: this project starts Bug and Task items.', card(spike.idReadable)?.startable?.reason === 'Spike: this project starts Bug and Task items.' && card(spike.idReadable)?.type === 'Spike', card(spike.idReadable));
+    check("another repository's item shows: Belongs to another repository (repo:api).", card(elsewhereItem.idReadable)?.startable?.reason === 'Belongs to another repository (repo:api).', card(elsewhereItem.idReadable));
+    check('a plain Task stays startable and carries its type', card(plainTask.idReadable)?.startable?.ok === true && card(plainTask.idReadable)?.type === 'Task', card(plainTask.idReadable));
+    check('the subtasks are on the board and startable', ready.filter((i) => i.title.startsWith('Checkout part')).length === 4 && ready.filter((i) => i.title.startsWith('Checkout part')).every((i) => i.startable.ok === true));
+    for (const [item, reason] of [[container, 'Has 4 subtasks. Start one of them.'], [spike, 'Spike: this project starts Bug and Task items.'], [elsewhereItem, 'Belongs to another repository (repo:api).']]) {
+      const refusedStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: item.idReadable });
+      check(`POST board/start ${item.idReadable} is 409: ${reason}`, refusedStart.status === 409 && refusedStart.body?.error?.message === reason && fake.issues.get(item.idReadable)?.state === 'Open', refusedStart);
+    }
+    // Read fresh: a Task that became a container since the last refresh is refused too.
+    const grown = fake.putIssue({ summary: 'Grows a subtask', state: 'Open', type: 'Task' });
+    await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+    fake.putIssue({ summary: 'Its only part', state: 'Open', type: 'Task', parent: grown.idReadable });
+    const grownStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: grown.idReadable });
+    check('Start reads the item fresh: a new subtask refuses it (Has 1 subtask. Start it instead.)', grownStart.status === 409 && grownStart.body?.error?.message === 'Has 1 subtask. Start it instead.', grownStart);
+    const plainStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: plainTask.idReadable });
+    check('a plain Task still starts', plainStart.status === 200 && fake.issues.get(plainTask.idReadable)?.state === 'In Progress', plainStart.body?.mission ?? plainStart);
   } catch (e) {
     check('the daemon section ran', false, String(e?.stack ?? e));
   } finally {
@@ -393,6 +424,70 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
     check('one mission for GAR-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
   } catch (e) {
     check('the refine section ran', false, String(e?.stack ?? e));
+  } finally {
+    await daemon?.stop();
+    await fake?.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+section("daemon: saving the tracker token clears the board's cached problem (#134)");
+{
+  const root = mkdtempSync(join(tmpdir(), 'tdi-token-'));
+  const home = join(root, 'h');
+  const { startDaemon } = await import('../apps/daemon/dist/main.js');
+  let daemon;
+  let fake;
+  try {
+    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake.putIssue({ summary: 'Checkout fails on Safari', description: '## Done when\n- [ ] Checkout works on Safari', state: 'Open' });
+    daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
+    const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
+    const call = async (method, path, body) => {
+      const res = await fetch(`${daemon.url}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'x-tandemise-api-version': 'v1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text ? JSON.parse(text) : undefined };
+    };
+    const until = async (cond, ms = 10_000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await cond()) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return Boolean(await cond());
+    };
+    const ws = (await call('POST', '/v1/workspaces', { name: 'Token' })).body?.workspace?.id;
+    const tracker = {
+      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
+    };
+    // The order a person may take in Settings → Intake: the tracker first, the token after.
+    const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker });
+    check('the tracker is saved before any token', put.status === 200, put);
+    const cachedProblem = await until(async () => /permanent token/.test((await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem ?? ''));
+    const before = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+    check('without a token the board caches the "Save a YouTrack permanent token" problem', cachedProblem && before?.groups?.ready?.length === 0, before);
+
+    const saved = await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
+    check('the token is saved (204)', saved.status === 204, saved);
+    // No POST board/refresh: the next 2-minute tick is far away, so only the save can have read it.
+    const cleared = await until(async () => {
+      const board = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+      return board?.problem === null && board?.groups?.ready?.some((i) => i.key === 'GAR-1');
+    });
+    const after = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+    check('GET board answers no problem and GAR-1 ready right after the token is saved, without a refresh', cleared, after);
+
+    // A wrong token is still said: the save reads the board again, and that read sets the problem again.
+    await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:wrong' });
+    const wrong = await until(async () => /Couldn't reach YouTrack/.test((await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem ?? ''));
+    check('…and a token YouTrack refuses sets the problem again, in its own words', wrong, (await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem);
+  } catch (e) {
+    check('the token section ran', false, String(e?.stack ?? e));
   } finally {
     await daemon?.stop();
     await fake?.close();
