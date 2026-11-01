@@ -40,6 +40,49 @@ export function signalSentence(signal: ProfileSignal): string {
   return `${name} ${signal.value} → ${signal.effect}`;
 }
 
+/** Why one signal set what it set, as the end of a sentence: `the tracker calls it a Bug`. */
+function signalReason(signal: ProfileSignal): string {
+  if (signal.said !== undefined) return signal.said;
+  switch (signal.name) {
+    case 'title prefix': return `the title starts with "${signal.value}"`;
+    case 'tracker type': return `the tracker calls it a ${signal.value}`;
+    case 'label': return `it has the label "${signal.value}"`;
+    case 'source': return `it came from ${signal.value}`;
+    case 'rule': return `the project rule ${signal.value} matched`;
+    case 'Done-when lines': return `nothing else set it, and it has ${signal.value} Done-when ${signal.value === '1' ? 'line' : 'lines'}`;
+    case 'repositories': return `it spans ${signal.value}`;
+    case 'history': return `${signal.value} went that way`;
+    case 'tiebreak': return `a quick model judged it (${signal.value})`;
+    case 'your choice': return 'you chose it';
+    case 'sensitivity floor': return `it touches ${signal.value}`;
+    case 'path': return `it names ${signal.value}`;
+    default: return `${signal.name} ${signal.value}`;
+  }
+}
+
+/**
+ * The one signal that decided each of type, size and risk, in plain words
+ * (#103): "Size tiny: the item says "copy"." The last signal that set a value
+ * is the one that stands (a later one overrides, an overruled one says
+ * "disagrees"); a value nothing set says so.
+ */
+export function decidingLines(profile: Pick<TaskProfile, 'type' | 'size' | 'risk' | 'signals' | 'areas'>): string[] {
+  const type = `Type ${profile.type === 'unknown' ? 'unclear' : TYPE_WORDS[profile.type].toLowerCase()}`;
+  const size = `Size ${SIZE_WORDS[profile.size]}`;
+  const risk = `Risk ${profile.risk}`;
+  const last = (prefix: string): ProfileSignal | undefined =>
+    [...profile.signals].reverse().find((s) => !s.effect.startsWith('disagrees:') && (s.effect.startsWith(prefix) || (prefix === 'risk ' && s.effect.startsWith('conservative default'))));
+  const line = (label: string, signal: ProfileSignal | undefined, otherwise: string): string =>
+    `${label}: ${signal === undefined ? otherwise : signalReason(signal)}.`;
+  const touched = profile.areas.filter((a) => a.sensitivity !== 'none').map((a) => `${a.name} (${a.sensitivity})`);
+  return [
+    line(type, last('type '), 'nothing said what kind of work it is'),
+    line(size, last('size '), 'nothing set it'),
+    line(risk, last('risk '),
+      touched.length > 0 ? `it touches ${touched.join(', ')}` : 'nothing it names is in a sensitive area'),
+  ];
+}
+
 const CLASS_WORDS: Readonly<Record<StepClass, string>> = {
   implement: 'Implement', review: 'Review', verify: 'Verify', spec: 'Specify', design: 'Design',
   architecture: 'Plan the approach', investigate: 'Investigate', resolve_conflicts: 'Resolve conflicts', ship: 'Ship',

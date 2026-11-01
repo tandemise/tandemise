@@ -358,8 +358,8 @@ export class DaemonClient {
   }
 
   /** Start: one mission from the item, never queued; the tracker moves it to in progress. */
-  startItem(workspaceId: string, key: string): Promise<MissionSummary> {
-    return this.#request('POST', `/workspaces/${workspaceId}/board/start`, { key }, undefined, { timeoutMs: 60_000 });
+  startItem(workspaceId: string, key: string, lane?: 'quick' | 'careful'): Promise<MissionSummary> {
+    return this.#request('POST', `/workspaces/${workspaceId}/board/start`, { key, ...(lane === undefined ? {} : { lane }) }, undefined, { timeoutMs: 60_000 });
   }
 
   intakeSignals(workspaceId: string, status?: readonly SignalStatus[]): Promise<readonly IntakeSignalView[]> {

@@ -224,7 +224,8 @@ export function buildRouter(services: TandemiseServices, options: {
   r.post('/v1/workspaces/:id/intake/check', (ctx) => services.intakeRunners.checkNow(ctx.caller, asId(ctx.params.id!)));
   r.post('/v1/workspaces/:id/board/start', async (ctx) => {
     const workspaceId = asId<'WorkspaceId'>(ctx.params.id!);
-    const mission = await services.tracker.start(ctx.caller, workspaceId, (await ctx.body(startBoardItemRequest)).key);
+    const request = await ctx.body(startBoardItemRequest);
+    const mission = await services.tracker.start(ctx.caller, workspaceId, request.key, request.lane);
     const summary = services.missions.list({ workspaceId }).find((s) => s.mission.id === mission.id);
     if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
     return summary;
