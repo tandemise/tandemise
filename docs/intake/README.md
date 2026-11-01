@@ -87,9 +87,9 @@ The answer is `202` with one result per signal:
 
 `received` means it is recorded. Filtering, dedupe and filing happen after the
 answer, so a slow tracker never holds your request open. Follow it in the
-**Intake** tab of the Board: "Filed as GAR-12", "Linked to GAR-7",
+**Intake** tab of the Board: "Filed as ACME-12", "Linked to ACME-7",
 "Held back: 3 events in 24 h; this source needs 20", "Needs your decision"
-(an Inbox card asks "Is this the same as GAR-7?"), "Rejected: …".
+(an Inbox card asks "Is this the same as ACME-7?"), "Rejected: …".
 
 Or with the CLI, which needs no `curl`:
 
@@ -166,7 +166,7 @@ curl -s "$TANDEMISE_URL/v1/intake/closures?after=<last id you saw>" \
       "url": "https://forms.example.com/replies/18",
       "kind": "done",
       "state": "pending",
-      "item": { "key": "GAR-12", "url": "https://acme.youtrack.cloud/issue/GAR-12" },
+      "item": { "key": "ACME-12", "url": "https://acme.youtrack.cloud/issue/ACME-12" },
       "prUrl": "https://github.com/acme/web/pull/88",
       "reply": { "address": "C0SUPPORT:1730000001.000100" },
       "lastError": null

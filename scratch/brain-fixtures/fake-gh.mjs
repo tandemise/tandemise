@@ -8,7 +8,7 @@
  *     $FAKE_GH_REMOTES/<owner>/<name>.git and prints its GitHub URL;
  *     it fails, as gh does, when that repository already exists;
  *   - `repo view <owner>/<name> --json isEmpty` says whether it has any ref;
- *   - `pr create` prints https://github.com/garipass/brain/pull/<n> and
+ *   - `pr create` prints https://github.com/acme/brain/pull/<n> and
  *     remembers the head branch;
  *   - `pr list --head <b>` prints that PR (or []);
  *   - `pr view <url> --json state` prints the state in $FAKE_GH_STATE/<n>, or OPEN.
@@ -70,12 +70,12 @@ if (a === 'pr' && b === 'create') {
   const n = prs.length + 1;
   prs.push({ n, head: flag('--head'), title: flag('--title'), draft: argv.includes('--draft') });
   writeFileSync(prsFile, JSON.stringify(prs));
-  console.log(`https://github.com/garipass/brain/pull/${n}`);
+  console.log(`https://github.com/acme/brain/pull/${n}`);
   process.exit(0);
 }
 if (a === 'pr' && b === 'list') {
   const head = flag('--head');
-  const found = prs.filter((p) => p.head === head).map((p) => ({ url: `https://github.com/garipass/brain/pull/${p.n}`, state: stateOf(p.n) }));
+  const found = prs.filter((p) => p.head === head).map((p) => ({ url: `https://github.com/acme/brain/pull/${p.n}`, state: stateOf(p.n) }));
   console.log(JSON.stringify(found));
   process.exit(0);
 }

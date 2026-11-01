@@ -1005,7 +1005,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       log: log(r).child({ component: 'refinement' }),
       // The first refinement converts the uploads when it comes before planning (spec A2).
       intake: (missionId) => r.resolve(t.PLANNING_SERVICE).ensureIntake(missionId),
-      // "From GAR-71" on criteria read from the mission's tracker item (#185).
+      // "From ACME-71" on criteria read from the mission's tracker item (#185).
       trackerKey: (missionId) => {
         const itemId = r.resolve(t.MISSION_REPOSITORY).get(missionId)?.trackerItemId ?? null;
         return itemId === null ? null : r.resolve(it.TRACKER_ITEM_REPOSITORY).get(itemId)?.key ?? null;

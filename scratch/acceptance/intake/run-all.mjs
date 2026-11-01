@@ -77,21 +77,21 @@ async function startFake(name, script, args = []) {
 }
 // The fake's own states, plus Draft for I15 (#135): a new issue still starts Open.
 const YT_STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete', 'Draft'].join(',');
-const ytUrl = REAL ? process.env.TANDEMISE_YOUTRACK_URL : await startFake('youtrack', 'fake-youtrack.mjs', ['--project', 'GAR', '--token', 'perm:acceptance', '--login', 'tandemise-bot', '--states', YT_STATES]);
+const ytUrl = REAL ? process.env.TANDEMISE_YOUTRACK_URL : await startFake('youtrack', 'fake-youtrack.mjs', ['--project', 'ACME', '--token', 'perm:acceptance', '--login', 'tandemise-bot', '--states', YT_STATES]);
 const sentryUrl = await startFake('sentry', 'fake-sentry.mjs', ['--token', 'sntrys_acceptance', '--org', 'acme', '--project', 'web', '--repos', 'acme/web']);
 const slackUrl = await startFake('slack', 'fake-slack.mjs', ['--workspace', 'acme', '--app-token', 'xapp-acceptance', '--bot-token', 'xoxb-acceptance']);
 // I10's second address for the tracker (Ruling 23): it would take the same token, so a request carrying it shows.
-if (!REAL) await startFake('youtrack-b', 'fake-youtrack.mjs', ['--project', 'GAR', '--token', 'perm:acceptance', '--login', 'tandemise-bot']);
+if (!REAL) await startFake('youtrack-b', 'fake-youtrack.mjs', ['--project', 'ACME', '--token', 'perm:acceptance', '--login', 'tandemise-bot']);
 writeFileSync(`${LINK}/fakes.json`, JSON.stringify({ pids: children.map((c) => c.pid) }));
 const stopFakes = () => { for (const c of children) { try { c.kill('SIGTERM'); } catch { /* gone */ } } };
 
 // The board a team already has: one ready item with a Done-when, one in progress, one in review, one done.
 if (!REAL) {
   const put = (issue) => fetch(`${ytUrl}/_fake/issues`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(issue) });
-  await put({ idReadable: 'GAR-1', summary: 'Checkout fails on Safari', type: 'Task', state: 'Open', description: 'Customers on Safari 17 cannot pay.\n\n## Done when\n- [ ] Checkout completes on Safari 17' });
-  await put({ idReadable: 'GAR-2', summary: 'Dark mode for the settings page', type: 'Task', state: 'In Progress', assignee: 'kim' });
-  await put({ idReadable: 'GAR-3', summary: 'Release notes for 2.4', type: 'Task', state: 'In Review' });
-  await put({ idReadable: 'GAR-4', summary: 'Old login crash', type: 'Bug', state: 'Fixed' });
+  await put({ idReadable: 'ACME-1', summary: 'Checkout fails on Safari', type: 'Task', state: 'Open', description: 'Customers on Safari 17 cannot pay.\n\n## Done when\n- [ ] Checkout completes on Safari 17' });
+  await put({ idReadable: 'ACME-2', summary: 'Dark mode for the settings page', type: 'Task', state: 'In Progress', assignee: 'kim' });
+  await put({ idReadable: 'ACME-3', summary: 'Release notes for 2.4', type: 'Task', state: 'In Review' });
+  await put({ idReadable: 'ACME-4', summary: 'Old login crash', type: 'Bug', state: 'Fixed' });
 }
 
 // The fake GitHub: the project's remote is acme/web; nothing in these scenarios files GitHub issues.
@@ -170,8 +170,8 @@ if (!desk) throw new Error('no Intake fix workflow in the acceptance project');
 await api('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: REAL ? process.env.TANDEMISE_YOUTRACK_TOKEN : 'perm:acceptance' });
 await api('PUT', `/v1/workspaces/${ws}/intake/config`, {
   tracker: {
-    kind: 'youtrack', url: ytUrl, project: REAL ? process.env.TANDEMISE_YOUTRACK_PROJECT : 'GAR',
-    board: `project: ${REAL ? process.env.TANDEMISE_YOUTRACK_PROJECT : 'GAR'} #Unresolved`,
+    kind: 'youtrack', url: ytUrl, project: REAL ? process.env.TANDEMISE_YOUTRACK_PROJECT : 'ACME',
+    board: `project: ${REAL ? process.env.TANDEMISE_YOUTRACK_PROJECT : 'ACME'} #Unresolved`,
     states: { ready: ['Open', 'Submitted'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'] },
     onComplete: 'in_review',
     workflows: { Bug: desk, Task: desk },

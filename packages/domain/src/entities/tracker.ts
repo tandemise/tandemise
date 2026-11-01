@@ -13,12 +13,12 @@ import type { TaskStatus } from './task.js';
  */
 
 /**
- * A tracker item's normalised reference, `<tracker>:<key>` (`youtrack:GAR-12`,
+ * A tracker item's normalised reference, `<tracker>:<key>` (`youtrack:ACME-12`,
  * `github:acme/web#42`), the relay's normalisation. Stored as plain text.
  */
 export type TrackerRef = Brand<string, 'TrackerRef'>;
 
-/** `trackerRef('youtrack', 'GAR-12')` is `youtrack:GAR-12`; `trackerRef('github', 'acme/web#42')` is `github:acme/web#42`. */
+/** `trackerRef('youtrack', 'ACME-12')` is `youtrack:ACME-12`; `trackerRef('github', 'acme/web#42')` is `github:acme/web#42`. */
 export function trackerRef(kind: 'youtrack' | 'github', key: string): TrackerRef {
   return `${kind}:${key}` as TrackerRef;
 }
@@ -274,7 +274,7 @@ export interface TrackerGoalSource {
  * The goal of a mission started from a tracker item (spec §7 step 3): the item
  * attributed to who started it and quoted as data, then each source's context.
  *
- *     YouTrack GAR-12, started by Ana: <url>
+ *     YouTrack ACME-12, started by Ana: <url>
  *
  *     The task as written in the tracker:
  *

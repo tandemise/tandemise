@@ -1025,7 +1025,7 @@ function goalContext(signal: IntakeSignal): string {
   return [signal.title, impactWords(signal.impact), signal.url].filter((x): x is string => x !== null && x !== '').join(' · ');
 }
 
-/** The ref for a key typed by a person (`GAR-12`, `#42` or `42`) when the board cache does not have it. */
+/** The ref for a key typed by a person (`ACME-12`, `#42` or `42`) when the board cache does not have it. */
 function refForKey(config: TrackerConfig, key: string): TrackerRef {
   if (config.kind === 'github-issues') return trackerRef('github', `${config.repo ?? ''}#${key.replace(/^.*#/, '')}`);
   return trackerRef('youtrack', key.toUpperCase());

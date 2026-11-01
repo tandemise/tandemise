@@ -52,7 +52,7 @@ see no change. Settings → Intake has a **Draft** field next to Ready.
    in order:
    1. the **description**, which only ever gains lines (#185): every line the
       item already has is kept exactly as written. The Done-when lines
-      accepted in Tandemise (not the item's own, which read "From GAR-71" on
+      accepted in Tandemise (not the item's own, which read "From ACME-71" on
       the mission) are appended to the item's own criteria section
       (`Done when` or `Acceptance criteria`) in its style, continuing its id
       scheme (`AC05`, `AC06`, …); with no such section, a `## Done when`

@@ -1,6 +1,6 @@
 /**
  * Tracker item references (spec §Data model, "item_ref"): `<tracker>:<key>`,
- * for example `youtrack:GAR-123` or `github:acme/app#7`. The daemon and the
+ * for example `youtrack:ACME-123` or `github:acme/app#7`. The daemon and the
  * relay both normalise through here, so they always agree on what "the same
  * item" is. #52 adds the other trackers.
  */
@@ -29,7 +29,7 @@ export function normalizeItemRef(raw: string): string {
   return `${tracker}:${key}`;
 }
 
-/** The display form: `GAR-123`, `acme/app#7`. */
+/** The display form: `ACME-123`, `acme/app#7`. */
 export function itemKey(ref: string): string {
   const at = ref.indexOf(':');
   return at < 0 ? ref : ref.slice(at + 1);

@@ -21,13 +21,13 @@ Result: **ALL PASS** (10/10 scenarios)
 - ✅ the sidebar has Board right after Home — `["Home","Board","Missions","Inbox","Artifacts","Repositories","Brain","Team","Skills","Evals","Runtimes","Integrations","Settings"]`
 - ✅ three groups: Ready, In progress, In review — `{"ready":"Ready\n1","inProgress":"In progress\n1","inReview":"In review\n1"}`
 - ✅ the header names the tracker and offers Check sources now — `"YouTrack\nRead just now\nCheck sources now"`
-- ✅ Ready lists GAR-1 "Checkout fails on Safari" with Start — `{"heading":"Ready\n1","rows":[{"key":"GAR-1","title":"Checkout fails on Safari","chips":[],"text":"GAR-1\nCheckout fails on Safari\nStart"}]}`
-- ✅ In progress lists GAR-2 with its assignee — `{"heading":"In progress\n1","rows":[{"key":"GAR-2","title":"Dark mode for the settings page","chips":[],"text":"GAR-2\nDark mode for the settings page\nkim\nStart"}]}`
-- ✅ In review lists GAR-3 — `{"heading":"In review\n1","rows":[{"key":"GAR-3","title":"Release notes for 2.4","chips":[],"text":"GAR-3\nRelease notes for 2.4\nStart"}]}`
-- ✅ GAR-4 (Fixed) is not on the Board
+- ✅ Ready lists ACME-1 "Checkout fails on Safari" with Start — `{"heading":"Ready\n1","rows":[{"key":"ACME-1","title":"Checkout fails on Safari","chips":[],"text":"ACME-1\nCheckout fails on Safari\nStart"}]}`
+- ✅ In progress lists ACME-2 with its assignee — `{"heading":"In progress\n1","rows":[{"key":"ACME-2","title":"Dark mode for the settings page","chips":[],"text":"ACME-2\nDark mode for the settings page\nkim\nStart"}]}`
+- ✅ In review lists ACME-3 — `{"heading":"In review\n1","rows":[{"key":"ACME-3","title":"Release notes for 2.4","chips":[],"text":"ACME-3\nRelease notes for 2.4\nStart"}]}`
+- ✅ ACME-4 (Fixed) is not on the Board
 - ✅ proof (fake YouTrack): the board query was read as written — `3`
-- ✅ Settings → Intake shows the tracker (YouTrack) and the three sources — `"Intake\nFor Acceptance\nTracker\n\nWork is filed in YouTrack GAR, and you start it from the Board.\n\nTracker\nYouTrack\nGitHub Issues\nYouTrack address\nhttps, or http on this computer only.\nProject\nIts short name, a`
-- ✅ a state YouTrack lacks is refused, shown in the daemon's own words — `{"shown":"YouTrack has no state 'Doing' in GAR. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.","daemonSays":"YouTrack has no state 'Doing' in GAR. Its states are: O`
+- ✅ Settings → Intake shows the tracker (YouTrack) and the three sources — `"Intake\nFor Acceptance\nTracker\n\nWork is filed in YouTrack ACME, and you start it from the Board.\n\nTracker\nYouTrack\nGitHub Issues\nYouTrack address\nhttps, or http on this computer only.\nProject\nIts short name, a`
+- ✅ a state YouTrack lacks is refused, shown in the daemon's own words — `{"shown":"YouTrack has no state 'Doing' in ACME. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.","daemonSays":"YouTrack has no state 'Doing' in ACME. Its states are: O`
 - ✅ …and nothing was saved
 - screenshot: `I1-board.png`
 - screenshot: `I1-settings-intake.png`
@@ -36,9 +36,9 @@ Result: **ALL PASS** (10/10 scenarios)
 ## I2 — A busy Sentry error becomes one tracker item, with its chip
 
 - ✅ the button said "Checking…" while it waited
-- ✅ one new row on the Board — `{"before":["GAR-1","GAR-2","GAR-3"],"after":["GAR-1","GAR-5","GAR-2","GAR-3"]}`
+- ✅ one new row on the Board — `{"before":["ACME-1","ACME-2","ACME-3"],"after":["ACME-1","ACME-5","ACME-2","ACME-3"]}`
 - ✅ its chip reads "Sentry · 132 events" — `["Sentry · 132 events"]`
-- ✅ it is Ready — `"GAR-5"`
+- ✅ it is Ready — `"ACME-5"`
 - ✅ proof (fake YouTrack): exactly one create — `1`
 - ✅ proof (fake YouTrack): its description has a "## Sources" section with the Sentry link — `"checkout/basket.ts\n\n## Sources\n- Sentry · acme/web · 132 events, 41 users · https://acme.sentry.io/issues/501/\n\nRecorded by Tandemise from Sentry, reported by someone."`
 - screenshot: `I2-board-sentry.png`
@@ -46,8 +46,8 @@ Result: **ALL PASS** (10/10 scenarios)
 ## I3 — The same error from Slack links to the item instead of filing another
 
 - ✅ no new row — `{"before":4,"after":4}`
-- ✅ GAR-5's chips now include Slack — `["Sentry · 132 events","Slack · thread"]`
-- ✅ the Intake tab says "Linked to GAR-5" — `{"fingerprint":"slack:acme.slack.com#support:C0SUPPORT:1730000001.000100","title":"TypeError: basket is null","source":"Slack","status":"Linked to GAR-5","text":"TypeError: basket is null\nSlack\nLinked to GAR-5\njust no`
+- ✅ ACME-5's chips now include Slack — `["Sentry · 132 events","Slack · thread"]`
+- ✅ the Intake tab says "Linked to ACME-5" — `{"fingerprint":"slack:acme.slack.com#support:C0SUPPORT:1730000001.000100","title":"TypeError: basket is null","source":"Slack","status":"Linked to ACME-5","text":"TypeError: basket is null\nSlack\nLinked to ACME-5\njust no`
 - ✅ proof (fake YouTrack): still one create — `1`
 - ✅ proof (fake Slack): the thread was acknowledged with :eyes: — `["eyes"]`
 - screenshot: `I3-board-two-sources.png`
@@ -62,22 +62,22 @@ Result: **ALL PASS** (10/10 scenarios)
 
 ## I5 — An unsure match is asked in the Inbox, and Same task links it
 
-- ✅ the Inbox asks "Is this the same as GAR-1?" — `"Is this the same as GAR-1?\nCheckout fails·From custom\nGAR-1 Checkout fails on Safari\njust now\nSame task\nNew task\nNot work"`
-- ✅ …shows the candidate and the three answers — `"Is this the same as GAR-1?\nCheckout fails·From custom\nGAR-1 Checkout fails on Safari\njust now\nSame task\nNew task\nNot work"`
+- ✅ the Inbox asks "Is this the same as ACME-1?" — `"Is this the same as ACME-1?\nCheckout fails·From custom\nGAR-1 Checkout fails on Safari\njust now\nSame task\nNew task\nNot work"`
+- ✅ …shows the candidate and the three answers — `"Is this the same as ACME-1?\nCheckout fails·From custom\nGAR-1 Checkout fails on Safari\njust now\nSame task\nNew task\nNot work"`
 - ✅ Same task removes the card
-- ✅ Intake: "Linked to GAR-1" — `{"fingerprint":"custom:web-form:form-17","title":"Checkout fails","source":"custom","status":"Linked to GAR-1","text":"Checkout fails\ncustom\nLinked to GAR-1\njust now"}`
+- ✅ Intake: "Linked to ACME-1" — `{"fingerprint":"custom:web-form:form-17","title":"Checkout fails","source":"custom","status":"Linked to ACME-1","text":"Checkout fails\ncustom\nLinked to ACME-1\njust now"}`
 - ✅ proof (fake YouTrack): still one create — `1`
 - screenshot: `I5-inbox-decision.png`
 
 ## I6 — Start opens a mission with the item's criteria and the tracker follows
 
-- ✅ GAR-5 is Ready with Start enabled — `"GAR-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nStart"`
+- ✅ ACME-5 is Ready with Start enabled — `"ACME-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nStart"`
 - ✅ Start opens the mission — `"msn_01m688s5dkasw2vremm0"`
 - ✅ the mission's Done when is the item's criterion — `"Done when\n0 of 1 verified\nU1\nCheckout no longer throws when the basket is empty\nThe spec will cover this\nNot verified"`
 - ✅ the mission was planned, never queued — `{"status":"AWAITING_PLAN_APPROVAL"}`
-- ✅ proof (fake YouTrack): GAR-5 is In Progress — `"In Progress"`
+- ✅ proof (fake YouTrack): ACME-5 is In Progress — `"In Progress"`
 - ✅ proof (fake YouTrack): one comment starting <!-- tandemise:activity --> — `["<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: TypeError: basket is null."]`
-- ✅ GAR-5 moved under In progress, with its mission's status in words — `"GAR-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nMission: Awaiting plan approval\nStart"`
+- ✅ ACME-5 moved under In progress, with its mission's status in words — `"ACME-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nMission: Awaiting plan approval\nStart"`
 - ✅ …and Start is off, with the reason as its title — `{"disabled":true,"title":"Has a mission"}`
 - screenshot: `I6-mission.png`
 - screenshot: `I6-board-started.png`
@@ -85,16 +85,16 @@ Result: **ALL PASS** (10/10 scenarios)
 ## I7 — The mission completes: the item moves to In Review and the comment shows the criteria
 
 - ✅ the mission completes — `"COMPLETE"`
-- ✅ proof (fake YouTrack): GAR-5 is In Review (onComplete) — `"In Review"`
+- ✅ proof (fake YouTrack): ACME-5 is In Review (onComplete) — `"In Review"`
 - ✅ proof (fake YouTrack): still one activity comment, now "Done in Tandemise — N of N criteria verified." — `"<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: TypeError: basket is null.\n\nPlan:\n- [x] spec\n- [x] build\n- [x] qa\n- [x] release\n\nDone in Tandemise — 2 of 2 criteria verified.\n\n| Key |`
 - ✅ …with the criteria table: the item's own criterion is U1, Verified — `"<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: TypeError: basket is null.\n\nPlan:\n- [x] spec\n- [x] build\n- [x] qa\n- [x] release\n\nDone in Tandemise — 2 of 2 criteria verified.\n\n| Key |`
-- ✅ the Board lists GAR-5 under In review, its mission Complete — `"GAR-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nMission: Complete\nStart"`
+- ✅ the Board lists ACME-5 under In review, its mission Complete — `"ACME-5\nTypeError: basket is null\nSentry · 132 events\nSlack · thread\nMission: Complete\nStart"`
 - screenshot: `I7-board-in-review.png`
 
 ## I8 — The item is done: the loop closes at Sentry and in Slack
 
 - ✅ proof (fake Sentry): issue 501 resolved inCommit, in acme/web — `{"status":"resolved","statusDetails":{"inCommit":{"commit":"cd3dd80711031c8b0aadc3b7aac9310fa6d7afc9","repository":"acme/web"}}}`
-- ✅ proof (fake Slack): one thread reply naming GAR-5 — `["Done: TypeError: basket is null · GAR-5"]`
+- ✅ proof (fake Slack): one thread reply naming ACME-5 — `["Done: TypeError: basket is null · ACME-5"]`
 - ✅ Intake: the Sentry signal reads "Closed" — `{"fingerprint":"sentry:acme/web:501","title":"TypeError: basket is null","source":"Sentry · 3 times","status":"Closed","text":"TypeError: basket is null\nSentry · 3 times\nClosed\njust now"}`
 - ✅ Intake: the Slack signal reads "Closed" — `{"fingerprint":"slack:acme.slack.com#support:C0SUPPORT:1730000001.000100","title":"TypeError: basket is null","source":"Slack","status":"Closed","text":"TypeError: basket is null\nSlack\nClosed\n3m ago"}`
 - ✅ nothing is written twice on later passes — `{"puts":1,"replies":1}`
@@ -105,7 +105,7 @@ Result: **ALL PASS** (10/10 scenarios)
 - ✅ Make a token shows a tdi_ token once, with Copy — `"tdi_ej2x…"`
 - ✅ tandemise intake push exits 0 and prints the fingerprint and status — `{"code":0,"stdout":"custom:web-form:form-18: received\n","stderr":""}`
 - ✅ the token pushes to its source only: refused in the daemon's words — `{"code":1,"stdout":"","stderr":"This token can only push to 'web-form'.\n"}`
-- ✅ the signal appears in the Intake tab, filed — `{"fingerprint":"custom:web-form:form-18","title":"Export to CSV drops accents","source":"custom","status":"Filed as GAR-6","text":"Export to CSV drops accents\ncustom\nFiled as GAR-6\njust now"}`
+- ✅ the signal appears in the Intake tab, filed — `{"fingerprint":"custom:web-form:form-18","title":"Export to CSV drops accents","source":"custom","status":"Filed as ACME-6","text":"Export to CSV drops accents\ncustom\nFiled as ACME-6\njust now"}`
 - ✅ tandemise intake closures lists its closure, pending — `"clo_01m688x4zsay69frmxc7 custom:web-form:form-18 pending\n"`
 - ✅ --ack closes it — `{"code":0,"stdout":"clo_01m688x4zsay69frmxc7 custom:web-form:form-18 closed\n","stderr":""}`
 - ✅ Intake: "Closed" — `{"fingerprint":"custom:web-form:form-18","title":"Export to CSV drops accents","source":"custom","status":"Closed","text":"Export to CSV drops accents\ncustom\nClosed\njust now"}`
@@ -119,7 +119,7 @@ Result: **ALL PASS** (10/10 scenarios)
 - ✅ the project is linked to a brain on this machine (local_only) — `{"status":"local_only","clone":"/tmp/tdm-intake/home/brains/ws_01m688m1k80pzxtqhy65"}`
 - ✅ after Sync (210d273): origin brain, one source sentry-team, the tracker at A — `{"origin":"brain","sources":["sentry-team"],"tracker":"http://127.0.0.1:38619"}`
 - ✅ API: the brain source is off on this computer (enabled false) — `{"sentry-team":false}`
-- ✅ Settings → Intake says it is set in the project's brain — `"Intake\nFor Acceptance\nSet in this project's brain.\nTracker\n\nWork is filed in YouTrack GAR, and you start it from the Board.\n\nTracker\nYouTrack\nGitHub Issues\nYouTrack address\nhttps, or http on this computer onl`
+- ✅ Settings → Intake says it is set in the project's brain — `"Intake\nFor Acceptance\nSet in this project's brain.\nTracker\n\nWork is filed in YouTrack ACME, and you start it from the Board.\n\nTracker\nYouTrack\nGitHub Issues\nYouTrack address\nhttps, or http on this computer onl`
 - ✅ the window shows "Run sentry-team on this computer" OFF — `"false"`
 - ✅ saving its token here leaves it off (API enabled false)
 - ✅ OFF: Check sources now → the fake Sentry records no poll — `{"before":5,"after":5}`
@@ -134,9 +134,9 @@ Result: **ALL PASS** (10/10 scenarios)
 - ✅ nothing from B is on the Board yet
 - ✅ Settings → Intake shows the prompt: the sentence, "Saved for http://127.0.0.1:38619." and Use the new address — `"This project's tracker now points at http://127.0.0.1:39029. Confirm the new address in Settings → Intake before Tandemise sends your token there.\n\nSaved for http://127.0.0.1:38619.\n\nUse the new address"`
 - ✅ click Use the new address → the prompt disappears and API originMismatch.tracker is null — `{"tracker":null,"sources":{}}`
-- ✅ the Board refreshes against B: GAR-101 Ready, GAR-102 In progress, and every row is B's item — `{"keys":{"ready":["GAR-101"],"inProgress":["GAR-102"],"inReview":[]},"notB":[]}`
+- ✅ the Board refreshes against B: ACME-101 Ready, ACME-102 In progress, and every row is B's item — `{"keys":{"ready":["ACME-101"],"inProgress":["ACME-102"],"inReview":[]},"notB":[]}`
 - ✅ …with no problem line — `""`
-- ✅ proof (fake YouTrack B): B now receives requests carrying the token (the board read) — `{"count":4,"paths":["GET /api/issues","GET /api/issues/GAR-1"]}`
+- ✅ proof (fake YouTrack B): B now receives requests carrying the token (the board read) — `{"count":4,"paths":["GET /api/issues","GET /api/issues/ACME-1"]}`
 - screenshot: `I10-on-this-computer-off.png`
 - screenshot: `I10-on-this-computer-on.png`
 - screenshot: `I10-board-tracker-moved.png`

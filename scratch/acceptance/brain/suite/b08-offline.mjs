@@ -7,7 +7,7 @@ import { REMOTE, clickIn, home1, openBrainTab, runBuildMission } from '../common
 const c = await home1();
 const ev = new Evidence('B8', 'Offline, work goes on from your copy of the brain');
 renameSync(REMOTE, `${REMOTE}.gone`);
-ev.note('renamed the bare repository behind github.com/garipass/brain');
+ev.note('renamed the bare repository behind github.com/acme/brain');
 try {
   await openBrainTab(c, 'sync');
   await clickIn(c, 'section[aria-label="Brain sync"]', 'Sync now');

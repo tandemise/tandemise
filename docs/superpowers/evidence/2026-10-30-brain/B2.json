@@ -31,7 +31,7 @@
     {
       "label": "home 2 is linked to the same remote",
       "ok": true,
-      "observed": "Brain\ngithub.com/garipass/brain\n\nUp to date (last synced 21:08).\n\n0 rules files · 0 lessons\n\nSync now\nOpen the brain\nUnlink"
+      "observed": "Brain\ngithub.com/acme/brain\n\nUp to date (last synced 21:08).\n\n0 rules files · 0 lessons\n\nSync now\nOpen the brain\nUnlink"
     },
     {
       "label": "Team → Roles → Developer shows home 1's model (brain-model)",

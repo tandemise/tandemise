@@ -8,7 +8,7 @@ const ev = new Evidence('B2', 'A second home uses the existing brain and gets th
 await openBrainSection(c);
 await clickIn(c, 'section[aria-label="Brain"]', 'Use an existing brain');
 await c.until(() => c.page.evaluate(`Boolean(document.querySelector('[aria-label="Use an existing brain"]'))`), { label: 'adopt form', timeoutMs: 10_000 });
-await typeInto(c, 'Brain repository', 'github.com/garipass/brain');
+await typeInto(c, 'Brain repository', 'github.com/acme/brain');
 await c.sleep(300);
 await clickIn(c, '[aria-label="Use an existing brain"]', 'Preview');
 await c.until(() => c.page.evaluate(`Boolean(document.querySelector('[aria-label="Brain preview"]'))`), { label: 'brain preview', timeoutMs: 60_000 });
@@ -20,7 +20,7 @@ await c.sleep(300);
 await c.page.screenshot(ev.shot('preview'));
 await clickIn(c, '[aria-label="Brain preview"]', 'Link');
 const text = await c.until(async () => { const t = await brainSectionText(c); return t.includes('Up to date') && t; }, { label: 'linked', timeoutMs: 60_000 });
-ev.check('home 2 is linked to the same remote', text.includes('github.com/garipass/brain') && text.includes('Up to date'), text.slice(0, 200));
+ev.check('home 2 is linked to the same remote', text.includes('github.com/acme/brain') && text.includes('Up to date'), text.slice(0, 200));
 await c.page.screenshot(ev.shot('linked'));
 const model = await roleModelInWindow(c, 'Developer');
 ev.check("Team → Roles → Developer shows home 1's model (brain-model)", model === 'brain-model', model);

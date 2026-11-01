@@ -13,15 +13,15 @@ Result: **PASS** (36/36 checks)
 - ✅ Settings → Intake: Make a token shows a tdi_ token — `"tdi_F9tL…"`
 - ✅ Settings → Intake, with a brain: Save token saves this computer's YouTrack token — `{"button":"clicked","saves":[1,2]}`
 - ✅ a shell pushes the signal (tandemise intake push exits 0) — `{"code":0,"stdout":"custom:web-form:form-7: received\n","stderr":""}`
-- ✅ Intake tab: the signal is filed in the tracker — `{"fingerprint":"custom:web-form:form-7","title":"Typo in the settings title","source":"custom","status":"Filed as GAR-2","text":"Typo in the settings title\ncustom\nFiled as GAR-2\njust now"}`
-- ✅ fake YouTrack: GAR-2 exists, a Bug, Open — `{"summary":"Typo in the settings title","type":"Bug","state":"Open"}`
-- ✅ Board: GAR-2 is under Ready with Start — `"GAR-2\nTypo in the settings title\ncustom · web-form\nStart"`
+- ✅ Intake tab: the signal is filed in the tracker — `{"fingerprint":"custom:web-form:form-7","title":"Typo in the settings title","source":"custom","status":"Filed as ACME-2","text":"Typo in the settings title\ncustom\nFiled as ACME-2\njust now"}`
+- ✅ fake YouTrack: ACME-2 exists, a Bug, Open — `{"summary":"Typo in the settings title","type":"Bug","state":"Open"}`
+- ✅ Board: ACME-2 is under Ready with Start — `"ACME-2\nTypo in the settings title\ncustom · web-form\nStart"`
 - ✅ Start: the factory decides the workflow (auto) — `"auto"`
 - ✅ Start with no Done-when line plans at once (no draft, no refinement) — `"EXECUTING"`
 - ✅ …and asks for no plan approval — `[]`
 - ✅ Plan → Why these steps: "Quick lane: one step, then a pull request." — `"Fix\ntiny\nlow risk\nMake it careful\n\nFix · tiny · low risk\n\nQuick lane: one step, then a pull request. The project's lane rules matched it.\n\nNo plan approval.\nNo separate review or QA: the tests carry it, and th`
 - ✅ …profiled from the tracker as a fix — `["Fix","tiny","low risk"]`
-- ✅ fake YouTrack: GAR-2 is In Progress — `"In Progress"`
+- ✅ fake YouTrack: ACME-2 is In Progress — `"In Progress"`
 - ✅ the implement step runs on the Coding agent's fake runtime — `"Day fake"`
 - ✅ Hold opens the terminal panel, "Held by You" — `"Implement the changeHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F"`
 - ✅ what you type reaches the session (it writes notes.txt) — `"Fake session sess-day-run_01m6abh98s812qvfzs8e\nwrite notes.txt\n> write notes.txt\nwrote notes.txt\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"`
@@ -34,10 +34,10 @@ Result: **PASS** (36/36 checks)
 - ✅ the pull request's branch carries the agent's change and the file made in the hold — `{"title":"fix: typo in the settings title","head":"tandemise/typo-in-the-settings-title/typo-in-the-settings-title-implement-4jpw0smj","files":[".gitignore",".tandemise/workflows/build-only.yaml",".tandemise/workflows/p0`
 - ✅ Inbox: "Review and merge" — `["Review and merge fix: typo in the settings title"]`
 - ✅ the ship card says "Waiting for your review" with Open in GitHub — `"Waiting for your review\n\nWaiting for your review: Auto-merge is off for this project.\n\nacme/web #1\nOpen in GitHub\nMerge\nAuto-merge is off for this project.\nThis repository has no CI checks, so Tandemise never me`
-- ✅ fake YouTrack: GAR-2 moved to In Review while the pull request waits for you — `"In Review"`
+- ✅ fake YouTrack: ACME-2 moved to In Review while the pull request waits for you — `"In Review"`
 - ✅ fake YouTrack: one activity comment, linking the pull request — `[{"id":"4-1","text":"<!-- tandemise:activity -->\n\nStarted in Tandemise by Demostenes Garcia: Typo in the settings title.\n\nPlan:\n- [x] Implement the change\n- [ ] Ship — waiting for a person\n\nPull request: https://`
-- ✅ Board: GAR-2 shows its mission — `"GAR-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nHas a mission\nStart"`
-- ✅ Home → Who's working on what: GAR-2 (Typo in the settings title), yours — `"Who's working on what\nYou\nGAR-2\nTypo in the settings title\nsince 20:28"`
+- ✅ Board: ACME-2 shows its mission — `"ACME-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nHas a mission\nStart"`
+- ✅ Home → Who's working on what: ACME-2 (Typo in the settings title), yours — `"Who's working on what\nYou\nGAR-2\nTypo in the settings title\nsince 20:28"`
 - ✅ the code change above ran the test suite exactly once (the gate's run; nothing ran it twice) — `1`
 - ✅ docs: the factory picks the quick lane (one step, then the pull request) — `["implement","ship"]`
 - ✅ docs: Start → pull request without a person stepping in — `{"prs":1,"attempts":1}`

@@ -1,5 +1,5 @@
-// I5 — A similar-but-unsure signal (a web form's "Checkout fails", close to GAR-1 "Checkout fails on Safari"):
-// the Inbox asks "Is this the same as GAR-1?"; Same task removes the card, and Intake says "Linked to GAR-1".
+// I5 — A similar-but-unsure signal (a web form's "Checkout fails", close to ACME-1 "Checkout fails on Safari"):
+// the Inbox asks "Is this the same as ACME-1?"; Same task removes the card, and Intake says "Linked to ACME-1".
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
 import { intakeStatus, openBoard, yt } from '../common.mjs';
@@ -18,7 +18,7 @@ await until(async () => (await c.api.get(`/v1/workspaces/${c.env.workspaceId}/in
 
 await page.navigate('#/inbox');
 const card = await until(() => page.evaluate(`document.querySelector('[data-intake-decision]')?.innerText ?? ''`), { label: 'the Inbox card', timeoutMs: 30_000 });
-ev.check('the Inbox asks "Is this the same as GAR-1?"', card.includes('Is this the same as GAR-1?'), card);
+ev.check('the Inbox asks "Is this the same as ACME-1?"', card.includes('Is this the same as ACME-1?'), card);
 ev.check('…shows the candidate and the three answers', card.includes('Checkout fails on Safari') && ['Same task', 'New task', 'Not work'].every((b) => card.includes(b)), card);
 await page.screenshot(ev.shot('inbox-decision'));
 await page.click('Same task', { within: '[data-intake-decision]' });
@@ -26,7 +26,7 @@ await until(() => page.evaluate(`document.querySelector('[data-intake-decision]'
 ev.check('Same task removes the card', true);
 
 await openBoard(c, 'intake');
-const row = await intakeStatus(c, fingerprint, (s) => s.startsWith('Linked'), 'Linked to GAR-1');
-ev.check('Intake: "Linked to GAR-1"', row.status === 'Linked to GAR-1', row);
+const row = await intakeStatus(c, fingerprint, (s) => s.startsWith('Linked'), 'Linked to ACME-1');
+ev.check('Intake: "Linked to ACME-1"', row.status === 'Linked to ACME-1', row);
 ev.check('proof (fake YouTrack): still one create', (await yt.creates()).length === 1, (await yt.creates()).length);
 c.close(); ev.save();

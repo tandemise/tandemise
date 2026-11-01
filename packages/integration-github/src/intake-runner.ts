@@ -46,7 +46,7 @@ export class GitHubIssuesRunner implements IntakeRunner {
   }
 
   /**
-   * Spec §8: a comment ("Fixed in <PR>; tracked as GAR-12."), then a close
+   * Spec §8: a comment ("Fixed in <PR>; tracked as ACME-12."), then a close
    * only with the source's `closeOnDone` (P14's guard). A won't-do item writes
    * nothing unless `closeWontDo` is set, and then closes as "not planned".
    */

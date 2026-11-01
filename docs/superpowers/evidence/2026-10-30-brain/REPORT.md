@@ -19,7 +19,7 @@ Result: **ALL PASS** (9/9 scenarios)
 
 - note: home 1 Developer model set to brain-model through the API, so B2 has something to carry
 - PASS the Brain section offers the three ways in — `"Brain\nNot linked\n\nA brain is one git repository that holds what this project has learned and how its factory works: roles, workflows, rules and lessons. A teammate who links the same brain gets the same factory. Shar`
-- PASS the window says Up to date — `"Brain\ngithub.com/garipass/brain\n\nUp to date (last synced 21:08).\n\n1 rules file · 0 lessons\n\nSync now\nOpen the brain\nUnlink"`
+- PASS the window says Up to date — `"Brain\ngithub.com/acme/brain\n\nUp to date (last synced 21:08).\n\n1 rules file · 0 lessons\n\nSync now\nOpen the brain\nUnlink"`
 - PASS and names the remote
 - PASS the fake gh created a private repository
 - PASS the bare repo has brain.yaml, factory/roles/development.md and memory/rules/project.md — `[".gitattributes","README.md","brain.yaml","factory/roles/architecture.md","factory/roles/design.md","factory/roles/development.md","factory/roles/finance.md","factory/roles/product.md","factory/roles/qa.md","factory/rol`
@@ -32,7 +32,7 @@ Result: **ALL PASS** (9/9 scenarios)
 
 - PASS the preview lists the items, item by item — `["Developer: Change","Project settings: Same","Work-in-progress limit: Same","Monthly limits: Same","Default mission limits: Same","Architect: Same","Product Designer: Same","Finance Analyst: Same","Product Manager: Same`
 - PASS the Developer is a Change (brain-model is new here) — `["Developer: Change"]`
-- PASS home 2 is linked to the same remote — `"Brain\ngithub.com/garipass/brain\n\nUp to date (last synced 21:08).\n\n0 rules files · 0 lessons\n\nSync now\nOpen the brain\nUnlink"`
+- PASS home 2 is linked to the same remote — `"Brain\ngithub.com/acme/brain\n\nUp to date (last synced 21:08).\n\n0 rules files · 0 lessons\n\nSync now\nOpen the brain\nUnlink"`
 - PASS Team → Roles → Developer shows home 1's model (brain-model) — `"brain-model"`
 - screenshot: `B2-preview.png`
 - screenshot: `B2-linked.png`
@@ -87,7 +87,7 @@ Result: **ALL PASS** (9/9 scenarios)
 
 ## B8 — Offline, work goes on from your copy of the brain
 
-- note: renamed the bare repository behind github.com/garipass/brain
+- note: renamed the bare repository behind github.com/acme/brain
 - PASS Brain → Sync says it is working from your copy — `"Working from your copy of the brain (last synced 21:12). Couldn't reach github.com."`
 - PASS the task still runs to the end — `["COMPLETE","SUCCEEDED"]`
 - PASS and the Sync tab still says so — `"Working from your copy of the brain (last synced 21:13). Couldn't reach github.com."`

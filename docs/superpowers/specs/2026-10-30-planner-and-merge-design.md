@@ -471,7 +471,7 @@ A malformed `merge.yaml` means **ask** for every PR, with the parse error, never
 #### 8.4 Conservative defaults
 
 - `autoMerge: off` in every new brain and in the shipped default. A project with no brain can never auto-merge.
-- Turning it on is a person's edit in Project settings → **Merge**, written to `factory/merge.yaml` with the person as author (`humanEdits`, #51 §8). The app first shows the **backtest** (§9.3) over the project's past decisions. Turning it on records a Decision (`memory/decisions/`, MVP.md §14.4) — "Auto-merge low-risk PRs in Garipass", by whom and when. That standing, recorded human authorization is how this design reconciles MVP.md §18.2 ("merge protected branch: human approval required") with auto-merge: the owner approves the policy once, explicitly, and every merge cites it.
+- Turning it on is a person's edit in Project settings → **Merge**, written to `factory/merge.yaml` with the person as author (`humanEdits`, #51 §8). The app first shows the **backtest** (§9.3) over the project's past decisions. Turning it on records a Decision (`memory/decisions/`, MVP.md §14.4) — "Auto-merge low-risk PRs in Acme", by whom and when. That standing, recorded human authorization is how this design reconciles MVP.md §18.2 ("merge protected branch: human approval required") with auto-merge: the owner approves the policy once, explicitly, and every merge cites it.
 - The careful lane always asks (a `never` rule in the default).
 
 #### 8.5 Merging the reviewed commit
@@ -486,7 +486,7 @@ A malformed `merge.yaml` means **ask** for every PR, with the parse error, never
 
 - A `merge_decisions` table (append-only, additive migration): `missionId`, `repo`, `prNumber`, `headSha`, `brainSha`, `verdict` (`merge` | `ask`), `score`, `factors` (each rule, its points or verdict, and the facts it read), the full input facts as JSON, `decidedAt`, and later `mergedAt`, `mergedBy` (`tandemise` or a member), `mergeSha`.
 - Events: `ship.pr_opened`, `ship.decided`, `ship.merged`, `ship.asked`, `ship.reverted`, recorded with the existing recorder.
-- **One PR comment** per decision, edited in place like #52's activity comment: "Tandemise merged this on its own: risk score 1 of 2 allowed. Touched `apps/web/src/pages/settings.tsx` (no sensitive areas), 34 lines, tests changed, CI green on `a1b2c3d`. Policy: garipass/brain@`9f8e7d6`." Or: "Tandemise asks for a review: touches `db/migrations/0042_add_index.sql` (never auto-merged in this project)."
+- **One PR comment** per decision, edited in place like #52's activity comment: "Tandemise merged this on its own: risk score 1 of 2 allowed. Touched `apps/web/src/pages/settings.tsx` (no sensitive areas), 34 lines, tests changed, CI green on `a1b2c3d`. Policy: acme/brain@`9f8e7d6`." Or: "Tandemise asks for a review: touches `db/migrations/0042_add_index.sql` (never auto-merged in this project)."
 - The brain's `history` entry for the mission (#51 §5) gains the verdict, the score and the PR URLs.
 - The tracker's activity comment (#52) says "Merged on its own" or "Waiting for review".
 

@@ -75,13 +75,13 @@ section('daemon: intake config, tokens, pushes and the CLI');
     // 1. The local config: a youtrack tracker and two custom sources.
     const config = {
       tracker: {
-        kind: 'youtrack', url: 'https://yt.test', project: 'GAR', board: 'project: GAR #Unresolved',
+        kind: 'youtrack', url: 'https://yt.test', project: 'ACME', board: 'project: ACME #Unresolved',
         states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
       },
       intake: { sources: [{ id: 'custom-feed', kind: 'custom', instance: 'custom-feed' }, { id: 'other-feed', kind: 'custom', instance: 'other-feed' }] },
     };
     const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, config);
-    check('PUT intake/config stores the tracker and sources', put.status === 200 && put.body?.origin === 'local' && put.body?.tracker?.project === 'GAR' && put.body?.sources?.length === 2 && put.body?.dailyCap === 20, put);
+    check('PUT intake/config stores the tracker and sources', put.status === 200 && put.body?.origin === 'local' && put.body?.tracker?.project === 'ACME' && put.body?.sources?.length === 2 && put.body?.dailyCap === 20, put);
     const got = await call('GET', `/v1/workspaces/${ws}/intake/config`);
     check('GET intake/config reads it back', got.status === 200 && got.body?.sources?.[1]?.id === 'other-feed', got);
     const badPut = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: undefined } });
@@ -157,7 +157,7 @@ section('daemon: intake config, tokens, pushes and the CLI');
       && /^ {2}Couldn't reach YouTrack: .* Tandemise will try again\.$/.test(named.stdout.split('\n')[1] ?? ''), named);
 
     // 8. `tandemise start <key>` (plan Task 8), against a fake YouTrack.
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
     fake.putIssue({ summary: 'Checkout fails on Safari', description: '## Done when\n- [ ] Checkout works on Safari', state: 'Open' });
     const app = await import('@tandemise/application');
     const toFake = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: fake.url } });
@@ -165,22 +165,22 @@ section('daemon: intake config, tokens, pushes and the CLI');
     // Saved after the URL is set, so the token is bound to the fake's address (Ruling 23).
     await daemon.container.resolve(app.TRACKER_RESOLVER).saveCredential(ws, 'perm:test');
     const refreshed = await call('POST', `/v1/workspaces/${ws}/board/refresh`);
-    check('POST board/refresh answers the board with GAR-1 ready', refreshed.status === 200 && refreshed.body?.trackerLabel === 'YouTrack' && refreshed.body?.groups?.ready?.some((i) => i.key === 'GAR-1' && i.startable.ok === true), refreshed);
+    check('POST board/refresh answers the board with ACME-1 ready', refreshed.status === 200 && refreshed.body?.trackerLabel === 'YouTrack' && refreshed.body?.groups?.ready?.some((i) => i.key === 'ACME-1' && i.startable.ok === true), refreshed);
     const boardRead = await call('GET', `/v1/workspaces/${ws}/board`);
-    check('GET board reads the cache', boardRead.status === 200 && boardRead.body?.groups?.ready?.some((i) => i.key === 'GAR-1'), boardRead);
-    const started = await cli(['start', 'GAR-1', '--project', ws], env);
-    check('tandemise start GAR-1 prints Started GAR-1: <mission title>', started.code === 0 && started.stdout.trim() === 'Started GAR-1: Checkout fails on Safari', started);
-    check('…and YouTrack shows GAR-1 In Progress', fake.issues.get('GAR-1')?.state === 'In Progress', fake.issues.get('GAR-1')?.state);
-    const startedAgain = await cli(['start', 'GAR-1', '--project', ws], env);
-    check("a second start exits 1 with the daemon's words", startedAgain.code === 1 && startedAgain.stderr.trim() === 'GAR-1 already has a mission: Checkout fails on Safari.', startedAgain);
-    const viaRoute = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-1' });
-    check('POST board/start refuses it as 409 too', viaRoute.status === 409 && viaRoute.body?.error?.message === 'GAR-1 already has a mission: Checkout fails on Safari.', viaRoute);
+    check('GET board reads the cache', boardRead.status === 200 && boardRead.body?.groups?.ready?.some((i) => i.key === 'ACME-1'), boardRead);
+    const started = await cli(['start', 'ACME-1', '--project', ws], env);
+    check('tandemise start ACME-1 prints Started ACME-1: <mission title>', started.code === 0 && started.stdout.trim() === 'Started ACME-1: Checkout fails on Safari', started);
+    check('…and YouTrack shows ACME-1 In Progress', fake.issues.get('ACME-1')?.state === 'In Progress', fake.issues.get('ACME-1')?.state);
+    const startedAgain = await cli(['start', 'ACME-1', '--project', ws], env);
+    check("a second start exits 1 with the daemon's words", startedAgain.code === 1 && startedAgain.stderr.trim() === 'ACME-1 already has a mission: Checkout fails on Safari.', startedAgain);
+    const viaRoute = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-1' });
+    check('POST board/start refuses it as 409 too', viaRoute.status === 409 && viaRoute.body?.error?.message === 'ACME-1 already has a mission: Checkout fails on Safari.', viaRoute);
     // #103: the lane chosen on the Board before Start goes with the mission.
     fake.putIssue({ summary: 'Typo on the receipt', description: '## Done when\n- [ ] The receipt says "Total"', state: 'Open' });
     await call('POST', `/v1/workspaces/${ws}/board/refresh`);
-    const quick = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'careful' });
+    const quick = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-2', lane: 'careful' });
     check('POST board/start with a lane starts the mission with it', quick.status === 200 && quick.body?.mission?.laneRequest === 'careful', quick.body?.mission ?? quick);
-    const badLane = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'fast' });
+    const badLane = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-2', lane: 'fast' });
     check('a lane that is not quick or careful is a 400', badLane.status === 400, badLane);
 
     // #136: a container, a type the project does not build and another repository's item are on the board, not startable.
@@ -241,7 +241,7 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
     mkdirSync(home, { recursive: true });
     writeFileSync(join(home, 'settings.json'), JSON.stringify({ intakeWebhookPort: hookPort }));
 
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
     sentry = await startFakeSentry({ token: 'sntrys_test', org: 'acme', project: 'web' });
     sentry.putIssue({ id: '501', title: 'TypeError: basket is null', culprit: 'basket.ts', count: '132', userCount: 41 });
     daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
@@ -258,7 +258,7 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
     const ws = (await call('POST', '/v1/workspaces', { name: 'Hooks' })).body?.workspace?.id;
     const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, {
       tracker: {
-        kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+        kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved',
         states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
       },
       intake: { sources: [{ id: 'sentry-web', kind: 'sentry', instance: 'acme/web', api: sentry.url }] },
@@ -281,9 +281,9 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
     check('…nor in settings.json', !settingsText.includes('sntrys_test') && !settingsText.includes('perm:test'));
 
     const checked = await call('POST', `/v1/workspaces/${ws}/intake/check`);
-    check('Check sources now reads Sentry with the saved token and files GAR-1 in YouTrack with the saved one',
+    check('Check sources now reads Sentry with the saved token and files ACME-1 in YouTrack with the saved one',
       checked.status === 200 && sentry.calls.some((c) => c.authorization === 'Bearer sntrys_test')
-      && fake.issues.get('GAR-1')?.summary === 'TypeError: basket is null', { status: checked.status, board: checked.body, issue: fake.issues.get('GAR-1')?.summary });
+      && fake.issues.get('ACME-1')?.summary === 'TypeError: basket is null', { status: checked.status, board: checked.body, issue: fake.issues.get('ACME-1')?.summary });
 
     const hookUrl = `http://127.0.0.1:${hookPort}`;
     const delivered = await fetch(`${hookUrl}/hooks/${ws}/sentry-web`, { method: 'POST', body: '{"data":{}}' });
@@ -296,7 +296,7 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
 
     // Ruling 23: both addresses move. Neither token goes to the new host until
     // the person confirms it, through the two confirm-origin routes.
-    fakeB = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fakeB = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
     sentryB = await startFakeSentry({ token: 'sntrys_test', org: 'acme', project: 'web' });
     sentryB.putIssue({ id: '502', title: 'ReferenceError: cart is not defined', culprit: 'cart.ts', count: '90', userCount: 12 });
     const before = (await call('GET', `/v1/workspaces/${ws}/intake/config`)).body;
@@ -346,9 +346,9 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
   let daemon;
   let fake;
   try {
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'In Review', 'Done', "Won't fix"] });
-    fake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: 'Customers on Safari cannot pay.', state: 'Draft' });
-    fake.putIssue({ idReadable: 'GAR-8', summary: 'Ready already', description: '## Done when\n- [ ] It works', state: 'Open' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'In Review', 'Done', "Won't fix"] });
+    fake.putIssue({ idReadable: 'ACME-7', summary: 'Pay on Safari', description: 'Customers on Safari cannot pay.', state: 'Draft' });
+    fake.putIssue({ idReadable: 'ACME-8', summary: 'Ready already', description: '## Done when\n- [ ] It works', state: 'Open' });
     daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
     const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
     const call = async (method, path, body) => {
@@ -363,7 +363,7 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
     const ws = (await call('POST', '/v1/workspaces', { name: 'Refine' })).body?.workspace?.id;
     await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
     const tracker = {
-      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved',
       states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
     };
     const noDraft = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...tracker, states: { ...tracker.states, draft: ['Drafty'] } } });
@@ -372,61 +372,61 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
     check('the mapping takes an optional draft state', put.status === 200 && JSON.stringify(put.body?.tracker?.states?.draft) === '["Draft"]', put.body?.tracker?.states);
 
     const board = (await call('POST', `/v1/workspaces/${ws}/board/refresh`)).body;
-    const draftRow = board?.groups?.draft?.find((i) => i.key === 'GAR-7');
-    check('the board has a Draft group with GAR-7: Refine offered, Start refused', draftRow?.refine?.ok === true && draftRow.refine.refinement === null
-      && draftRow.startable.ok === false && draftRow.startable.reason === 'Refine it first' && !board.groups.ready.some((i) => i.key === 'GAR-7'), draftRow);
-    const startDraft = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-7' });
-    check('Start on a draft is 409: GAR-7 is a draft in YouTrack. Refine it first.', startDraft.status === 409 && startDraft.body?.error?.message === 'GAR-7 is a draft in YouTrack. Refine it first.', startDraft.body);
-    const refineReady = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-8' });
+    const draftRow = board?.groups?.draft?.find((i) => i.key === 'ACME-7');
+    check('the board has a Draft group with ACME-7: Refine offered, Start refused', draftRow?.refine?.ok === true && draftRow.refine.refinement === null
+      && draftRow.startable.ok === false && draftRow.startable.reason === 'Refine it first' && !board.groups.ready.some((i) => i.key === 'ACME-7'), draftRow);
+    const startDraft = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-7' });
+    check('Start on a draft is 409: ACME-7 is a draft in YouTrack. Refine it first.', startDraft.status === 409 && startDraft.body?.error?.message === 'ACME-7 is a draft in YouTrack. Refine it first.', startDraft.body);
+    const refineReady = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'ACME-8' });
     check('Refine on a ready item is 409', refineReady.status === 409 && /not a draft/.test(refineReady.body?.error?.message ?? ''), refineReady.body);
 
     const writesBefore = fake.calls.filter((c) => c.method === 'POST').length;
-    const refined = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-7' });
+    const refined = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'ACME-7' });
     const missionId = refined.body?.mission?.id;
-    check('POST board/refine makes a draft mission linked to GAR-7', refined.status === 200 && refined.body?.mission?.status === 'DRAFT' && typeof missionId === 'string', refined.body?.mission ?? refined);
-    const again = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-7' });
+    check('POST board/refine makes a draft mission linked to ACME-7', refined.status === 200 && refined.body?.mission?.status === 'DRAFT' && typeof missionId === 'string', refined.body?.mission ?? refined);
+    const again = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'ACME-7' });
     check('…a second Refine answers the same mission', again.body?.mission?.id === missionId, again.body?.mission?.id);
     // Several write-back passes (every 5 s at a 200 ms tick would be one; wait for two).
     await new Promise((r) => setTimeout(r, 6_000));
     const writesDuring = fake.calls.filter((c) => c.method === 'POST').slice(writesBefore);
-    check('Refine, and the passes after it, write nothing to YouTrack', writesDuring.length === 0 && fake.issues.get('GAR-7')?.state === 'Draft'
-      && (fake.comments.get('GAR-7') ?? []).length === 0, writesDuring.map((c) => c.path));
+    check('Refine, and the passes after it, write nothing to YouTrack', writesDuring.length === 0 && fake.issues.get('ACME-7')?.state === 'Draft'
+      && (fake.comments.get('ACME-7') ?? []).length === 0, writesDuring.map((c) => c.path));
 
-    const early = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-7' });
+    const early = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'ACME-7' });
     check('Write and mark ready before anything is accepted is refused in words', early.status >= 400 && /Add at least one Done-when criterion on its mission first\./.test(early.body?.error?.message ?? ''), early.body);
-    const waiting = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'GAR-7');
+    const waiting = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'ACME-7');
     check('the card says what is left, not ready', waiting?.refine?.refinement?.ready === false && waiting.refine.refinement.sentence === 'Add at least one Done-when criterion on its mission, then write it to YouTrack.', waiting?.refine);
 
     await call('POST', `/v1/missions/${missionId}/criteria`, { statement: 'Checkout completes on Safari 17' });
-    const readyRow = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'GAR-7');
+    const readyRow = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'ACME-7');
     check('with a Done-when line the card is ready to write', readyRow?.refine?.refinement?.ready === true && readyRow.refine.refinement.sentence === 'Ready to write to YouTrack: 1 Done-when line.', readyRow?.refine);
-    const written = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-7' });
-    const issue = fake.issues.get('GAR-7');
+    const written = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'ACME-7' });
+    const issue = fake.issues.get('ACME-7');
     check('POST board/ready writes the description with its Done-when section', written.status === 200
       && issue?.description === 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Checkout completes on Safari 17', issue?.description);
-    check('…moves GAR-7 to Open', issue?.state === 'Open', issue?.state);
-    const comments = fake.comments.get('GAR-7') ?? [];
+    check('…moves ACME-7 to Open', issue?.state === 'Open', issue?.state);
+    const comments = fake.comments.get('ACME-7') ?? [];
     check('…and posts the activity comment: Refined in Tandemise by <name>: 1 Done-when line. Moved from Draft to Open.',
       comments.length === 1 && /^<!-- tandemise:activity -->\n\nRefined in Tandemise by .+: 1 Done-when line\. Moved from Draft to Open\.$/.test(comments[0].text), comments.map((c) => c.text));
-    const nowReady = written.body?.groups?.ready?.find((i) => i.key === 'GAR-7');
-    check('the board answered has GAR-7 ready, Start offered, its mission still the draft', nowReady?.startable?.ok === true && nowReady.mission?.id === missionId && written.body.groups.draft.length === 0, nowReady);
+    const nowReady = written.body?.groups?.ready?.find((i) => i.key === 'ACME-7');
+    check('the board answered has ACME-7 ready, Start offered, its mission still the draft', nowReady?.startable?.ok === true && nowReady.mission?.id === missionId && written.body.groups.draft.length === 0, nowReady);
     await new Promise((r) => setTimeout(r, 6_000));
-    check('…and no pass moves it to In Progress on its own', fake.issues.get('GAR-7')?.state === 'Open', fake.issues.get('GAR-7')?.state);
+    check('…and no pass moves it to In Progress on its own', fake.issues.get('ACME-7')?.state === 'Open', fake.issues.get('ACME-7')?.state);
 
-    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-7' });
+    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-7' });
     check('Start adopts the refined mission rather than making a second one', started.status === 200 && started.body?.mission?.id === missionId && started.body.mission.status !== 'DRAFT', started.body?.mission ?? started);
-    check('…GAR-7 moves to In Progress', fake.issues.get('GAR-7')?.state === 'In Progress', fake.issues.get('GAR-7')?.state);
-    const after = fake.comments.get('GAR-7') ?? [];
+    check('…ACME-7 moves to In Progress', fake.issues.get('ACME-7')?.state === 'In Progress', fake.issues.get('ACME-7')?.state);
+    const after = fake.comments.get('ACME-7') ?? [];
     check('…and the activity comment, edited in place, keeps the refined line on top of Started', after.length === 1
       && /^<!-- tandemise:activity -->\n\nRefined in Tandemise by .+\n\nStarted in Tandemise by /.test(after[0].text), after.map((c) => c.text));
     const missions = (await call('GET', `/v1/missions?workspaceId=${ws}`)).body;
     const list = Array.isArray(missions) ? missions : missions?.missions ?? [];
-    check('one mission for GAR-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
+    check('one mission for ACME-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
 
     // #185: the write-back only adds. An item with its own Acceptance criteria, and one with its own Done when.
     const own = {
-      'GAR-20': { body: 'Receipts are hard to read.\n\n## Acceptance criteria\n- AC01: The total is bold\n- AC02: The date is shown\n\n## Notes\nLeave the logo alone.\n', added: ['- AC03: The receipt prints on A4'] },
-      'GAR-21': { body: 'Search is slow.\n\n## Done when\n- [ ] Results show within a second\n', added: ['- [ ] The receipt prints on A4'] },
+      'ACME-20': { body: 'Receipts are hard to read.\n\n## Acceptance criteria\n- AC01: The total is bold\n- AC02: The date is shown\n\n## Notes\nLeave the logo alone.\n', added: ['- AC03: The receipt prints on A4'] },
+      'ACME-21': { body: 'Search is slow.\n\n## Done when\n- [ ] Results show within a second\n', added: ['- [ ] The receipt prints on A4'] },
     };
     for (const [key, item] of Object.entries(own)) {
       fake.putIssue({ idReadable: key, summary: `Own criteria ${key}`, description: item.body, state: 'Draft' });
@@ -463,7 +463,7 @@ section("daemon: saving the tracker token clears the board's cached problem (#13
   let daemon;
   let fake;
   try {
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
     fake.putIssue({ summary: 'Checkout fails on Safari', description: '## Done when\n- [ ] Checkout works on Safari', state: 'Open' });
     daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
     const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
@@ -486,7 +486,7 @@ section("daemon: saving the tracker token clears the board's cached problem (#13
     };
     const ws = (await call('POST', '/v1/workspaces', { name: 'Token' })).body?.workspace?.id;
     const tracker = {
-      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved',
       states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
     };
     // The order a person may take in Settings → Intake: the tracker first, the token after.
@@ -501,10 +501,10 @@ section("daemon: saving the tracker token clears the board's cached problem (#13
     // No POST board/refresh: the next 2-minute tick is far away, so only the save can have read it.
     const cleared = await until(async () => {
       const board = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
-      return board?.problem === null && board?.groups?.ready?.some((i) => i.key === 'GAR-1');
+      return board?.problem === null && board?.groups?.ready?.some((i) => i.key === 'ACME-1');
     });
     const after = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
-    check('GET board answers no problem and GAR-1 ready right after the token is saved, without a refresh', cleared, after);
+    check('GET board answers no problem and ACME-1 ready right after the token is saved, without a refresh', cleared, after);
 
     // A wrong token is still said: the save reads the board again, and that read sets the problem again.
     await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:wrong' });
@@ -528,9 +528,9 @@ section('daemon: Start assigns before it moves, and a refused move is on the Boa
   let fake;
   try {
     // A team workflow: In Progress needs an assignee.
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'To Verify', 'Done', "Won't fix"], requireAssignee: ['In Progress'] });
-    fake.putIssue({ idReadable: 'GAR-30', summary: 'Unassigned start', description: '## Done when\n- [ ] It works', state: 'Open' });
-    fake.putIssue({ idReadable: 'GAR-31', summary: 'Refined start', description: 'Make the export faster.', state: 'Draft' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'To Verify', 'Done', "Won't fix"], requireAssignee: ['In Progress'] });
+    fake.putIssue({ idReadable: 'ACME-30', summary: 'Unassigned start', description: '## Done when\n- [ ] It works', state: 'Open' });
+    fake.putIssue({ idReadable: 'ACME-31', summary: 'Refined start', description: 'Make the export faster.', state: 'Draft' });
     daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
     const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
     const call = async (method, path, body) => {
@@ -545,43 +545,43 @@ section('daemon: Start assigns before it moves, and a refused move is on the Boa
     const ws = (await call('POST', '/v1/workspaces', { name: 'Move' })).body?.workspace?.id;
     await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
     await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: {
-      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved',
       states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'To Verify', done: ['Done'], wont_do: ["Won't fix"], draft: ['Draft'] }, onComplete: 'in_review',
     } });
     await call('POST', `/v1/workspaces/${ws}/board/refresh`);
 
     // No login for this person: the tracker refuses the move, and the Board says so.
-    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-30' });
-    const row = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.ready?.find((i) => i.key === 'GAR-30');
-    check('with no assignee the tracker refuses In Progress, and the card says so in its words', started.status === 200 && fake.issues.get('GAR-30')?.state === 'Open'
-      && /^Couldn't move GAR-30 to In Progress in YouTrack: .*Assignee is required for In Progress\.$/.test(row?.moveProblem ?? ''), { state: fake.issues.get('GAR-30')?.state, moveProblem: row?.moveProblem });
+    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-30' });
+    const row = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.ready?.find((i) => i.key === 'ACME-30');
+    check('with no assignee the tracker refuses In Progress, and the card says so in its words', started.status === 200 && fake.issues.get('ACME-30')?.state === 'Open'
+      && /^Couldn't move ACME-30 to In Progress in YouTrack: .*Assignee is required for In Progress\.$/.test(row?.moveProblem ?? ''), { state: fake.issues.get('ACME-30')?.state, moveProblem: row?.moveProblem });
 
     const inbox = (await call('GET', `/v1/inbox?workspaceId=${ws}`)).body;
     const stalledRow = inbox?.stalled?.find((s) => s.action?.kind === 'tracker-move');
-    check("…and it is a Stalled row in the Inbox, offering to try the move again", stalledRow?.action?.itemKey === 'GAR-30' && stalledRow.action.label === 'Try the move again'
-      && /Couldn't move GAR-30 to In Progress/.test(stalledRow.reason), stalledRow ?? inbox?.stalled);
+    check("…and it is a Stalled row in the Inbox, offering to try the move again", stalledRow?.action?.itemKey === 'ACME-30' && stalledRow.action.label === 'Try the move again'
+      && /Couldn't move ACME-30 to In Progress/.test(stalledRow.reason), stalledRow ?? inbox?.stalled);
     const homeView = (await call("GET", `/v1/home?workspaceId=${ws}`)).body;
     check('…counted in Home\'s Stalled', (homeView?.metrics?.stalled ?? 0) >= 1, homeView?.metrics);
 
     // With the person's tracker login, a refined item: Draft → Open → In Progress, assigned first.
     await call('PATCH', '/v1/settings', { trackerLogins: { [ws]: 'kim' } });
-    const retried = await call('POST', `/v1/workspaces/${ws}/board/retry-move`, { key: 'GAR-30' });
+    const retried = await call('POST', `/v1/workspaces/${ws}/board/retry-move`, { key: 'ACME-30' });
     const cleared = (await call('GET', `/v1/inbox?workspaceId=${ws}`)).body?.stalled?.some((s) => s.action?.kind === 'tracker-move');
-    check('"Try the move again", now with a login: GAR-30 is assigned and moves, and the Stalled row is gone', retried.status === 200 && fake.issues.get('GAR-30')?.state === 'In Progress'
-      && fake.issues.get('GAR-30')?.assignee === 'kim' && cleared === false, { status: retried.status, state: fake.issues.get('GAR-30')?.state, cleared });
-    const m = (await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-31' })).body?.mission?.id;
+    check('"Try the move again", now with a login: ACME-30 is assigned and moves, and the Stalled row is gone', retried.status === 200 && fake.issues.get('ACME-30')?.state === 'In Progress'
+      && fake.issues.get('ACME-30')?.assignee === 'kim' && cleared === false, { status: retried.status, state: fake.issues.get('ACME-30')?.state, cleared });
+    const m = (await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'ACME-31' })).body?.mission?.id;
     await call('POST', `/v1/missions/${m}/criteria`, { statement: 'An export of 10,000 rows takes under a second' });
-    await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-31' });
-    const afterReady = fake.issues.get('GAR-31')?.state;
-    const go = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-31' });
+    await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'ACME-31' });
+    const afterReady = fake.issues.get('ACME-31')?.state;
+    const go = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'ACME-31' });
     check('a refined item goes Draft → Open → In Progress, assigned first', afterReady === 'Open' && go.status === 200 && go.body?.mission?.id === m
-      && fake.issues.get('GAR-31')?.state === 'In Progress' && fake.issues.get('GAR-31')?.assignee === 'kim', { afterReady, now: fake.issues.get('GAR-31')?.state, assignee: fake.issues.get('GAR-31')?.assignee });
-    const order = fake.fieldSets.filter((c) => c.issue === 'GAR-31').flatMap((c) => c.fields);
+      && fake.issues.get('ACME-31')?.state === 'In Progress' && fake.issues.get('ACME-31')?.assignee === 'kim', { afterReady, now: fake.issues.get('ACME-31')?.state, assignee: fake.issues.get('ACME-31')?.assignee });
+    const order = fake.fieldSets.filter((c) => c.issue === 'ACME-31').flatMap((c) => c.fields);
     check('…set as data: State=Open, then Assignee=kim before State=In Progress, and no command', JSON.stringify(order) === JSON.stringify(['State=Open', 'Assignee=kim', 'State=In Progress'])
-      && !fake.commands.some((c) => c.issues.some((i) => i.idReadable === 'GAR-31')), { order, commands: fake.commands });
+      && !fake.commands.some((c) => c.issues.some((i) => i.idReadable === 'ACME-31')), { order, commands: fake.commands });
     await new Promise((r) => setTimeout(r, 6_000));
-    const later = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.inProgress?.find((i) => i.key === 'GAR-31');
-    check('…and it stays In Progress across write-back passes, with no problem on its card', fake.issues.get('GAR-31')?.state === 'In Progress' && later?.moveProblem === null, { state: fake.issues.get('GAR-31')?.state, card: later });
+    const later = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.inProgress?.find((i) => i.key === 'ACME-31');
+    check('…and it stays In Progress across write-back passes, with no problem on its card', fake.issues.get('ACME-31')?.state === 'In Progress' && later?.moveProblem === null, { state: fake.issues.get('ACME-31')?.state, card: later });
   } catch (e) {
     check('the move section ran', false, String(e?.stack ?? e));
   } finally {
@@ -599,7 +599,7 @@ section('daemon: a custom source reads and acks its closures (plan Task 13)');
   let daemon;
   let fake;
   try {
-    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
     daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
     const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
     const call = async (method, path, body, bearer = token) => {
@@ -622,7 +622,7 @@ section('daemon: a custom source reads and acks its closures (plan Task 13)');
     const ws = (await call('POST', '/v1/workspaces', { name: 'Closures' })).body?.workspace?.id;
     const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, {
       tracker: {
-        kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+        kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved',
         states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
       },
       intake: { sources: [{ id: 'custom-feed', kind: 'custom', instance: 'custom-feed' }, { id: 'other-feed', kind: 'custom', instance: 'other-feed' }] },
@@ -637,11 +637,11 @@ section('daemon: a custom source reads and acks its closures (plan Task 13)');
     }, intakeToken);
     check('the custom token pushes c1', pushed.status === 202 && pushed.body?.results?.[0]?.fingerprint === 'custom:custom-feed:c1', pushed);
     const signalOf = async () => (await call('GET', `/v1/workspaces/${ws}/intake/signals`)).body?.find((s) => s.fingerprint === 'custom:custom-feed:c1');
-    check('…and it lands in YouTrack as GAR-1', await until(async () => (await signalOf())?.status === 'created') && fake.issues.get('GAR-1')?.summary === 'Export to CSV drops the last row', await signalOf());
+    check('…and it lands in YouTrack as ACME-1', await until(async () => (await signalOf())?.status === 'created') && fake.issues.get('ACME-1')?.summary === 'Export to CSV drops the last row', await signalOf());
 
     const empty = await call('GET', '/v1/intake/closures', undefined, intakeToken);
     check('before the item is done, the feed is empty', empty.status === 200 && Array.isArray(empty.body?.closures) && empty.body.closures.length === 0, empty);
-    fake.setState('GAR-1', 'Done');
+    fake.setState('ACME-1', 'Done');
     const refreshed = await call('POST', `/v1/workspaces/${ws}/board/refresh`);
     check('the item set to Done in YouTrack, then refresh', refreshed.status === 200, refreshed);
 
@@ -657,7 +657,7 @@ section('daemon: a custom source reads and acks its closures (plan Task 13)');
     const item = feed.body?.closures?.[0];
     check('the token reads its feed: id, fingerprint, key, url, kind, item, prUrl and the reply address',
       feed.status === 200 && feed.body?.closures?.length === 1 && item?.id === closureId && item?.fingerprint === 'custom:custom-feed:c1' && item?.key === 'c1'
-      && item?.url === 'https://feed.test/c1' && item?.kind === 'done' && item?.item?.key === 'GAR-1' && typeof item?.item?.url === 'string'
+      && item?.url === 'https://feed.test/c1' && item?.kind === 'done' && item?.item?.key === 'ACME-1' && typeof item?.item?.url === 'string'
       && item?.prUrl === null && item?.reply?.address === 'ticket-77' && item?.state === 'pending', feed);
     const after = await call('GET', `/v1/intake/closures?after=${closureId}`, undefined, intakeToken);
     check('…after=<id> answers what came after it', after.status === 200 && after.body?.closures?.length === 0, after);

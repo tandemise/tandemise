@@ -9,8 +9,8 @@
       "observed": {
         "kind": "youtrack",
         "url": "http://127.0.0.1:45397",
-        "project": "GAR",
-        "board": "project: GAR #Unresolved",
+        "project": "ACME",
+        "board": "project: ACME #Unresolved",
         "states": {
           "ready": [
             "Open",
@@ -41,7 +41,7 @@
       }
     },
     {
-      "label": "the container (GAR-5) stays on the Board under Ready, its type Task shown",
+      "label": "the container (ACME-5) stays on the Board under Ready, its type Task shown",
       "ok": true,
       "observed": {
         "type": "Task",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "label": "the Spike (GAR-8) stays on the Board under Ready, its type Spike shown",
+      "label": "the Spike (ACME-8) stays on the Board under Ready, its type Spike shown",
       "ok": true,
       "observed": {
         "type": "Spike",
@@ -89,7 +89,7 @@
       }
     },
     {
-      "label": "another repository's Bug (GAR-9) stays on the Board under Ready, its type Bug shown",
+      "label": "another repository's Bug (ACME-9) stays on the Board under Ready, its type Bug shown",
       "ok": true,
       "observed": {
         "type": "Bug",
@@ -113,7 +113,7 @@
       }
     },
     {
-      "label": "a plain Task (GAR-10) shows its type and Start is on",
+      "label": "a plain Task (ACME-10) shows its type and Start is on",
       "ok": true,
       "observed": {
         "type": "Task",
@@ -125,7 +125,7 @@
       }
     },
     {
-      "label": "proof (API): Start of GAR-5 is refused in the same words",
+      "label": "proof (API): Start of ACME-5 is refused in the same words",
       "ok": true,
       "observed": {
         "status": 409,
@@ -133,7 +133,7 @@
       }
     },
     {
-      "label": "proof (API): Start of GAR-8 is refused in the same words",
+      "label": "proof (API): Start of ACME-8 is refused in the same words",
       "ok": true,
       "observed": {
         "status": 409,
@@ -141,7 +141,7 @@
       }
     },
     {
-      "label": "proof (API): Start of GAR-9 is refused in the same words",
+      "label": "proof (API): Start of ACME-9 is refused in the same words",
       "ok": true,
       "observed": {
         "status": 409,
@@ -152,18 +152,18 @@
       "label": "proof (fake YouTrack): none of the three moved",
       "ok": true,
       "observed": [
-        "GAR-5 Open",
-        "GAR-8 Open",
-        "GAR-9 Open"
+        "ACME-5 Open",
+        "ACME-8 Open",
+        "ACME-9 Open"
       ]
     },
     {
-      "label": "Start on GAR-10 opens its mission",
+      "label": "Start on ACME-10 opens its mission",
       "ok": true,
       "observed": "msn_01m6b4zgr3ep2btwztqg"
     },
     {
-      "label": "proof (fake YouTrack): GAR-10 is In Progress",
+      "label": "proof (fake YouTrack): ACME-10 is In Progress",
       "ok": true,
       "observed": "In Progress"
     }

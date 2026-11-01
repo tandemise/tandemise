@@ -15,17 +15,17 @@ Claude Code users solve this with `CLAUDE.md`, `AGENTS.md` and memory files that
 
 ## Goal
 
-Each project has a **brain**: one git repository (for example `garipass/brain`) that holds what the project has learned and how its factory works.
+Each project has a **brain**: one git repository (for example `acme/brain`) that holds what the project has learned and how its factory works.
 
 - **Memory:** lessons, conventions, decisions, and a history of what was done and what went wrong.
 - **The factory definition:** steps (workflows), roles with their skills and models, gates, the primary tracker and its state mapping, and the MCPs the project needs.
 
 Success looks like this:
 
-1. I link Garipass to `garipass/brain` (new or existing). A teammate links the same repo on their machine and gets the same factory.
+1. I link Acme to `acme/brain` (new or existing). A teammate links the same repo on their machine and gets the same factory.
 2. When I hold a task and fix what the agent got wrong, the brain gains a short lesson about it, with a link to the run it came from.
 3. The next mission's agents load that lesson (and only the lessons relevant to their step), and the task view shows me exactly which ones they loaded.
-4. When a lesson keeps proving useful, Tandemise proposes turning it into a rule. I get a PR to `garipass/brain`, with the evidence and an eval scorecard, and I merge it or not.
+4. When a lesson keeps proving useful, Tandemise proposes turning it into a rule. I get a PR to `acme/brain`, with the evidence and an eval scorecard, and I merge it or not.
 5. Personal settings and secrets never enter the brain. Everything works with no server; sharing is `git pull` and `git push`.
 
 ## Non-goals (this sub-project)
@@ -111,14 +111,14 @@ evals/                         # promotion evals; never readable by an agent
 
 ```yaml
 version: 1
-project: Garipass
+project: Acme
 repositories:                  # the code repos this project spans, by remote, never by local path
-  - name: garipass
-    remote: github.com/garipass/garipass
+  - name: acme
+    remote: github.com/acme/acme
   - name: claude
-    remote: github.com/garipass/claude
+    remote: github.com/acme/claude
   - name: ops
-    remote: github.com/garipass/ops
+    remote: github.com/acme/ops
 promotion:
   autoApply: off               # off | small; see §7
   minHelpful: 3                # net helpful votes before a lesson is proposed for promotion
@@ -133,7 +133,7 @@ humanEdits: direct             # direct | pr: how a person's own edits in the ap
 - notification preferences, the desktop's own settings;
 - absolute paths, machine names, home directories.
 
-Every text the daemon writes into the brain passes through the P15 `Scrubber` (secret patterns become `${SECRET_n}` in factory files, and `[redacted secret]` in ledger entries). Absolute paths under a repository's checkout are rewritten repo-relative (`garipass:src/app/page.tsx`); any other absolute path is refused in a ledger entry. The offline check proves this on every write path.
+Every text the daemon writes into the brain passes through the P15 `Scrubber` (secret patterns become `${SECRET_n}` in factory files, and `[redacted secret]` in ledger entries). Absolute paths under a repository's checkout are rewritten repo-relative (`acme:src/app/page.tsx`); any other absolute path is refused in a ledger entry. The offline check proves this on every write path.
 
 ### 2. Relation to `.tandemise/` (reuse, not a parallel format)
 
@@ -411,7 +411,7 @@ Following `api-contract/src/setup.ts`:
 - `GET /v1/runs/:id/brain` → the "What it knew" view.
 
 Refusals come back in the daemon's own words. For example:
-- "This project already has a brain: garipass/brain."
+- "This project already has a brain: acme/brain."
 - "A lesson can't contain a secret; it was left out."
 - "The evals folder can only be changed by a person."
 

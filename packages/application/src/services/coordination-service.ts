@@ -104,7 +104,7 @@ export class CoordinationService {
   /**
    * The tracker item a mission works on, or null: the board item Start made
    * it from (intake spec §7; its ref is already `<tracker>:<key>`, e.g.
-   * `youtrack:GAR-12`), else its P14 GitHub issue link.
+   * `youtrack:ACME-12`), else its P14 GitHub issue link.
    */
   itemFor(mission: Mission): TrackerItem | null {
     if (mission.trackerItemId !== null && mission.trackerItemId !== undefined) {

@@ -128,8 +128,8 @@ section('contract: config files (tracker.yaml, intake.yaml)');
 tracker:
   kind: youtrack
   url: https://acme.youtrack.cloud
-  project: GAR
-  board: "project: GAR #Unresolved sort by: updated desc"
+  project: ACME
+  board: "project: ACME #Unresolved sort by: updated desc"
   states:
     ready: [Open, Submitted]
     in_progress: In Progress
@@ -270,7 +270,7 @@ section('similarity: titleTokens and lexicalSimilarity');
 {
   const title = "TypeError: cannot read 'id' of undefined";
   check('titleTokens drops stopwords, one-letter words and repeats', eq(D.titleTokens(title), ['typeerror', 'read', 'id', 'undefined']), D.titleTokens(title));
-  const item = (t, description = '') => ({ ref: 'youtrack:GAR-1', key: 'GAR-1', url: 'https://yt.test/issue/GAR-1', title: t, description, state: 'Open', assignee: null, updatedAt: '2026-10-30T00:00:00Z', createdAt: '2026-10-30T00:00:00Z' });
+  const item = (t, description = '') => ({ ref: 'youtrack:ACME-1', key: 'ACME-1', url: 'https://yt.test/issue/ACME-1', title: t, description, state: 'Open', assignee: null, updatedAt: '2026-10-30T00:00:00Z', createdAt: '2026-10-30T00:00:00Z' });
   const sig = (t, url = 'https://acme.sentry.io/issues/1/') => ({ title: t, description: '', url });
   const s = D.lexicalSimilarity(sig(title), item(`${title} in checkout`));
   check('the same error plus " in checkout" scores 0.84, between ask and link', s === 0.84 && s >= D.DEFAULT_INTAKE_SIMILARITY.ask && s < D.DEFAULT_INTAKE_SIMILARITY.link, s);
@@ -407,8 +407,8 @@ section('store: migration and repositories');
     const revived = intake.upsertSignal(ws, 'custom', sig({ source: { kind: 'my-feed', instance: 'x' }, key: '1' }), clock.now());
     check('a valid push after a rejected one enters the pipeline as new', revived.firstTime && revived.signal.id === rej.id && revived.signal.status === 'received' && revived.signal.reason === null, revived);
     check('listSignals filters by status', intake.listSignals(ws, { statuses: ['received'] }).length === 2 && intake.listSignals(ws, { statuses: ['rejected'] }).length === 0);
-    const held = intake.setStatus(a.signal.id, 'needs_decision', 'Is this the same as GAR-12?', { candidateRef: 'youtrack:GAR-12', score: 0.7 });
-    check('setStatus keeps the reason, candidate and score', held.status === 'needs_decision' && held.candidateRef === 'youtrack:GAR-12' && held.score === 0.7, held);
+    const held = intake.setStatus(a.signal.id, 'needs_decision', 'Is this the same as ACME-12?', { candidateRef: 'youtrack:ACME-12', score: 0.7 });
+    check('setStatus keeps the reason, candidate and score', held.status === 'needs_decision' && held.candidateRef === 'youtrack:ACME-12' && held.score === 0.7, held);
     intake.addAttachment(a.signal.id, { name: 'trace.txt', mediaType: 'text/plain', url: 'https://acme.sentry.io/t.txt', blobSha256: null });
     check('attachments round-trip', intake.attachments(a.signal.id).length === 1 && intake.attachments(a.signal.id)[0].url === 'https://acme.sentry.io/t.txt');
     let badAttachment = null;
@@ -418,13 +418,13 @@ section('store: migration and repositories');
     // 3. One link per signal.
     const link = intake.createPendingLink(ws, a.signal.id, null, 'created');
     let second = null;
-    try { intake.createPendingLink(ws, a.signal.id, 'youtrack:GAR-1', 'url'); } catch (e) { second = e; }
+    try { intake.createPendingLink(ws, a.signal.id, 'youtrack:ACME-1', 'url'); } catch (e) { second = e; }
     check('a second link for the same signal throws', second !== null && link.status === 'pending');
     check('the pending link is listed for restart', intake.pendingLinks().some((l) => l.id === link.id));
-    const done = intake.completeLink(link.id, 'youtrack:GAR-1');
-    check('completeLink sets the ref and marks it done', done.status === 'done' && done.itemRef === 'youtrack:GAR-1' && intake.linkFor(a.signal.id)?.status === 'done' && !intake.pendingLinks().some((l) => l.id === link.id));
-    intake.createPendingLink(ws, revived.signal.id, 'youtrack:GAR-2', 'similarity', 0.9);
-    check("repointLinks moves a duplicate's links", intake.repointLinks(ws, 'youtrack:GAR-2', 'youtrack:GAR-1') === 1 && intake.linksForItem(ws, 'youtrack:GAR-1').length === 2);
+    const done = intake.completeLink(link.id, 'youtrack:ACME-1');
+    check('completeLink sets the ref and marks it done', done.status === 'done' && done.itemRef === 'youtrack:ACME-1' && intake.linkFor(a.signal.id)?.status === 'done' && !intake.pendingLinks().some((l) => l.id === link.id));
+    intake.createPendingLink(ws, revived.signal.id, 'youtrack:ACME-2', 'similarity', 0.9);
+    check("repointLinks moves a duplicate's links", intake.repointLinks(ws, 'youtrack:ACME-2', 'youtrack:ACME-1') === 1 && intake.linksForItem(ws, 'youtrack:ACME-1').length === 2);
 
     // 4. The daily cap counts only links that created an item, since the day started.
     check('createdToday counts only linked_by=created since the day start',
@@ -451,15 +451,15 @@ section('store: migration and repositories');
     check('a source round-trips and is listed as enabled', intake.source(ws, 'sentry-web')?.cursor?.since === 'x' && intake.listEnabledSources().length === 1 && intake.listSources(ws).length === 1);
 
     // 6. The board cache, and a mission that points at it.
-    const tracked = items.upsert(ws, { ref: 'youtrack:GAR-1', key: 'GAR-1', url: 'https://yt.test/issue/GAR-1', title: 'T', description: 'D', state: 'Open', assignee: null, updatedAt: '2026-10-30T10:00:00Z', createdAt: '2026-10-30T09:00:00Z', type: 'Bug' });
+    const tracked = items.upsert(ws, { ref: 'youtrack:ACME-1', key: 'ACME-1', url: 'https://yt.test/issue/ACME-1', title: 'T', description: 'D', state: 'Open', assignee: null, updatedAt: '2026-10-30T10:00:00Z', createdAt: '2026-10-30T09:00:00Z', type: 'Bug' });
     const again = items.upsert(ws, { ...tracked, state: 'In Progress' });
-    check('an item upserts by ref, keeping its id', again.id === tracked.id && again.state === 'In Progress' && items.byKey(ws, 'GAR-1')?.id === tracked.id && items.list(ws).length === 1);
+    check('an item upserts by ref, keeping its id', again.id === tracked.id && again.state === 'In Progress' && items.byKey(ws, 'ACME-1')?.id === tracked.id && items.list(ws).length === 1);
     items.setWrittenState(tracked.id, 'In Progress');
     check('the written state is kept across a refresh', items.upsert(ws, { ...tracked, state: 'In Progress' }).writtenState === 'In Progress');
-    items.saveComment(ws, 'youtrack:GAR-1', 'tandemise:activity', 'c-1', 'v1');
-    items.saveComment(ws, 'youtrack:GAR-1', 'tandemise:activity', 'c-1', 'v2');
-    check('one comment per (item, marker)', items.comment(ws, 'youtrack:GAR-1', 'tandemise:activity')?.body === 'v2');
-    const mission = missions.create({ id: ids.mission(), workspaceId: ws, repositoryId: null, title: 'From GAR-1', goal: 'g', trackerItemId: tracked.id });
+    items.saveComment(ws, 'youtrack:ACME-1', 'tandemise:activity', 'c-1', 'v1');
+    items.saveComment(ws, 'youtrack:ACME-1', 'tandemise:activity', 'c-1', 'v2');
+    check('one comment per (item, marker)', items.comment(ws, 'youtrack:ACME-1', 'tandemise:activity')?.body === 'v2');
+    const mission = missions.create({ id: ids.mission(), workspaceId: ws, repositoryId: null, title: 'From ACME-1', goal: 'g', trackerItemId: tracked.id });
     check('a mission is written with its tracker item', missions.get(mission.id)?.trackerItemId === tracked.id);
     items.removeMissing(ws, []);
     check("removing the tracker item clears the mission's pointer", items.get(tracked.id) === undefined && missions.get(mission.id)?.trackerItemId === null, missions.get(mission.id)?.trackerItemId);
@@ -564,7 +564,7 @@ section('ingest: validate and record, in process');
     check('the local config source reads an empty project', config.origin === 'local' && config.read(ws).tracker === null && config.read(ws).dailyCap === 20);
     config.write(ws, {
       tracker: {
-        kind: 'youtrack', url: 'https://yt.test', project: 'GAR', board: 'project: GAR #Unresolved',
+        kind: 'youtrack', url: 'https://yt.test', project: 'ACME', board: 'project: ACME #Unresolved',
         states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
       },
       intake: { sources: [{ id: 'custom-feed', kind: 'custom', instance: 'custom-feed', closeOnDone: false, closeWontDo: false }], dailyCap: 20, similarity: { link: 0.85, ask: 0.55 } },
@@ -573,7 +573,7 @@ section('ingest: validate and record, in process');
     check('the local config source round-trips the tracker and sources', read.tracker?.kind === 'youtrack' && read.sources.length === 1 && read.sources[0].id === 'custom-feed', read);
     let badWrite = null;
     try { config.write(ws, { tracker: { kind: 'youtrack', board: 'x', states: { ready: ['Open'], in_progress: 'P', done: ['Done'], wont_do: [] }, onComplete: 'done' } }); } catch (e) { badWrite = e; }
-    check('the local config source refuses a youtrack tracker with no url or project', badWrite?.code === 'VALIDATION' && config.read(ws).tracker?.project === 'GAR', badWrite?.message);
+    check('the local config source refuses a youtrack tracker with no url or project', badWrite?.code === 'VALIDATION' && config.read(ws).tracker?.project === 'ACME', badWrite?.message);
 
     const unknown = await refusal(() => intake.ingest({ ...scope, sourceId: 'nope' }, signal()));
     check("an unknown source is refused: This project has no intake source 'nope'.", unknown?.code === 'NOT_FOUND' && unknown?.message === "This project has no intake source 'nope'.", { code: unknown?.code, message: unknown?.message });
@@ -750,7 +750,7 @@ const pipeline = await (async () => {
   }
 
   const ytTracker = (url) => ({
-    kind: 'youtrack', url, project: 'GAR', board: 'project: GAR #Unresolved', onComplete: 'in_review',
+    kind: 'youtrack', url, project: 'ACME', board: 'project: ACME #Unresolved', onComplete: 'in_review',
     states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'] },
     // A Task runs the planned preset with its plan card (the write-back sections drive it); any other type, the factory.
     workflows: { Task: 'feature-delivery' },
@@ -767,10 +767,10 @@ const pipeline = await (async () => {
     await d.resolver.saveCredential(ws, 'perm:test');
     return ws;
   }
-  const GAR1_TITLE = "TypeError: cannot read 'id' of undefined";
+  const ACME1_TITLE = "TypeError: cannot read 'id' of undefined";
   const sentry = (over = {}) => ({
     schema: 'tandemise.intake/v1', source: { kind: 'sentry', instance: 'acme/web' }, key: '4501234567',
-    url: 'https://acme.sentry.io/issues/4501234567/', title: GAR1_TITLE,
+    url: 'https://acme.sentry.io/issues/4501234567/', title: ACME1_TITLE,
     description: 'Checkout breaks when the cart is empty. cc @ana', reporter: { name: 'Sam Ortiz' },
     impact: { level: 'error', events: 132, users: 41, lastSeen: clock.now() }, ...over,
   });
@@ -779,14 +779,14 @@ const pipeline = await (async () => {
     url: `https://acme.slack.com/archives/C1/${key}`, title, reporter: { handle: 'dana' }, ...over,
   });
   return {
-    app, clock, open, configureYouTrack, intakeConfig, sentry, slack, GAR1_TITLE, memorySecrets, startFakeYouTrack,
+    app, clock, open, configureYouTrack, intakeConfig, sentry, slack, ACME1_TITLE, memorySecrets, startFakeYouTrack,
     Y, G, I, defineModule, fakeGh, ghRoot, mkdtempSync, tmpdir,
     advance: (ms) => { t += ms; },
   };
 })();
 
 section('pipeline: filter, dedupe, then create or link (Task 7)');
-const fake = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+const fake = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
 const { rmSync } = await import('node:fs');
 const homes = [];
 const newHome = () => { const h = pipeline.mkdtempSync(join(pipeline.tmpdir(), 'tdi-pipe-')); homes.push(h); return h; };
@@ -805,13 +805,13 @@ try {
 
   // 1. Over the bar: a new item, with the Sources section and the type.
   const s1 = await push(sentry());
-  const gar1 = fake.issues.get('GAR-1');
-  check('1. a signal over the bar is created as GAR-1', s1.status === 'created' && s1.link?.status === 'done' && s1.link?.itemRef === 'youtrack:GAR-1' && s1.link?.linkedBy === 'created', { status: s1.status, reason: s1.reason, link: s1.link });
+  const gar1 = fake.issues.get('ACME-1');
+  check('1. a signal over the bar is created as ACME-1', s1.status === 'created' && s1.link?.status === 'done' && s1.link?.itemRef === 'youtrack:ACME-1' && s1.link?.linkedBy === 'created', { status: s1.status, reason: s1.reason, link: s1.link });
   check('…its description has the Sources line', gar1?.description.includes('## Sources\n- Sentry · acme/web · 132 events, 41 users · https://acme.sentry.io/issues/4501234567/'), gar1?.description);
   check('…and who recorded it', gar1?.description.includes('Recorded by Tandemise from Sentry, reported by Sam Ortiz.'), gar1?.description);
-  check('…the type comes from the source (Type=Bug, set as data)', fake.fieldSets.some((c) => c.issue === 'GAR-1' && c.fields.includes('Type=Bug')), fake.fieldSets);
+  check('…the type comes from the source (Type=Bug, set as data)', fake.fieldSets.some((c) => c.issue === 'ACME-1' && c.fields.includes('Type=Bug')), fake.fieldSets);
   check('…copied text never pings anyone (@mentions broken)', gar1?.description.includes('cc @​ana') && !gar1?.description.includes('cc @ana'), gar1?.description);
-  check('…and the item is in the board cache', PA.items.byRef(ws, 'youtrack:GAR-1')?.key === 'GAR-1');
+  check('…and the item is in the board cache', PA.items.byRef(ws, 'youtrack:ACME-1')?.key === 'ACME-1');
 
   // 2. The same fingerprint again: the local index answers.
   const s2 = await push(sentry());
@@ -822,7 +822,7 @@ try {
   const s3 = await push(nan(3));
   check("3. 3 events is held back: '3 events in 24 h; this source needs 20'", s3.status === 'held_back' && s3.reason === '3 events in 24 h; this source needs 20' && creates() === 1, { status: s3.status, reason: s3.reason });
   const s3b = await push(nan(300));
-  check('…and the same fingerprint at 300 events is created as GAR-2', s3b.status === 'created' && s3b.link?.itemRef === 'youtrack:GAR-2' && creates() === 2, { status: s3b.status, reason: s3b.reason, link: s3b.link });
+  check('…and the same fingerprint at 300 events is created as ACME-2', s3b.status === 'created' && s3b.link?.itemRef === 'youtrack:ACME-2' && creates() === 2, { status: s3b.status, reason: s3b.reason, link: s3b.link });
 
   // 4. Another daemon, its own database, the same tracker: the exact URL answers.
   const PB = await pipeline.open({ home: newHome(), settings: app.createMemorySettingsStore(), secrets: pipeline.memorySecrets(), providers: [pipeline.Y.youtrackIntegrationModule] });
@@ -832,9 +832,9 @@ try {
     await PB.intake.settle();
     const sb = PB.repo.getSignal(r.signalId);
     const lb = PB.repo.linkFor(r.signalId);
-    check("4. another daemon's same signal is linked by its exact URL, no new item", sb.status === 'linked' && lb?.linkedBy === 'url' && lb?.itemRef === 'youtrack:GAR-1' && creates() === 2, { status: sb.status, reason: sb.reason, link: lb });
-    const sourcesComment = (fake.comments.get('GAR-1') ?? []).find((c) => c.text.startsWith('<!-- tandemise:sources -->'));
-    check('…and the URL is in its sources comment', sourcesComment?.text.includes('https://acme.sentry.io/issues/4501234567/'), fake.comments.get('GAR-1'));
+    check("4. another daemon's same signal is linked by its exact URL, no new item", sb.status === 'linked' && lb?.linkedBy === 'url' && lb?.itemRef === 'youtrack:ACME-1' && creates() === 2, { status: sb.status, reason: sb.reason, link: lb });
+    const sourcesComment = (fake.comments.get('ACME-1') ?? []).find((c) => c.text.startsWith('<!-- tandemise:sources -->'));
+    check('…and the URL is in its sources comment', sourcesComment?.text.includes('https://acme.sentry.io/issues/4501234567/'), fake.comments.get('ACME-1'));
   } finally {
     await PB.intake.settle();
     await PB.container.dispose();
@@ -862,22 +862,22 @@ try {
   }
 
   // 6. Similarity: the same title from another source links; a close one asks.
-  const s6 = await push(slack('p1', pipeline.GAR1_TITLE), 'slack-support');
-  check('6. the same title from Slack is linked by similarity, score 1', s6.status === 'linked' && s6.link?.linkedBy === 'similarity' && s6.link?.score === 1 && s6.link?.itemRef === 'youtrack:GAR-1' && creates() === 2, { status: s6.status, reason: s6.reason, link: s6.link });
-  const s6b = await push(slack('p2', `${pipeline.GAR1_TITLE} in checkout`), 'slack-support');
-  check("…a close title needs a decision: 'Is this the same as GAR-1?'", s6b.status === 'needs_decision' && s6b.reason === 'Is this the same as GAR-1?' && s6b.candidateRef === 'youtrack:GAR-1' && s6b.score >= 0.55 && s6b.score < 0.85 && creates() === 2, { status: s6b.status, reason: s6b.reason, candidateRef: s6b.candidateRef, score: s6b.score });
+  const s6 = await push(slack('p1', pipeline.ACME1_TITLE), 'slack-support');
+  check('6. the same title from Slack is linked by similarity, score 1', s6.status === 'linked' && s6.link?.linkedBy === 'similarity' && s6.link?.score === 1 && s6.link?.itemRef === 'youtrack:ACME-1' && creates() === 2, { status: s6.status, reason: s6.reason, link: s6.link });
+  const s6b = await push(slack('p2', `${pipeline.ACME1_TITLE} in checkout`), 'slack-support');
+  check("…a close title needs a decision: 'Is this the same as ACME-1?'", s6b.status === 'needs_decision' && s6b.reason === 'Is this the same as ACME-1?' && s6b.candidateRef === 'youtrack:ACME-1' && s6b.score >= 0.55 && s6b.score < 0.85 && creates() === 2, { status: s6b.status, reason: s6b.reason, candidateRef: s6b.candidateRef, score: s6b.score });
   const inbox = PA.services.projections.inbox(ws).intakeDecisions ?? [];
-  check('…and the Inbox asks it, naming the candidate', inbox.length === 1 && inbox[0].signalId === s6b.id && inbox[0].question === 'Is this the same as GAR-1?' && inbox[0].candidate?.key === 'GAR-1' && inbox[0].sourceLabel === 'Slack', inbox);
+  check('…and the Inbox asks it, naming the candidate', inbox.length === 1 && inbox[0].signalId === s6b.id && inbox[0].question === 'Is this the same as ACME-1?' && inbox[0].candidate?.key === 'ACME-1' && inbox[0].sourceLabel === 'Slack', inbox);
   const decided = await PA.intake.decide(PA.caller, s6b.id, 'same');
   const s6c = PA.repo.getSignal(s6b.id);
-  check("…'same' links it (person), and the Inbox is empty", decided.status === 'linked' && s6c.status === 'linked' && PA.repo.linkFor(s6b.id)?.linkedBy === 'person' && PA.repo.linkFor(s6b.id)?.itemRef === 'youtrack:GAR-1' && (PA.services.projections.inbox(ws).intakeDecisions ?? []).length === 0, { decided, link: PA.repo.linkFor(s6b.id) });
+  check("…'same' links it (person), and the Inbox is empty", decided.status === 'linked' && s6c.status === 'linked' && PA.repo.linkFor(s6b.id)?.linkedBy === 'person' && PA.repo.linkFor(s6b.id)?.itemRef === 'youtrack:ACME-1' && (PA.services.projections.inbox(ws).intakeDecisions ?? []).length === 0, { decided, link: PA.repo.linkFor(s6b.id) });
 
   // 7. Nothing like it: a new item.
   const s7 = await push(slack('p3', 'Export to CSV is slow'), 'slack-support');
-  check('7. an unrelated title is created', s7.status === 'created' && s7.link?.itemRef === 'youtrack:GAR-3' && creates() === 3, { status: s7.status, reason: s7.reason, link: s7.link });
-  check('…a reporter with no name reads as their handle', fake.issues.get('GAR-3')?.description.includes('Recorded by Tandemise from Slack, reported by dana.'), fake.issues.get('GAR-3')?.description);
+  check('7. an unrelated title is created', s7.status === 'created' && s7.link?.itemRef === 'youtrack:ACME-3' && creates() === 3, { status: s7.status, reason: s7.reason, link: s7.link });
+  check('…a reporter with no name reads as their handle', fake.issues.get('ACME-3')?.description.includes('Recorded by Tandemise from Slack, reported by dana.'), fake.issues.get('ACME-3')?.description);
 
-  // 8. The daily cap: sentry-web filed GAR-1 and GAR-2 today.
+  // 8. The daily cap: sentry-web filed ACME-1 and ACME-2 today.
   PA.config.write(ws, { intake: pipeline.intakeConfig({ dailyCap: 2 }) });
   const capped = (key, title) => sentry({ key, url: `https://acme.sentry.io/issues/${key}/`, title });
   const s8 = await push(capped('cap1', 'Login button misaligned on Firefox'));
@@ -885,7 +885,7 @@ try {
   const capCard = (PA.services.projections.inbox(ws).intakeDecisions ?? []).find((d) => d.signalId === s8.id);
   check('…the Inbox card has no candidate', capCard !== undefined && capCard.candidate === null && capCard.question === s8.reason, capCard);
   const s8b = await PA.intake.decide(PA.caller, s8.id, 'new');
-  check("…'new' creates it, past the cap", s8b.status === 'created' && PA.repo.linkFor(s8.id)?.itemRef === 'youtrack:GAR-4' && creates() === 4, { s8b, link: PA.repo.linkFor(s8.id) });
+  check("…'new' creates it, past the cap", s8b.status === 'created' && PA.repo.linkFor(s8.id)?.itemRef === 'youtrack:ACME-4' && creates() === 4, { s8b, link: PA.repo.linkFor(s8.id) });
 
   // 9. Not work.
   const s9 = await push(capped('cap2', 'Avatar upload spins forever'));
@@ -913,8 +913,8 @@ try {
 
   // A repeat whose events grew tenfold updates the same sources comment, never a new one.
   await push(sentry({ impact: { level: 'error', events: 1500, users: 41, lastSeen: pipeline.clock.now() } }));
-  const sourcesComments = (fake.comments.get('GAR-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
-  check('a linked signal whose events grew tenfold updates the one sources comment', sourcesComments.length === 1 && sourcesComments[0].text.includes('1500 events'), fake.comments.get('GAR-1'));
+  const sourcesComments = (fake.comments.get('ACME-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
+  check('a linked signal whose events grew tenfold updates the one sources comment', sourcesComments.length === 1 && sourcesComments[0].text.includes('1500 events'), fake.comments.get('ACME-1'));
   const writes = fake.calls.length;
   await push(sentry({ impact: { level: 'error', events: 1600, users: 41, lastSeen: pipeline.clock.now() } }));
   check('…and a small change writes nothing', fake.calls.slice(writes).every((c) => c.method === 'GET'), fake.calls.slice(writes).map((c) => `${c.method} ${c.path}`));
@@ -981,7 +981,7 @@ try {
       await second.intake.settle();
       const s = second.repo.getSignal(signalId);
       const link = second.repo.linkFor(signalId);
-      check(`${when} create: after the restart exactly one item carries the URL, and the signal is created`, withUrl(url) === 1 && s.status === 'created' && s.reason === null && link?.status === 'done' && link?.itemRef?.startsWith('youtrack:GAR-'), { items: withUrl(url), status: s.status, reason: s.reason, link });
+      check(`${when} create: after the restart exactly one item carries the URL, and the signal is created`, withUrl(url) === 1 && s.status === 'created' && s.reason === null && link?.status === 'done' && link?.itemRef?.startsWith('youtrack:ACME-'), { items: withUrl(url), status: s.status, reason: s.reason, link });
       check(`${when} create: the restart ${when === 'before' ? 'created it once' : 'adopted it by URL, creating nothing'}`, creates() - createsBefore === (when === 'before' ? 1 : 0) && link?.linkedBy === 'created', { created: creates() - createsBefore, link });
       const after = fake.calls.slice(callsBefore);
       const search = after.findIndex((c) => c.method === 'GET' && c.path === '/api/issues' && (c.query.get('query') ?? '').includes(`"${url}"`));
@@ -1011,8 +1011,8 @@ try {
 section('board: the cache, grouped by mapped state, and duplicate merging (Task 8)');
 const boardHomes = [];
 const boardHome = () => { const h = pipeline.mkdtempSync(join(pipeline.tmpdir(), 'tdi-board-')); boardHomes.push(h); return h; };
-const fakeB = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
-const fakeR = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+const fakeB = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
+const fakeR = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
 const SAFARI = 'Checkout fails on Safari';
 const DONE_WHEN = 'Clicking Pay on Safari does nothing.\n\n## Done when\n- [ ] Checkout works on Safari';
 const boardDaemon = { home: boardHome(), settings: pipeline.app.createMemorySettingsStore(), secrets: pipeline.memorySecrets() };
@@ -1032,18 +1032,18 @@ try {
   check('before a refresh the board is empty and says it was never read', before.refreshedAt === null && before.groups.ready.length === 0 && before.trackerLabel === 'YouTrack', before);
   const board = await tracker.refreshBoard(boardWs);
   const keys = (list) => list.map((i) => i.key);
-  check('refreshBoard groups GAR-1 / GAR-2 / GAR-3 as ready / in progress / in review',
-    eq(keys(board.groups.ready), ['GAR-1']) && eq(keys(board.groups.inProgress), ['GAR-2']) && eq(keys(board.groups.inReview), ['GAR-3']) && board.problem === null && board.refreshedAt !== null, board);
+  check('refreshBoard groups ACME-1 / ACME-2 / ACME-3 as ready / in progress / in review',
+    eq(keys(board.groups.ready), ['ACME-1']) && eq(keys(board.groups.inProgress), ['ACME-2']) && eq(keys(board.groups.inReview), ['ACME-3']) && board.problem === null && board.refreshedAt !== null, board);
   const gar2 = board.groups.inProgress[0];
   check("…an item shows its state and assignee, and one in progress can't be started", gar2?.state === 'In Progress' && gar2?.assignee === 'ana' && gar2?.startable.ok === false && gar2?.startable.reason === 'Already in progress' && gar2?.mission === null, gar2);
-  check('…a ready item can be started', board.groups.ready[0]?.startable.ok === true && board.groups.ready[0]?.url.endsWith('/issue/GAR-1'), board.groups.ready[0]);
+  check('…a ready item can be started', board.groups.ready[0]?.startable.ok === true && board.groups.ready[0]?.url.endsWith('/issue/ACME-1'), board.groups.ready[0]);
 
-  // A Sentry signal with GAR-1's title links to it: its chip reads "Sentry · 132 events".
+  // A Sentry signal with ACME-1's title links to it: its chip reads "Sentry · 132 events".
   const r = await BD.intake.ingest({ workspaceId: boardWs, sourceId: 'sentry-web', tokenId: null }, pipeline.sentry({ title: SAFARI }));
   await BD.intake.settle();
-  check('a Sentry signal with the same title links to GAR-1', BD.repo.linkFor(r.signalId)?.itemRef === 'youtrack:GAR-1', BD.repo.linkFor(r.signalId));
+  check('a Sentry signal with the same title links to ACME-1', BD.repo.linkFor(r.signalId)?.itemRef === 'youtrack:ACME-1', BD.repo.linkFor(r.signalId));
   const chips = tracker.board(boardWs).groups.ready[0]?.sources;
-  check("GAR-1's chips show Sentry · 132 events", eq(chips, [{ label: 'Sentry', detail: '132 events' }]), chips);
+  check("ACME-1's chips show Sentry · 132 events", eq(chips, [{ label: 'Sentry', detail: '132 events' }]), chips);
 
   // Ruling 29 (found by I10): the board shows what the board query returns. An
   // item kept in the cache only because a signal points at it (Ruling 13) is
@@ -1051,22 +1051,22 @@ try {
   {
     const cfg = BD.container.resolve(pipeline.app.INTAKE_CONFIG_SOURCE);
     const tracker0 = cfg.read(boardWs).tracker;
-    cfg.write(boardWs, { tracker: { ...tracker0, board: 'project: GAR #Unresolved Search' } });
+    cfg.write(boardWs, { tracker: { ...tracker0, board: 'project: ACME #Unresolved Search' } });
     const narrowed = await tracker.refreshBoard(boardWs);
-    const cachedGar1 = BD.container.resolve(pipeline.app.TRACKER_ITEM_REPOSITORY).byRef(boardWs, 'youtrack:GAR-1');
+    const cachedGar1 = BD.container.resolve(pipeline.app.TRACKER_ITEM_REPOSITORY).byRef(boardWs, 'youtrack:ACME-1');
     check('an item the board query no longer returns is not on the board, though a signal keeps it cached',
-      !narrowed.groups.ready.some((i) => i.key === 'GAR-1') && eq(keys(narrowed.groups.inProgress), ['GAR-2']) && cachedGar1?.state === 'Open', { ready: keys(narrowed.groups.ready), cached: cachedGar1?.state });
+      !narrowed.groups.ready.some((i) => i.key === 'ACME-1') && eq(keys(narrowed.groups.inProgress), ['ACME-2']) && cachedGar1?.state === 'Open', { ready: keys(narrowed.groups.ready), cached: cachedGar1?.state });
     cfg.write(boardWs, { tracker: tracker0 });
     const back = await tracker.refreshBoard(boardWs);
-    check('…and it is back once the query returns it again', back.groups.ready.some((i) => i.key === 'GAR-1'), keys(back.groups.ready));
+    check('…and it is back once the query returns it again', back.groups.ready.some((i) => i.key === 'ACME-1'), keys(back.groups.ready));
   }
 
   // An item the board query no longer returns stays cached while a signal points at it.
-  fakeB.setState('GAR-1', 'Fixed');
+  fakeB.setState('ACME-1', 'Fixed');
   const afterFix = await tracker.refreshBoard(boardWs);
-  check('a resolved item leaves the board…', !afterFix.groups.ready.some((i) => i.key === 'GAR-1'), afterFix.groups.ready);
-  check('…but stays in the cache, re-read, while a signal links to it', BD.items.byKey(boardWs, 'GAR-1')?.state === 'Fixed', BD.items.byKey(boardWs, 'GAR-1'));
-  fakeB.setState('GAR-1', 'Open');
+  check('a resolved item leaves the board…', !afterFix.groups.ready.some((i) => i.key === 'ACME-1'), afterFix.groups.ready);
+  check('…but stays in the cache, re-read, while a signal links to it', BD.items.byKey(boardWs, 'ACME-1')?.state === 'Fixed', BD.items.byKey(boardWs, 'ACME-1'));
+  fakeB.setState('ACME-1', 'Open');
   await tracker.refreshBoard(boardWs);
 } catch (e) {
   check('the board section ran', false, String(e?.stack ?? e));
@@ -1148,26 +1148,26 @@ try {
   const fromTracker = () => missions.list({ workspaceId: boardWs }).filter((m) => m.trackerItemId !== null && m.trackerItemId !== undefined);
   const refusal = async (key) => { try { await tracker.start(BD.caller, boardWs, key); return null; } catch (e) { return e; } };
 
-  const mission = await tracker.start(BD.caller, boardWs, 'GAR-1');
+  const mission = await tracker.start(BD.caller, boardWs, 'ACME-1');
   await BD.intake.settle();
   await tracker.settle();
-  const gar1 = BD.items.byKey(boardWs, 'GAR-1');
+  const gar1 = BD.items.byKey(boardWs, 'ACME-1');
   const stored = missions.get(mission.id);
-  check('Start GAR-1 makes exactly one mission, with its tracker item', fromTracker().length === 1 && stored?.trackerItemId === gar1?.id, fromTracker().map((m) => m.trackerItemId));
+  check('Start ACME-1 makes exactly one mission, with its tracker item', fromTracker().length === 1 && stored?.trackerItemId === gar1?.id, fromTracker().map((m) => m.trackerItemId));
   // planNow: planning began at once. With no planner runtime here the preset
   // plans it in the same call, so it is already past PLANNING (RULINGS ruling 13).
   const planned = missions.get(mission.id);
   check('…never queued, and planned at once (its Done-when was parsed)', stored?.queuedAt === null && ['PLANNING', 'AWAITING_PLAN_APPROVAL', 'EXECUTING'].includes(mission.status) && planned?.queuedAt === null, { queuedAt: stored?.queuedAt, status: mission.status });
-  check("…its goal starts 'YouTrack GAR-1, started by Demo: '", stored?.goal.startsWith('YouTrack GAR-1, started by Demo: ') === true, stored?.goal);
+  check("…its goal starts 'YouTrack ACME-1, started by Demo: '", stored?.goal.startsWith('YouTrack ACME-1, started by Demo: ') === true, stored?.goal);
   check('…quotes the task as written and lists its sources', stored?.goal.includes(`The task as written in the tracker:\n\n${SAFARI}\n\n${DONE_WHEN}`) === true && stored?.goal.includes('\n\nSources:\n- Sentry · acme/web · ') === true, stored?.goal);
   check('…its title is the item title', stored?.title === SAFARI, stored?.title);
   const ledger = criteria.listActive(mission.id);
   check("…its ledger has 'Checkout works on Safari', decided by the tracker", ledger.some((c) => c.statement === 'Checkout works on Safari' && c.decidedBy === 'tracker'), ledger);
-  check('…YouTrack shows GAR-1 In Progress', fakeB.issues.get('GAR-1')?.state === 'In Progress', fakeB.issues.get('GAR-1')?.state);
-  const activity = (fakeB.comments.get('GAR-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:activity -->'));
-  check('…with one activity comment', activity.length === 1 && activity[0].text.includes(`Started in Tandemise by Demo: ${SAFARI}.`), fakeB.comments.get('GAR-1'));
-  check('…and the written state is remembered', BD.items.byKey(boardWs, 'GAR-1')?.writtenState === 'In Progress', BD.items.byKey(boardWs, 'GAR-1'));
-  const row = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1');
+  check('…YouTrack shows ACME-1 In Progress', fakeB.issues.get('ACME-1')?.state === 'In Progress', fakeB.issues.get('ACME-1')?.state);
+  const activity = (fakeB.comments.get('ACME-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:activity -->'));
+  check('…with one activity comment', activity.length === 1 && activity[0].text.includes(`Started in Tandemise by Demo: ${SAFARI}.`), fakeB.comments.get('ACME-1'));
+  check('…and the written state is remembered', BD.items.byKey(boardWs, 'ACME-1')?.writtenState === 'In Progress', BD.items.byKey(boardWs, 'ACME-1'));
+  const row = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'ACME-1');
   check('…the board shows its mission, and it cannot be started again', row?.mission?.id === mission.id && row?.startable.ok === false && row?.startable.reason === 'Has a mission', row);
   // #101: a mission whose next step waits on a saturated runtime says so on the Board,
   // not only "Mission: Executing". The reason is the executor's own deferral words.
@@ -1181,18 +1181,18 @@ try {
     const saved = { status: step.status, statusReason: step.statusReason };
     const busy = R.describeRejections([{ profileId: 'rtp_x', profileName: 'Claude Code', reason: 'saturated: 1/1 runs in flight', busy: true }]);
     tasks.update(step.id, { status: 'READY', statusReason: `Waiting for a runtime slot. ${busy}` });
-    const waiting = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1')?.mission;
+    const waiting = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'ACME-1')?.mission;
     check('…a READY step waiting for a runtime slot: "Waiting for a free slot on Claude Code"', waiting?.waiting === 'Waiting for a free slot on Claude Code', waiting);
     tasks.update(step.id, { statusReason: 'Waiting for you: sign in again' });
-    const person = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'GAR-1')?.mission;
+    const person = tracker.board(boardWs).groups.inProgress.find((i) => i.key === 'ACME-1')?.mission;
     check('…a step waiting on something else is no slot wait', person?.waiting === null, person);
     tasks.update(step.id, saved);
   }
 
-  const second = await refusal('GAR-1');
-  check(`a second Start of GAR-1 is refused: "GAR-1 already has a mission: ${SAFARI}."`, second?.code === 'CONFLICT' && second?.message === `GAR-1 already has a mission: ${SAFARI}.` && fromTracker().length === 1, { code: second?.code, message: second?.message });
-  const busy = await refusal('GAR-2');
-  check('Start of GAR-2 (In Progress, ana) is refused: "GAR-2 is already in progress (ana)."', busy?.code === 'CONFLICT' && busy?.message === 'GAR-2 is already in progress (ana).' && fromTracker().length === 1, { code: busy?.code, message: busy?.message });
+  const second = await refusal('ACME-1');
+  check(`a second Start of ACME-1 is refused: "ACME-1 already has a mission: ${SAFARI}."`, second?.code === 'CONFLICT' && second?.message === `ACME-1 already has a mission: ${SAFARI}.` && fromTracker().length === 1, { code: second?.code, message: second?.message });
+  const busy = await refusal('ACME-2');
+  check('Start of ACME-2 (In Progress, ana) is refused: "ACME-2 is already in progress (ana)."', busy?.code === 'CONFLICT' && busy?.message === 'ACME-2 is already in progress (ana).' && fromTracker().length === 1, { code: busy?.code, message: busy?.message });
 
   // No Done-when: a draft, not queued, and never pulled.
   fakeB.putIssue({ summary: 'Claims are checked', description: 'Two people, one item.', state: 'Open' });
@@ -1200,7 +1200,7 @@ try {
   // #53 §4 changes #52 §7: with no type mapping the factory decides, and a Start with no
   // Done-when line plans at once in the quick and standard lanes.
   check('with no type mapping, Start lets the factory decide (workflow auto)', stored?.workflowPreset === 'auto', stored?.workflowPreset);
-  const plain = await tracker.start(BD.caller, boardWs, 'GAR-5');
+  const plain = await tracker.start(BD.caller, boardWs, 'ACME-5');
   check('an item with no criteria that is not careful plans at once, not queued', plain.status !== 'DRAFT' && missions.get(plain.id)?.queuedAt === null, { status: plain.status, queuedAt: missions.get(plain.id)?.queuedAt });
   // The careful lane still asks for Done-when lines: such an item opens as a draft to refine.
   const careful = fakeB.putIssue({ summary: 'Migrate the sessions schema', description: 'Sessions move to their own table.', state: 'Open' }).idReadable;
@@ -1226,8 +1226,8 @@ try {
 try {
   const released = [];
   const claims = [
-    { id: 'clm_a', itemRef: 'youtrack:GAR-7', memberId: 'mem_ana', localRef: 'msn_live' },
-    { id: 'clm_b', itemRef: 'youtrack:GAR-7', memberId: 'mem_ana', localRef: 'msn_failed' },
+    { id: 'clm_a', itemRef: 'youtrack:ACME-7', memberId: 'mem_ana', localRef: 'msn_live' },
+    { id: 'clm_b', itemRef: 'youtrack:ACME-7', memberId: 'mem_ana', localRef: 'msn_failed' },
   ];
   const port = {
     me: () => ({ memberId: 'mem_ana', deviceId: 'dev_1' }),
@@ -1242,10 +1242,10 @@ try {
     settings: { read: () => ({}), write: () => ({}) }, recorder: { invalidate() {} }, cancelMission: async () => {},
     clock: { now: () => new Date() }, log: quiet,
   });
-  await cs.releaseItem('youtrack:GAR-7', 'released', 'msn_failed');
+  await cs.releaseItem('youtrack:ACME-7', 'released', 'msn_failed');
   check("a failed Start's release names its mission: only that claim goes", eq(released, ['clm_b']), released);
   released.length = 0;
-  await cs.releaseItem('youtrack:GAR-7', 'done');
+  await cs.releaseItem('youtrack:ACME-7', 'done');
   check('…a release without a mission still lets go of every claim of the person on the item', eq(released, ['clm_a', 'clm_b']), released);
   const src = readFileSync(join(repo, 'packages/application/src/services/tracker-service.ts'), 'utf8');
   check("…and Start's failure path passes its pre-named mission id", /releaseItem\(item\.ref, 'released', missionId\)/.test(src));
@@ -1257,7 +1257,7 @@ try {
 try {
   const refusing = (c) => c.rebind(pipeline.app.INTAKE_CLAIMS, () => ({
     source: async () => true,
-    item: async () => ({ ok: false, reason: 'Ana is working on GAR-4 since 10:42.' }),
+    item: async () => ({ ok: false, reason: 'Ana is working on ACME-4 since 10:42.' }),
     releaseItem: async () => {},
   }), { source: 'check' });
   const RD = await pipeline.open({ ...boardDaemon, providers: [pipeline.Y.youtrackIntegrationModule], bindings: refusing });
@@ -1265,9 +1265,9 @@ try {
     const missions = RD.container.resolve(pipeline.app.MISSION_REPOSITORY);
     const before = missions.list({ workspaceId: boardWs }).length;
     let refused = null;
-    try { await RD.services.tracker.start(RD.caller, boardWs, 'GAR-4'); } catch (e) { refused = e; }
-    check('with the claim refused, Start says exactly "Ana is working on GAR-4 since 10:42."', refused?.code === 'CONFLICT' && refused?.message === 'Ana is working on GAR-4 since 10:42.' && missions.list({ workspaceId: boardWs }).length === before, { code: refused?.code, message: refused?.message });
-    check('…and GAR-4 is not moved', fakeB.issues.get('GAR-4')?.state === 'Open', fakeB.issues.get('GAR-4')?.state);
+    try { await RD.services.tracker.start(RD.caller, boardWs, 'ACME-4'); } catch (e) { refused = e; }
+    check('with the claim refused, Start says exactly "Ana is working on ACME-4 since 10:42."', refused?.code === 'CONFLICT' && refused?.message === 'Ana is working on ACME-4 since 10:42.' && missions.list({ workspaceId: boardWs }).length === before, { code: refused?.code, message: refused?.message });
+    check('…and ACME-4 is not moved', fakeB.issues.get('ACME-4')?.state === 'Open', fakeB.issues.get('ACME-4')?.state);
   } finally {
     await RD.services.tracker.settle();
     await RD.container.dispose();
@@ -1283,7 +1283,7 @@ try {
 // ------------------------------------------------------------------ claims (spec §3, acceptance "Claims"; Ruling 22)
 // Two daemons, two databases, one team: Start takes the relay's
 // ('tracker_item', ref) claim before the mission exists. While Ana holds
-// GAR-1, Bruno's Start is refused in her words, even when the tracker still
+// ACME-1, Bruno's Start is refused in her words, even when the tracker still
 // shows the item Open; once her mission ends, the claim is released and his
 // Start goes through. Solo (no relay) the other Start sections show it is
 // always granted.
@@ -1291,7 +1291,7 @@ section('claims: two daemons share the relay\'s claims; Start refuses with the h
 {
   const { sharedTeam, eventBus } = await import('./shared-coordination.mjs');
   const team = sharedTeam(pipeline.clock);
-  const fakeC = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+  const fakeC = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
   const claimHomes = [];
   const opened = [];
   try {
@@ -1318,32 +1318,32 @@ section('claims: two daemons share the relay\'s claims; Start refuses with the h
     const bruno = await daemon('Bruno');
     fakeC.putIssue({ summary: 'Checkout fails on Safari', description: DONE_WHEN, state: 'Open' });
     const missionsOf = (x) => x.d.container.resolve(pipeline.app.MISSION_REPOSITORY).list({ workspaceId: x.ws }).filter((m) => m.trackerItemId != null);
-    const startOf = async (x) => { try { return { mission: await x.d.services.tracker.start(x.d.caller, x.ws, 'GAR-1') }; } catch (e) { return { error: e }; } };
+    const startOf = async (x) => { try { return { mission: await x.d.services.tracker.start(x.d.caller, x.ws, 'ACME-1') }; } catch (e) { return { error: e }; } };
 
     const a = await startOf(ana);
-    check('Ana starts GAR-1', a.mission !== undefined, a.error?.message);
-    const held = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:GAR-1');
-    check("…the team holds one claim on youtrack:GAR-1, Ana's, tied to her mission",
+    check('Ana starts ACME-1', a.mission !== undefined, a.error?.message);
+    const held = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:ACME-1');
+    check("…the team holds one claim on youtrack:ACME-1, Ana's, tied to her mission",
       held.length === 1 && held[0].memberName === 'Ana' && held[0].projectKey === 'github.com/acme/brain' && held[0].localRef === a.mission?.id, held);
-    // The tracker alone would not stop Bruno: someone moved GAR-1 back to Open.
-    fakeC.setState('GAR-1', 'Open');
+    // The tracker alone would not stop Bruno: someone moved ACME-1 back to Open.
+    fakeC.setState('ACME-1', 'Open');
     const b = await startOf(bruno);
-    check('Bruno\'s Start is refused with Ana\'s words: "Ana is working on GAR-1 since HH:MM."',
-      b.error?.code === 'CONFLICT' && /^Ana is working on GAR-1 since \d\d:\d\d\.$/.test(b.error?.message ?? ''), { code: b.error?.code, message: b.error?.message });
+    check('Bruno\'s Start is refused with Ana\'s words: "Ana is working on ACME-1 since HH:MM."',
+      b.error?.code === 'CONFLICT' && /^Ana is working on ACME-1 since \d\d:\d\d\.$/.test(b.error?.message ?? ''), { code: b.error?.code, message: b.error?.message });
     check('…before any mission exists on Bruno\'s machine', missionsOf(bruno).length === 0, missionsOf(bruno).map((m) => m.id));
-    check('…and GAR-1 is not moved by Bruno', fakeC.issues.get('GAR-1')?.state === 'Open', fakeC.issues.get('GAR-1')?.state);
+    check('…and ACME-1 is not moved by Bruno', fakeC.issues.get('ACME-1')?.state === 'Open', fakeC.issues.get('ACME-1')?.state);
     const rows = ana.d.services.coordination?.rows?.(ana.ws) ?? [];
-    check("Ana's Home lists GAR-1 as hers, with her mission", rows.some((r) => r.itemKey === 'GAR-1' && r.mine && r.missionId === a.mission?.id), rows);
+    check("Ana's Home lists ACME-1 as hers, with her mission", rows.some((r) => r.itemKey === 'ACME-1' && r.mine && r.missionId === a.mission?.id), rows);
 
     if (a.mission !== undefined) await ana.d.services.missions.cancel(a.mission.id, 'Not today.');
     await ana.d.services.tracker.settle();
-    const after = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:GAR-1');
+    const after = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:ACME-1');
     check('cancelling Ana\'s mission releases the claim', after.length === 0, after);
-    fakeC.setState('GAR-1', 'Open');
+    fakeC.setState('ACME-1', 'Open');
     const b2 = await startOf(bruno);
     check('…then Bruno\'s Start is granted and makes his mission', b2.mission !== undefined && missionsOf(bruno).length === 1, b2.error?.message);
-    const bHeld = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:GAR-1');
-    check('…and the team now sees Bruno on GAR-1', bHeld.length === 1 && bHeld[0].memberName === 'Bruno' && bHeld[0].localRef === b2.mission?.id, bHeld);
+    const bHeld = team.store.activeClaims().filter((c) => c.itemRef === 'youtrack:ACME-1');
+    check('…and the team now sees Bruno on ACME-1', bHeld.length === 1 && bHeld[0].memberName === 'Bruno' && bHeld[0].localRef === b2.mission?.id, bHeld);
   } catch (e) {
     check('the shared claims section ran', false, String(e?.stack ?? e));
   } finally {
@@ -1362,8 +1362,8 @@ section('claims: two daemons share the relay\'s claims; Start refuses with the h
 section('write-back: the activity comment and the state follow the mission (Task 9)');
 const wbHomes = [];
 const wbHome = () => { const h = pipeline.mkdtempSync(join(pipeline.tmpdir(), 'tdi-wb-')); wbHomes.push(h); return h; };
-const fakeW = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
-const fakeN = await pipeline.startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+const fakeW = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
+const fakeN = await pipeline.startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
 const ACTIVITY = '<!-- tandemise:activity -->';
 /** The daemon's handles for driving a started mission by hand. */
 const driver = (d, ws) => {
@@ -1419,12 +1419,12 @@ try {
   const tracker = WD.services.tracker;
   const w = driver(WD, ws);
   const activity = (key) => (fakeW.comments.get(key) ?? []).filter((c) => c.text.startsWith(ACTIVITY));
-  const edits = () => fakeW.calls.filter((c) => c.method === 'POST' && /^\/api\/issues\/GAR-1\/comments\/[^/]+$/.test(c.path)).length;
+  const edits = () => fakeW.calls.filter((c) => c.method === 'POST' && /^\/api\/issues\/ACME-1\/comments\/[^/]+$/.test(c.path)).length;
   await tracker.refreshBoard(ws);
 
-  const mission = await tracker.start(WD.caller, ws, 'GAR-1');
+  const mission = await tracker.start(WD.caller, ws, 'ACME-1');
   await tracker.settle();
-  check('Start posts the activity comment derived from the mission: its first line only', activity('GAR-1').length === 1 && activity('GAR-1')[0].text === `${ACTIVITY}\n\nStarted in Tandemise by Demo: ${SAFARI}.`, activity('GAR-1'));
+  check('Start posts the activity comment derived from the mission: its first line only', activity('ACME-1').length === 1 && activity('ACME-1')[0].text === `${ACTIVITY}\n\nStarted in Tandemise by Demo: ${SAFARI}.`, activity('ACME-1'));
 
   // 1. The plan is approved and its steps written; one done, the next running.
   const steps = await w.approvePlan(mission.id);
@@ -1432,12 +1432,12 @@ try {
   w.step(steps[0].id, 'SUCCEEDED');
   w.step(steps[1].id, 'RUNNING');
   await w.pass();
-  check('within a minute of the last write the comment is not edited yet', edits() === 0 && !activity('GAR-1')[0].text.includes('Plan:'), activity('GAR-1')[0].text);
+  check('within a minute of the last write the comment is not edited yet', edits() === 0 && !activity('ACME-1')[0].text.includes('Plan:'), activity('ACME-1')[0].text);
   pipeline.advance(61_000);
   await w.pass();
-  const one = activity('GAR-1');
+  const one = activity('ACME-1');
   check(`61 s later one edit lands: "- [ ] ${steps[1].title} — running"`, edits() === 1 && one[0].text.includes(`- [x] ${steps[0].title}`) && one[0].text.includes(`- [ ] ${steps[1].title} — running`), { edits: edits(), text: one[0]?.text });
-  check('…and GAR-1 still has one comment', (fakeW.comments.get('GAR-1') ?? []).length === 1, fakeW.comments.get('GAR-1'));
+  check('…and ACME-1 still has one comment', (fakeW.comments.get('ACME-1') ?? []).length === 1, fakeW.comments.get('ACME-1'));
 
   // 2. Two changes within 10 s: neither lands before the minute is up; then the latest does.
   pipeline.advance(5_000);
@@ -1446,10 +1446,10 @@ try {
   pipeline.advance(5_000);
   w.step(steps[1].id, 'BLOCKED');
   await w.pass();
-  check('two changes within 10 s of an edit: nothing is edited before 60 s', edits() === 1 && !activity('GAR-1')[0].text.includes('— held'), { edits: edits() });
+  check('two changes within 10 s of an edit: nothing is edited before 60 s', edits() === 1 && !activity('ACME-1')[0].text.includes('— held'), { edits: edits() });
   pipeline.advance(50_000);
   await w.pass();
-  const latest = activity('GAR-1')[0].text;
+  const latest = activity('ACME-1')[0].text;
   check('at 60 s the latest state lands, once', edits() === 2 && latest.includes(`- [ ] ${steps[1].title} — held`) && !latest.includes('waiting for a person'), { edits: edits(), latest });
   pipeline.advance(61_000);
   await w.pass();
@@ -1461,53 +1461,53 @@ try {
   const card = w.pendingCard(mission.id);
   pipeline.advance(61_000);
   await w.pass();
-  check("a pull request plus a pending approval moves GAR-1 to 'In Review'", fakeW.issues.get('GAR-1')?.state === 'In Review' && WD.items.byKey(ws, 'GAR-1')?.writtenState === 'In Review', { state: fakeW.issues.get('GAR-1')?.state, written: WD.items.byKey(ws, 'GAR-1')?.writtenState });
-  check('…and the comment links it', activity('GAR-1')[0].text.includes('\n\nPull request: https://github.com/acme/web/pull/7'), activity('GAR-1')[0].text);
+  check("a pull request plus a pending approval moves ACME-1 to 'In Review'", fakeW.issues.get('ACME-1')?.state === 'In Review' && WD.items.byKey(ws, 'ACME-1')?.writtenState === 'In Review', { state: fakeW.issues.get('ACME-1')?.state, written: WD.items.byKey(ws, 'ACME-1')?.writtenState });
+  check('…and the comment links it', activity('ACME-1')[0].text.includes('\n\nPull request: https://github.com/acme/web/pull/7'), activity('ACME-1')[0].text);
 
   // 3b. The ship step's pull request (#53) is no handoff link, only a ship.pr_opened event: it counts too.
   fakeW.putIssue({ summary: 'Typo in the settings title', description: 'Settigns.\n\n## Done when\n- [ ] Settings', state: 'Open', type: 'Task' });
-  const typo = await tracker.start(WD.caller, ws, 'GAR-4');
+  const typo = await tracker.start(WD.caller, ws, 'ACME-4');
   await tracker.settle();
   const typoSteps = await w.approvePlan(typo.id);
   WD.container.resolve(pipeline.app.EVENT_RECORDER).record({ workspaceId: ws, missionId: typo.id, taskId: typoSteps[0]?.id ?? null }, { type: 'ship.pr_opened', repo: 'acme/web', number: 12, url: 'https://github.com/acme/web/pull/12', headSha: 'a'.repeat(40) });
   w.pendingCard(typo.id);
   pipeline.advance(61_000);
   await w.pass();
-  check("the ship step's pull request plus a pending approval moves GAR-4 to 'In Review'", fakeW.issues.get('GAR-4')?.state === 'In Review', fakeW.issues.get('GAR-4')?.state);
-  check('…and its activity comment links that pull request', activity('GAR-4')[0]?.text.includes('Pull request: https://github.com/acme/web/pull/12') === true, activity('GAR-4')[0]?.text);
+  check("the ship step's pull request plus a pending approval moves ACME-4 to 'In Review'", fakeW.issues.get('ACME-4')?.state === 'In Review', fakeW.issues.get('ACME-4')?.state);
+  check('…and its activity comment links that pull request', activity('ACME-4')[0]?.text.includes('Pull request: https://github.com/acme/web/pull/12') === true, activity('ACME-4')[0]?.text);
 
   // 4. COMPLETE → onComplete (In Review), with the criteria table.
   w.repo.approvals.update(card.id, { status: 'APPROVED', selectedOptionId: card.options[0]?.id ?? null, decidedAt: pipeline.clock.now() });
   w.complete(mission.id, steps[1].id);
   pipeline.advance(61_000);
   await w.pass();
-  const done = activity('GAR-1')[0].text;
-  check("COMPLETE leaves GAR-1 in 'In Review' (onComplete) and never moves it back", fakeW.issues.get('GAR-1')?.state === 'In Review', fakeW.issues.get('GAR-1')?.state);
+  const done = activity('ACME-1')[0].text;
+  check("COMPLETE leaves ACME-1 in 'In Review' (onComplete) and never moves it back", fakeW.issues.get('ACME-1')?.state === 'In Review', fakeW.issues.get('ACME-1')?.state);
   check("…the comment says 'Done in Tandemise — 1 of 1 criteria verified.' with the table", done.includes('\n\nDone in Tandemise — 1 of 1 criteria verified.\n\n| Key | Criterion | Result |') && /\| \S+ \| Checkout works on Safari \| Verified \|/.test(done), done);
-  check('…and it is still one comment', (fakeW.comments.get('GAR-1') ?? []).length === 1);
+  check('…and it is still one comment', (fakeW.comments.get('ACME-1') ?? []).length === 1);
 
-  // 5. A person resolves GAR-3 before its mission completes: their change wins.
-  const coupon = await tracker.start(WD.caller, ws, 'GAR-3');
+  // 5. A person resolves ACME-3 before its mission completes: their change wins.
+  const coupon = await tracker.start(WD.caller, ws, 'ACME-3');
   await tracker.settle();
-  fakeW.setState('GAR-3', 'Fixed');
+  fakeW.setState('ACME-3', 'Fixed');
   const commandsBefore = fakeW.fieldSets.length;
   w.complete(coupon.id, (await w.approvePlan(coupon.id))[0].id);
   pipeline.advance(61_000);
   await w.pass();
   pipeline.advance(61_000);
   await w.pass();
-  const gar3Moves = fakeW.fieldSets.slice(commandsBefore).filter((c) => c.issue === 'GAR-3' && c.fields.some((f) => f.startsWith('State=')));
-  check("a person's 'Fixed' before COMPLETE: Tandemise writes no transition", fakeW.issues.get('GAR-3')?.state === 'Fixed' && gar3Moves.length === 0, { state: fakeW.issues.get('GAR-3')?.state, gar3Moves });
-  check('…but the comment still follows the mission', activity('GAR-3')[0]?.text.includes('Done in Tandemise — ') === true, activity('GAR-3'));
+  const gar3Moves = fakeW.fieldSets.slice(commandsBefore).filter((c) => c.issue === 'ACME-3' && c.fields.some((f) => f.startsWith('State=')));
+  check("a person's 'Fixed' before COMPLETE: Tandemise writes no transition", fakeW.issues.get('ACME-3')?.state === 'Fixed' && gar3Moves.length === 0, { state: fakeW.issues.get('ACME-3')?.state, gar3Moves });
+  check('…but the comment still follows the mission', activity('ACME-3')[0]?.text.includes('Done in Tandemise — ') === true, activity('ACME-3'));
 
   // 6. CANCELLED → back to the first ready state, said in the comment.
-  const refunds = await tracker.start(WD.caller, ws, 'GAR-2');
+  const refunds = await tracker.start(WD.caller, ws, 'ACME-2');
   await tracker.settle();
   w.repo.missions.update(refunds.id, { status: 'CANCELLED' });
   pipeline.advance(61_000);
   await w.pass();
-  check("a CANCELLED mission moves GAR-2 back to 'Open'", fakeW.issues.get('GAR-2')?.state === 'Open' && WD.items.byKey(ws, 'GAR-2')?.writtenState === 'Open', fakeW.issues.get('GAR-2')?.state);
-  check("…with 'Stopped in Tandemise; moved back to Open.'", activity('GAR-2')[0]?.text.endsWith('\n\nStopped in Tandemise; moved back to Open.') === true, activity('GAR-2')[0]?.text);
+  check("a CANCELLED mission moves ACME-2 back to 'Open'", fakeW.issues.get('ACME-2')?.state === 'Open' && WD.items.byKey(ws, 'ACME-2')?.writtenState === 'Open', fakeW.issues.get('ACME-2')?.state);
+  check("…with 'Stopped in Tandemise; moved back to Open.'", activity('ACME-2')[0]?.text.endsWith('\n\nStopped in Tandemise; moved back to Open.') === true, activity('ACME-2')[0]?.text);
   const settledCalls = fakeW.calls.length;
   pipeline.advance(61_000);
   await w.pass();
@@ -1546,8 +1546,8 @@ try {
     const ws = await pipeline.configureYouTrack(ND, fakeN.url);
     const tracker = ND.services.tracker;
     const w = driver(ND, ws);
-    const activity = () => (fakeN.comments.get('GAR-1') ?? []).filter((c) => c.text.startsWith(ACTIVITY));
-    const mission = await tracker.start(ND.caller, ws, 'GAR-1');
+    const activity = () => (fakeN.comments.get('ACME-1') ?? []).filter((c) => c.text.startsWith(ACTIVITY));
+    const mission = await tracker.start(ND.caller, ws, 'ACME-1');
     await tracker.settle();
     const steps = await w.approvePlan(mission.id);
     for (const [i, status] of [[0, 'RUNNING'], [0, 'SUCCEEDED'], [1, 'RUNNING']]) {
@@ -1593,7 +1593,7 @@ try {
   const quiet = { info() {}, warn() {}, error() {}, debug() {}, child() { return quiet; } };
   const local = new APP.LocalIntakeConfigSource({ settings: store, log: quiet });
   const linked = new Set(['ws_brain']);
-  const brainTracker = { kind: 'youtrack', url: 'https://acme.youtrack.cloud', project: 'GAR', board: 'project: GAR #Unresolved',
+  const brainTracker = { kind: 'youtrack', url: 'https://acme.youtrack.cloud', project: 'ACME', board: 'project: ACME #Unresolved',
     states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed'], wont_do: [] }, onComplete: 'in_review' };
   const brain = {
     originFor: (ws) => (linked.has(ws) ? 'brain' : 'local'),
@@ -1605,7 +1605,7 @@ try {
   local.write('ws_local', { tracker: { ...brainTracker, project: 'LOC' } });
   check('an unlinked project reads the local settings', src.read('ws_local').tracker?.project === 'LOC' && src.originFor('ws_local') === 'local');
   const fromBrain = src.read('ws_brain');
-  check("a linked project reads the brain's tracker", src.originFor('ws_brain') === 'brain' && fromBrain.tracker?.project === 'GAR' && fromBrain.dailyCap === 5 && fromBrain.similarity.link === 0.9, fromBrain);
+  check("a linked project reads the brain's tracker", src.originFor('ws_brain') === 'brain' && fromBrain.tracker?.project === 'ACME' && fromBrain.dailyCap === 5 && fromBrain.similarity.link === 0.9, fromBrain);
   check("a brain source that fails intake's schema is dropped, the valid one kept", eq(fromBrain.sources.map((s) => s.id), ['sentry-web']), fromBrain.sources);
   let refused = null;
   try { src.write('ws_brain', { tracker: null }); } catch (e) { refused = e; }

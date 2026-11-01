@@ -49,24 +49,24 @@ if (wants('pure')) {
   check('createPaths(..).brains is <root>/brains', paths.brains === '/x/brains');
   check('makeWriterId slugs the handle and keeps 6 hex', D.makeWriterId?.('Ana Smith', 'a1b2c3d4e5') === 'ana-smith-a1b2c3');
 
-  const repos = [{ name: 'garipass', path: '/home/ana/src/garipass' }];
+  const repos = [{ name: 'acme', path: '/home/ana/src/acme' }];
   const tok = D.scrubForBrain?.('use ghp_' + 'a'.repeat(36), repos);
   check('a GitHub token becomes [redacted secret]', tok && 'text' in tok && tok.text.includes('[redacted secret]') && !tok.text.includes('ghp_'), tok);
-  const rel = D.scrubForBrain?.('edit /home/ana/src/garipass/src/app/page.tsx', repos);
-  check('a path inside a repository becomes repo-relative', rel?.text === 'edit garipass:src/app/page.tsx', rel);
+  const rel = D.scrubForBrain?.('edit /home/ana/src/acme/src/app/page.tsx', repos);
+  check('a path inside a repository becomes repo-relative', rel?.text === 'edit acme:src/app/page.tsx', rel);
   const abs = D.scrubForBrain?.('read /etc/ssh/config', repos);
   check('any other absolute path is refused in words', abs?.refused === "A lesson can't name a path on your machine. Name the file inside its repository instead.", abs);
   const plain = D.scrubForBrain?.('Run npm run ci before a PR.', repos);
   check('plain text is unchanged', plain?.text === 'Run npm run ci before a PR.', plain);
   check('the secret refusal sentence', D.BRAIN_SECRET_REFUSAL === "A lesson can't contain a secret; it was left out.");
 
-  const m = app.readBrainManifest?.('version: 1\nproject: Garipass\n');
+  const m = app.readBrainManifest?.('version: 1\nproject: Acme\n');
   check('brain.yaml defaults', m?.manifest?.promotion?.autoApply === 'off' && m.manifest.promotion.minHelpful === 3 && m.manifest.promotion.minMissions === 2 && m.manifest.humanEdits === 'direct' && Array.isArray(m.manifest.repositories) && m.manifest.repositories.length === 0, m);
   const bad = app.readBrainManifest?.('version: 1\nproject: G\npromotion:\n  autoApply: always\n');
   check('autoApply: always is a problem naming autoApply', typeof bad?.problem === 'string' && bad.problem.includes('autoApply'), bad);
   const once = m && app.renderBrainManifest(m.manifest);
   check('renderBrainManifest is stable', once !== undefined && once === app.renderBrainManifest(app.readBrainManifest(once).manifest), once);
-  check('remoteOf normalises ssh and https', app.remoteOf?.('git@github.com:garipass/brain.git') === 'github.com/garipass/brain' && app.remoteOf('https://github.com/garipass/brain.git') === 'github.com/garipass/brain' && app.remoteOf('https://github.com/garipass/brain') === 'github.com/garipass/brain');
+  check('remoteOf normalises ssh and https', app.remoteOf?.('git@github.com:acme/brain.git') === 'github.com/acme/brain' && app.remoteOf('https://github.com/acme/brain.git') === 'github.com/acme/brain' && app.remoteOf('https://github.com/acme/brain') === 'github.com/acme/brain');
   check('layout constants', app.BRAIN_GITATTRIBUTES === 'memory/ledger/** merge=union\n' && app.BRAIN_FACTORY === 'factory' && app.BRAIN_EVALS === 'evals');
 }
 
@@ -83,14 +83,14 @@ if (wants('persistence')) {
   check('schemaVersion is 23 or later (the brain is 023)', P.schemaVersion(db) >= 23 && P.MIGRATIONS.some((m) => m.version === 23 && m.name === 'brain'), P.schemaVersion(db));
   const ws = ids.workspace();
   container.resolve(P.WORKSPACE_REPOSITORY).create({
-    id: ws, name: 'Garipass', defaultRepositoryId: null,
+    id: ws, name: 'Acme', defaultRepositoryId: null,
     autonomy: { planApproval: 'ask', localCodeChanges: 'auto', externalWrites: 'policy', productionRelease: 'ask', financialActions: 'deny' },
     concurrency: { maxTotalWorkers: 3, perRuntime: {} }, routing: {}, defaultAutonomyLevel: 'balanced',
     knowledge: { productVision: null, architecturePrinciples: null, codingStandards: null, designSystem: null, glossary: null },
   });
   const brains = container.resolve(P.WORKSPACE_BRAIN_REPOSITORY);
   const link = {
-    workspaceId: ws, remote: 'github.com/garipass/brain', defaultBranch: 'main', clonePath: '/x/brains/ws',
+    workspaceId: ws, remote: 'github.com/acme/brain', defaultBranch: 'main', clonePath: '/x/brains/ws',
     writerId: 'ana-a1b2c3', lastPulledSha: null, lastPushedSha: null, lastSyncAt: null,
     lastSyncError: "Couldn't reach github.com.", fallbackBranch: null, linkedAt: now(),
   };
@@ -196,13 +196,13 @@ const roleFixture = (id, name, model, extra = {}) => ({
 const skillHash = 'a'.repeat(64);
 const snapshotFixture = {
   project: {
-    name: 'Garipass', autonomy: { planApproval: 'ask', localCodeChanges: 'auto', externalWrites: 'policy', productionRelease: 'ask', financialActions: 'deny' },
+    name: 'Acme', autonomy: { planApproval: 'ask', localCodeChanges: 'auto', externalWrites: 'policy', productionRelease: 'ask', financialActions: 'deny' },
     maxTotalWorkers: 3, knowledge: { codingStandards: 'Use the design tokens.' }, wipLimit: null, monthlyLimits: [], missionLimits: [],
   },
   roles: [roleFixture('development', 'Developer', 'strong-model', { skills: [{ name: 'tdd', version: 1, hash: skillHash }] }), roleFixture('review', 'Reviewer', null)],
   workflows: [{ file: 'build-feature.yaml', content: 'id: build-feature\nname: Build a feature\nsteps: []\n' }],
   routines: [{ name: 'Nightly', kind: 'mission', goal: 'Tidy up', successCriteria: [], priority: 'normal', limits: null, workflow: null, schedule: { type: 'daily', at: '03:00' } }],
-  skills: [{ name: 'tdd', version: 1, hash: skillHash, source: { kind: 'git', url: 'https://github.com/garipass/skills', subpath: 'tdd' } }],
+  skills: [{ name: 'tdd', version: 1, hash: skillHash, source: { kind: 'git', url: 'https://github.com/acme/skills', subpath: 'tdd' } }],
   issues: null,
 };
 const mcpsFixture = [
@@ -211,7 +211,7 @@ const mcpsFixture = [
 ];
 // renderSetup(snapshotFixture).hash computed from origin/main's build, before
 // this change: a P15 export without the new files is byte-identical to today's.
-const P15_BASELINE_HASH = '717200293e5b';
+const P15_BASELINE_HASH = 'ad0857baffa6'; // the fixture's example names are neutral (acme), so the bytes changed
 
 if (wants('codec')) {
   section('codec: tracker, intake and mcps files; a brain root');
@@ -255,7 +255,7 @@ if (wants('git')) {
   const remote = bare('git1');
   const a = join(HOME, 'git1-a');
   await repo.init(a, 'main');
-  const manifest = 'version: 1\nproject: Garipass\n';
+  const manifest = 'version: 1\nproject: Acme\n';
   await repo.commit(a, [{ path: 'brain.yaml', mode: 'write', content: manifest }], 'chore: create', null);
   await repo.setRemote(a, remote);
   check('init + commit + push is pushed', (await repo.push(a, 'main', { setUpstream: true })) === 'pushed');
@@ -446,7 +446,7 @@ if (wants('select')) {
     helpful: 0, harmful: 0, net: 0, addedAt: now, lastConfirmedAt: now, missions: ['M'], confirmedElsewhere: false,
     invalidAt: null, supersededBy: null, retired: null, promoted: null, netSinceRejected: null, flags: { harmful: false, stale: false }, ...extra,
   });
-  const task = { repos: ['garipass'], role: 'development', step: 'build', files: ['garipass:src/app/page.tsx'] };
+  const task = { repos: ['acme'], role: 'development', step: 'build', files: ['acme:src/app/page.tsx'] };
   const mem = (entries) => ({ entries, aliases: {}, problems: [] });
   const step0 = entry('Step lesson.', { step: 'build' });
   const proj9 = entry('Project lesson.', {}, { net: 9, helpful: 9 });
@@ -458,8 +458,8 @@ if (wants('select')) {
   check('an index line is the first 80 characters', budget?.index[0]?.title.length === 80);
   const hundred = Array.from({ length: 100 }, (_, i) => entry(`${String(i).padStart(3, '0')}${'y'.repeat(197)}`, {}));
   check('the index is capped at 40', D.selectBrain?.(mem(hundred), task, now).index.length === 40);
-  check('a paths glob matches a repo-relative file', D.matchScope?.({ paths: ['src/**/*.tsx'] }, { ...task, files: ['garipass:src/app/page.tsx'] }) === 'paths');
-  check('and not a .ts file', D.matchScope?.({ paths: ['src/**/*.tsx'] }, { ...task, files: ['garipass:src/app/page.ts'] }) === null);
+  check('a paths glob matches a repo-relative file', D.matchScope?.({ paths: ['src/**/*.tsx'] }, { ...task, files: ['acme:src/app/page.tsx'] }) === 'paths');
+  check('and not a .ts file', D.matchScope?.({ paths: ['src/**/*.tsx'] }, { ...task, files: ['acme:src/app/page.ts'] }) === null);
   check('a lesson for another role does not match', D.matchScope?.({ role: 'review' }, task) === null);
   const harmful = entry('Harmful.', {}, { flags: { harmful: true, stale: false }, harmful: 3, net: -3 });
   const superseded = entry('Superseded.', {}, { invalidAt: '2026-01-01T00:00:00.000Z', supersededBy: 'x' });
@@ -584,10 +584,10 @@ async function brainHarness(name) {
   const repoDir = join(home, 'code');
   mkdirSync(repoDir, { recursive: true });
   git(repoDir, 'init', '-q', '-b', 'main');
-  writeFileSync(join(repoDir, 'README.md'), '# garipass\n');
+  writeFileSync(join(repoDir, 'README.md'), '# acme\n');
   git(repoDir, 'add', '-A');
   git(repoDir, 'commit', '-q', '-m', 'init');
-  const ws = (await services.workspaces.create(caller, { name: 'Garipass', repositoryPath: repoDir })).workspace.id;
+  const ws = (await services.workspaces.create(caller, { name: 'Acme', repositoryPath: repoDir })).workspace.id;
   return { home, paths, container, services, r, caller, ws, repoDir, published, subscribers, brainRepo: repoPort, prompts };
 }
 
@@ -598,7 +598,7 @@ if (wants('link') || wants('factory') || wants('ledger') || wants('loading') || 
   H1 = await brainHarness('home1');
   H2 = await brainHarness('home2');
 }
-const remoteDir = join(FAKE.remotes, 'garipass', 'brain.git');
+const remoteDir = join(FAKE.remotes, 'acme', 'brain.git');
 const tokenText = 'ghp_' + 'z'.repeat(36);
 
 if (H1 !== null) {
@@ -613,9 +613,9 @@ if (H1 !== null) {
   s1.workspaces.update(ws1, { knowledge: { productVision: 'Calm software.', architecturePrinciples: null, codingStandards: 'Run npm run ci.', designSystem: null, glossary: null } });
 
   const before = ghLog().length;
-  const view = await s1.brain.link(c1, ws1, { mode: 'create', owner: 'garipass', name: 'brain' });
+  const view = await s1.brain.link(c1, ws1, { mode: 'create', owner: 'acme', name: 'brain' });
   const created = ghLog().slice(before).find((l) => l.argv[0] === 'repo');
-  check('create runs gh repo create --private', created?.argv.join(' ') === 'repo create garipass/brain --private', created);
+  check('create runs gh repo create --private', created?.argv.join(' ') === 'repo create acme/brain --private', created);
   check('the view is linked and up to date', view.linked === true && view.status === 'up_to_date' && view.statusLine.startsWith('Up to date'), view);
   const tree = git(remoteDir, 'ls-tree', '-r', '--name-only', 'main').split('\n').filter(Boolean);
   for (const f of ['brain.yaml', 'README.md', '.gitattributes', 'factory/tandemise.yaml', 'factory/roles/development.md', 'memory/rules/project.md']) {
@@ -631,8 +631,8 @@ if (H1 !== null) {
   check('project.md carries the knowledge fields in order', rules.indexOf('## Product vision') >= 0 && rules.indexOf('## Product vision') < rules.indexOf('## Coding standards') && rules.includes('Run npm run ci.'), rules);
 
   let second = null;
-  try { await s1.brain.link(c1, ws1, { mode: 'create', owner: 'garipass', name: 'brain' }); } catch (e) { second = e.message; }
-  check('a second brain is refused in words', second === 'This project already has a brain: github.com/garipass/brain.', second);
+  try { await s1.brain.link(c1, ws1, { mode: 'create', owner: 'acme', name: 'brain' }); } catch (e) { second = e.message; }
+  check('a second brain is refused in words', second === 'This project already has a brain: github.com/acme/brain.', second);
 
   const factoryText = tree.filter((f) => f.startsWith('factory/')).map((f) => git(remoteDir, 'show', `main:${f}`)).join('\n');
   const profileIds = r1(app.RUNTIME_PROFILE_REPOSITORY).list().map((p) => p.id);
@@ -644,12 +644,12 @@ if (H1 !== null) {
 
   // Adopt from a second home.
   const { services: s2, caller: c2, ws: ws2 } = H2;
-  const preview = await s2.brain.link(c2, ws2, { mode: 'adopt', remote: 'github.com/garipass/brain' });
+  const preview = await s2.brain.link(c2, ws2, { mode: 'adopt', remote: 'github.com/acme/brain' });
   check('adopt previews role:development as same', preview.items?.find((i) => i.id === 'role:development')?.action === 'same', preview.items?.map((i) => [i.id, i.action]));
   check('adopt previews the missing GitHub connection', preview.items?.find((i) => i.id === 'mcps:GitHub')?.detail === 'This project needs GitHub. Connect it.');
   check('adopt counts the brain', preview.brain?.rules >= 1 && preview.brain.mcpsNeeded.includes('GitHub'), preview.brain);
   const adopted = await s2.brain.applyAdopt(c2, ws2, { hash: preview.hash, choices: {} });
-  check('after applyAdopt home 2 is linked', adopted.linked === true && adopted.remote === 'github.com/garipass/brain', adopted);
+  check('after applyAdopt home 2 is linked', adopted.linked === true && adopted.remote === 'github.com/acme/brain', adopted);
   const model = (s, w, id) => s.roles.list(w).find((x) => x.id === id)?.models?.model ?? null;
   check("home 2's Reviewer model equals home 1's", model(s2, ws2, 'review') === 'strong-model' && model(s2, ws2, 'development') === model(s1, ws1, 'development'));
   check('the two homes have different writer ids', s1.brain.view(ws1).writerId !== s2.brain.view(ws2).writerId, [s1.brain.view(ws1).writerId, s2.brain.view(ws2).writerId]);
@@ -795,11 +795,11 @@ if (H1 !== null && (wants('factory') || wants('ledger') || wants('loading') || w
   const skillHashV = D.hashSkillFiles([{ path: 'SKILL.md', bytes: Buffer.from(skillText) }]);
   scratchEdit({
     [`skills/tdd/${skillHashV.slice(0, 12)}/SKILL.md`]: skillText,
-    'factory/skills.lock': `skills:\n  - hash: ${skillHashV}\n    name: tdd\n    source:\n      kind: git\n      subpath: tdd\n      url: https://github.com/garipass/skills\n    version: 1\nversion: 1\n`,
+    'factory/skills.lock': `skills:\n  - hash: ${skillHashV}\n    name: tdd\n    source:\n      kind: git\n      subpath: tdd\n      url: https://github.com/acme/skills\n    version: 1\nversion: 1\n`,
     'factory/roles/review.md': (t) => { const read = app.readRole('roles/review.md', t); return app.renderRole({ ...read.role, skills: [{ name: 'tdd', version: 1, hash: skillHashV }] }); },
   });
   const ws4 = (await s2.workspaces.create(H2.caller, { name: 'Third', repositoryPath: H2.repoDir })).workspace.id;
-  const pv = await s2.brain.link(H2.caller, ws4, { mode: 'adopt', remote: 'github.com/garipass/brain' });
+  const pv = await s2.brain.link(H2.caller, ws4, { mode: 'adopt', remote: 'github.com/acme/brain' });
   check('the adopt preview has no Needs import for a vendored skill', !pv.items.some((i) => i.needsImport !== null), pv.items.filter((i) => i.needsImport !== null).map((i) => i.id));
   await s2.brain.applyAdopt(H2.caller, ws4, { hash: pv.hash, choices: {} });
   check('the skill is in the store after adopt', (await s2.skills.content(skillHashV)) !== null);
@@ -934,8 +934,8 @@ if (H1 !== null && (wants('ledger') || wants('loading') || wants('tools') || wan
 
   // A protected default branch: lessons go to one standing PR.
   const wsP = (await s1.workspaces.create(c1, { name: 'Guarded', repositoryPath: H1.repoDir })).workspace.id;
-  await s1.brain.link(c1, wsP, { mode: 'create', owner: 'garipass', name: 'guarded' });
-  const guarded = join(FAKE.remotes, 'garipass', 'guarded.git');
+  await s1.brain.link(c1, wsP, { mode: 'create', owner: 'acme', name: 'guarded' });
+  const guarded = join(FAKE.remotes, 'acme', 'guarded.git');
   writeFileSync(join(guarded, 'hooks', 'pre-receive'), '#!/bin/sh\nwhile read old new ref; do if [ "$ref" = "refs/heads/main" ]; then echo "GH006: Protected branch update failed" >&2; exit 1; fi; done\nexit 0\n');
   chmodSync(join(guarded, 'hooks', 'pre-receive'), 0o755);
   const ghP = ghLog().length;
@@ -1024,7 +1024,7 @@ if (H1 !== null && (wants('loading') || wants('tools') || wants('signals') || wa
   const compiler = createContextCompiler();
   const many = Array.from({ length: 30 }, (_, i) => ({ id: `w:${i}`, text: `Lesson ${i}: ${'z'.repeat(180)}`, net: 0 }));
   const baseReq = {
-    role, workspaceName: 'Garipass', knowledge: { productVision: null, architecturePrinciples: null, codingStandards: null, designSystem: null, glossary: null },
+    role, workspaceName: 'Acme', knowledge: { productVision: null, architecturePrinciples: null, codingStandards: null, designSystem: null, glossary: null },
     mission, task: t, dependencyArtifacts: [], decisions: [], evidence: [], grants: [], outputContract: { artifacts: [], workingDirectory: '/w', completionGate: null, notes: [] },
   };
   const tight = compiler.compile({ ...baseReq, maxChars: 6000, brain: { sha: 'abc', rules: [{ path: 'memory/rules/project.md', text: 'Always run npm run ci.' }], lessons: many, index: [] } });
@@ -1217,9 +1217,9 @@ if (H1 !== null && (wants('promotion') || wants('intake'))) {
   const { services: s1, caller: c1 } = H1;
   const { FAKE_ADAPTER_ID } = await import('@tandemise/runtime-generic');
   const now = () => shared.systemClock.now();
-  const promoRemote = join(FAKE.remotes, 'garipass', 'promo.git');
+  const promoRemote = join(FAKE.remotes, 'acme', 'promo.git');
   const wsP = (await s1.workspaces.create(c1, { name: 'Promo', repositoryPath: H1.repoDir })).workspace.id;
-  await s1.brain.link(c1, wsP, { mode: 'create', owner: 'garipass', name: 'promo' });
+  await s1.brain.link(c1, wsP, { mode: 'create', owner: 'acme', name: 'promo' });
   const promoterProfile = H1.r(app.RUNTIME_PROFILE_REPOSITORY).create({
     id: shared.ids.runtimeProfile(), workspaceId: null, adapterId: FAKE_ADAPTER_ID, name: 'promoter', executablePath: null, args: [],
     settings: { script: { steps: [{ kind: 'message', text: 'unset' }, { kind: 'complete' }] } }, capabilities: [], enabled: true, maxConcurrent: 4, createdAt: now(), updatedAt: now(),
@@ -1315,7 +1315,7 @@ if (H1 !== null && (wants('promotion') || wants('intake'))) {
 
   // 6. Two daemons, the same lessons: one PR.
   const wsQ = (await H2.services.workspaces.create(H2.caller, { name: 'Promo too', repositoryPath: H2.repoDir })).workspace.id;
-  const pq = await H2.services.brain.link(H2.caller, wsQ, { mode: 'adopt', remote: 'github.com/garipass/promo' });
+  const pq = await H2.services.brain.link(H2.caller, wsQ, { mode: 'adopt', remote: 'github.com/acme/promo' });
   await H2.services.brain.applyAdopt(H2.caller, wsQ, { hash: pq.hash, choices: {} });
   await s1.brain.sync(wsP, 'person');
   await H2.services.brain.sync(wsQ, 'person');
@@ -1387,7 +1387,7 @@ if (H1 !== null && wants('intake')) {
   const source = H1.r(app.BRAIN_INTAKE_CONFIG);
   const wsNone = (await s1.workspaces.create(c1, { name: 'No brain intake', repositoryPath: H1.repoDir })).workspace.id;
   check('with no brain it is the local source (defaults here) and says local', JSON.stringify(source.read(wsNone)) === JSON.stringify(app.INTAKE_DEFAULTS) && source.originFor(wsNone) === 'local');
-  const tracker = 'tracker:\n  kind: youtrack\n  url: https://yt.example\n  project: GAR\n  board: "project: GAR"\n  states:\n    ready: [Open]\n    in_progress: In Progress\n    done: [Fixed]\n    wont_do: []\n  onComplete: done\n';
+  const tracker = 'tracker:\n  kind: youtrack\n  url: https://yt.example\n  project: ACME\n  board: "project: ACME"\n  states:\n    ready: [Open]\n    in_progress: In Progress\n    done: [Fixed]\n    wont_do: []\n  onComplete: done\n';
   scratchEdit({ 'factory/tracker.yaml': tracker });
   await s1.brain.sync(ws1, 'person');
   const read = source.read(ws1);

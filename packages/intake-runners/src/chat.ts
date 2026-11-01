@@ -42,7 +42,7 @@ export function replyPrefix(kind: Closure['kind']): string {
 }
 
 /**
- * Spec §8: "Done: <title> · GAR-12 · <PR>", the PR left out when there is
+ * Spec §8: "Done: <title> · ACME-12 · <PR>", the PR left out when there is
  * none. A won't-do item (only with `closeWontDo`) says "Not planned:" and
  * names no PR.
  */

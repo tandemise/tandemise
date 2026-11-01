@@ -48,14 +48,14 @@ const children = [];
 {
   const dir = `${LINK}/youtrack`;
   mkdirSync(dir, { recursive: true });
-  children.push(spawn(process.execPath, [join(repoRoot, 'scratch/fake-youtrack.mjs'), '--port', '0', '--state', dir, '--project', 'GAR', '--token', 'perm:acceptance', '--login', 'tandemise-bot'], { stdio: ['ignore', 'ignore', 'inherit'] }));
+  children.push(spawn(process.execPath, [join(repoRoot, 'scratch/fake-youtrack.mjs'), '--port', '0', '--state', dir, '--project', 'ACME', '--token', 'perm:acceptance', '--login', 'tandemise-bot'], { stdio: ['ignore', 'ignore', 'inherit'] }));
   const deadline = Date.now() + 15_000;
   while (!existsSync(`${dir}/url`)) { if (Date.now() > deadline) throw new Error('fake YouTrack did not start'); await sleep(100); }
 }
 const ytUrl = readFileSync(`${LINK}/youtrack/url`, 'utf8').trim();
 writeFileSync(`${LINK}/fakes.json`, JSON.stringify({ pids: children.map((c) => c.pid) }));
 // The board a team already has: one item someone else is on.
-await fetch(`${ytUrl}/_fake/issues`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idReadable: 'GAR-1', summary: 'Dark mode for the settings page', type: 'Task', state: 'In Progress', assignee: 'kim' }) });
+await fetch(`${ytUrl}/_fake/issues`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idReadable: 'ACME-1', summary: 'Dark mode for the settings page', type: 'Task', state: 'In Progress', assignee: 'kim' }) });
 
 const ghBin = installFakeGh(`${LINK}/gh`, { login: 'acme-bot' });
 // No run may reach real GitHub: the daemon's PATH must resolve gh to the fake before anything starts.
@@ -94,7 +94,7 @@ const ws = env.workspaceId;
 await api('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:acceptance' });
 await api('PUT', `/v1/workspaces/${ws}/intake/config`, {
   tracker: {
-    kind: 'youtrack', url: ytUrl, project: 'GAR', board: 'project: GAR #Unresolved',
+    kind: 'youtrack', url: ytUrl, project: 'ACME', board: 'project: ACME #Unresolved',
     states: { ready: ['Open', 'Submitted'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'] },
     onComplete: 'in_review',
   },

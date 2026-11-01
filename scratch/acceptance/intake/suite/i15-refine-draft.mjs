@@ -22,8 +22,8 @@ if (REAL_YOUTRACK) {
 }
 
 const ws = c.env.workspaceId;
-// Its own key: I11 starts a GAR-50 of its own, whose mission keeps writing to it.
-const KEY = 'GAR-150';
+// Its own key: I11 starts a ACME-50 of its own, whose mission keeps writing to it.
+const KEY = 'ACME-150';
 const posts = async () => (await yt.state()).calls.filter((x) => x.method === 'POST' && (x.path.includes(KEY) || x.path === '/api/commands'));
 
 // The mapping gains the Draft state, as a person would set it in Settings → Intake. From

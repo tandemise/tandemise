@@ -14,10 +14,10 @@ That work isn't only code, but the first target use is a software factory.
 Not even the owner uses it. They keep going back to Claude Code directly, mostly
 because it's faster and simpler. The goal is to have everything in Tandemise.
 
-Say we create a new project, Garipass, and add all its repositories:
-- /garipass/garipass
-- /garipass/claude
-- /garipass/ops
+Say we create a new project, Acme, and add all its repositories:
+- /acme/acme
+- /acme/claude
+- /acme/ops
 
 Then we connect the MCPs and services we use:
 - GitHub

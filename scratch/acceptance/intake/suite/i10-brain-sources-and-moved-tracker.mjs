@@ -111,8 +111,8 @@ const p3 = await sentryPolls();
 ev.check('OFF again: Check sources now (and the ticks since) → no further polls', p3 === p2, { before: p2, after: p3 });
 
 // ------------------------------------------------------------------ (b) the tracker moves to B
-await ytB.put({ idReadable: 'GAR-101', summary: 'Only at the new address', type: 'Task', state: 'Open', description: 'Filed in YouTrack B.' });
-await ytB.put({ idReadable: 'GAR-102', summary: 'Also at the new address', type: 'Task', state: 'In Progress', assignee: 'lee' });
+await ytB.put({ idReadable: 'ACME-101', summary: 'Only at the new address', type: 'Task', state: 'Open', description: 'Filed in YouTrack B.' });
+await ytB.put({ idReadable: 'ACME-102', summary: 'Also at the new address', type: 'Task', state: 'In Progress', assignee: 'lee' });
 const tokenCallsB = async () => (await ytB.state()).calls.filter((x) => x.authorization === `Bearer ${TOKEN_A}`).length;
 const callsB0 = (await ytB.state()).calls.filter((x) => !x.path.startsWith('/_fake')).length;
 const head2 = await brainCommit({ ...local.tracker, url: urlB }, 'chore: the tracker moved');
@@ -135,7 +135,7 @@ const afterCheck = await problemShown();
 const checkError = await page.evaluate(`[...document.querySelectorAll('.board .error-state, .board [role="alert"]')].map((e) => e.innerText.trim()).join(' | ')`);
 ev.check('Check sources now: the Board still answers with the same sentence (no read of B)', afterCheck === SENTENCE || checkError.includes(SENTENCE), { afterCheck, checkError });
 ev.check('proof (fake YouTrack B): no request carrying the token reached B', (await tokenCallsB()) === 0, { tokenCalls: await tokenCallsB(), anyCalls: (await ytB.state()).calls.filter((x) => !x.path.startsWith('/_fake')).length - callsB0 });
-ev.check('nothing from B is on the Board yet', !JSON.stringify(await boardGroups(c)).includes('GAR-101'));
+ev.check('nothing from B is on the Board yet', !JSON.stringify(await boardGroups(c)).includes('ACME-101'));
 await page.screenshot(ev.shot('board-tracker-moved'));
 
 await page.navigate('#/settings');
@@ -152,13 +152,13 @@ const confirmed = await api.get(configUrl);
 ev.check('click Use the new address → the prompt disappears and API originMismatch.tracker is null', confirmed.originMismatch?.tracker === null, confirmed.originMismatch);
 
 await openBoard(c);
-const groups = await until(async () => { const g = await boardGroups(c); return JSON.stringify(g).includes('GAR-101') && g; }, { label: "B's items on the Board", timeoutMs: 30_000 });
+const groups = await until(async () => { const g = await boardGroups(c); return JSON.stringify(g).includes('ACME-101') && g; }, { label: "B's items on the Board", timeoutMs: 30_000 });
 const keys = Object.fromEntries(Object.entries(groups).map(([k, g]) => [k, g.rows.map((r) => r.key)]));
 // B numbers its own items too (anything filed after the confirm lands there), so every row must be one of B's, by key and title.
 const issuesB = new Map((await ytB.state()).issues.map((i) => [i.idReadable, i.summary]));
 const rowsNow = Object.values(groups).flatMap((g) => g.rows);
-ev.check("the Board refreshes against B: GAR-101 Ready, GAR-102 In progress, and every row is B's item",
-  keys.ready?.includes('GAR-101') && keys.inProgress?.includes('GAR-102') && rowsNow.every((r) => issuesB.get(r.key) === r.title),
+ev.check("the Board refreshes against B: ACME-101 Ready, ACME-102 In progress, and every row is B's item",
+  keys.ready?.includes('ACME-101') && keys.inProgress?.includes('ACME-102') && rowsNow.every((r) => issuesB.get(r.key) === r.title),
   { keys, notB: rowsNow.filter((r) => issuesB.get(r.key) !== r.title).map((r) => `${r.key} ${r.title}`) });
 ev.check('…with no problem line', (await problemShown()) === '', await problemShown());
 const authed = (await ytB.state()).calls.filter((x) => x.authorization === `Bearer ${TOKEN_A}`);

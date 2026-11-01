@@ -42,19 +42,19 @@ const H = 3_600_000;
 section('rules');
 {
   check('github refs lowercase the repo', C.itemKey(C.githubItemRef('Acme/App', 7)) === 'acme/app#7', C.githubItemRef('Acme/App', 7));
-  check('a youtrack key keeps its case', C.itemKey('youtrack:GAR-123') === 'GAR-123');
-  check('normalising lowercases the tracker only', C.normalizeItemRef(' YouTrack:GAR-1 ') === 'youtrack:GAR-1');
+  check('a youtrack key keeps its case', C.itemKey('youtrack:ACME-123') === 'ACME-123');
+  check('normalising lowercases the tracker only', C.normalizeItemRef(' YouTrack:ACME-1 ') === 'youtrack:ACME-1');
   let threw = null;
   try { C.normalizeItemRef('nope'); } catch (e) { threw = e.message; }
   check('a ref with no tracker throws', threw === 'Not a tracker item: nope', threw);
-  check('held by someone else', C.heldBySentence({ holderName: 'Ana', itemRef: 'youtrack:GAR-123', startedAt: '2026-10-30T10:42:00Z', self: false, deviceLabel: 'x', timeZone: 'UTC' }) === 'Ana is working on GAR-123 since 10:42.');
-  check('held by you elsewhere', C.heldBySentence({ holderName: 'Ana', itemRef: 'youtrack:GAR-123', startedAt: '2026-10-30T10:42:00Z', self: true, deviceLabel: 'Work laptop' }) === "You're already working on this on Work laptop.");
+  check('held by someone else', C.heldBySentence({ holderName: 'Ana', itemRef: 'youtrack:ACME-123', startedAt: '2026-10-30T10:42:00Z', self: false, deviceLabel: 'x', timeZone: 'UTC' }) === 'Ana is working on ACME-123 since 10:42.');
+  check('held by you elsewhere', C.heldBySentence({ holderName: 'Ana', itemRef: 'youtrack:ACME-123', startedAt: '2026-10-30T10:42:00Z', self: true, deviceLabel: 'Work laptop' }) === "You're already working on this on Work laptop.");
   const now = new Date('2026-10-30T20:00:00');
   const ago = (ms) => new Date(now.getTime() - ms).toISOString();
-  const base = { holderMemberId: 'ana', holderName: 'Ana', itemRef: 'youtrack:GAR-123', now, staleAfterMs: C.DEFAULT_STALE_AFTER_MS };
+  const base = { holderMemberId: 'ana', holderName: 'Ana', itemRef: 'youtrack:ACME-123', now, staleAfterMs: C.DEFAULT_STALE_AFTER_MS };
   const member = { memberId: 'bo', role: 'member' };
   const fresh = C.takeOverRefusal({ ...base, actor: member, holderLastSeenAt: ago(H) });
-  check('a member may not take over a fresh claim', fresh === 'Only an admin can take over GAR-123 while Ana is around. Anyone can once Ana has been away for 24 hours.', fresh);
+  check('a member may not take over a fresh claim', fresh === 'Only an admin can take over ACME-123 while Ana is around. Anyone can once Ana has been away for 24 hours.', fresh);
   check('a member may take over a stale one', C.takeOverRefusal({ ...base, actor: member, holderLastSeenAt: ago(25 * H) }) === null);
   check('an admin may take over a fresh one', C.takeOverRefusal({ ...base, actor: { memberId: 'cy', role: 'admin' }, holderLastSeenAt: ago(H) }) === null);
   check('nobody takes over their own', C.takeOverRefusal({ ...base, actor: { memberId: 'ana', role: 'admin' }, holderLastSeenAt: ago(H) }) === 'This is already yours.');
