@@ -3,7 +3,7 @@ import type {
   PlanProposal, PlanProposalRepositoryPort, RoleRepositoryPort, RunRepositoryPort, TaskRepositoryPort, UnitOfWork,
 } from '@tandemise/domain';
 import {
-  ACCEPT_RESULT_OPTION, FINISHED_TASK_STATUSES, NEEDS_CHANGES_OPTION, REPLAN_REST_OPTION, REQUEST_CHANGES_OPTION, SKIP_REST_OPTION, canTransition, isAffirmative, isPlanFitCard, isStarted,
+  ACCEPT_RESULT_OPTION, CANCEL_MISSION_OPTION, FINISHED_TASK_STATUSES, RECHECK_SHIP_OPTION, NEEDS_CHANGES_OPTION, REPLAN_REST_OPTION, REQUEST_CHANGES_OPTION, SKIP_REST_OPTION, canTransition, isAffirmative, isPlanFitCard, isStarted,
 } from '@tandemise/domain';
 import type { ApprovalView, DecideApprovalRequest } from '@tandemise/api-contract';
 import type { ApprovalId, Clock, Logger } from '@tandemise/shared';
@@ -60,6 +60,10 @@ export interface ApprovalDeps {
   readonly shipDecided?: (approval: Approval) => Promise<void>;
   /** Plan fit's "Plan the rest again": starts the replan once the card is decided. Resolved late, as planning composes after this. */
   readonly replanRest?: (missionId: Mission['id'], note: string | null, planFitApprovalId: Approval['id']) => Promise<unknown>;
+  /** "Re-check and continue to ship" on a plan-fit card (#200); throws when CI still fails. */
+  readonly recheckCiRound?: (card: Approval) => Promise<void>;
+  /** "Cancel the mission" on a card that stopped its rounds (#196). */
+  readonly cancelMission?: (missionId: Mission['id'], reason: string) => Promise<unknown>;
   /** Claims the mission's tracker item before an approved plan starts it (relay spec). Optional for older harnesses. */
   readonly claims?: { assertMayStart(mission: Mission): Promise<boolean | void>; abandonStart?(mission: Mission): Promise<void> };
   readonly clock: Clock;
@@ -185,6 +189,20 @@ export class ApprovalServiceImpl implements ApprovalService {
         this.deps.recorder.invalidate('approvals', decided.missionId);
         throw e;
       }
+    }
+
+    if (isPlanFitCard(decided) && decided.selectedOptionId === RECHECK_SHIP_OPTION && this.deps.recheckCiRound !== undefined) {
+      try {
+        await this.deps.recheckCiRound(decided);
+      } catch (e) {
+        reopenCard(this.deps.approvals, decided.id);
+        this.deps.recorder.invalidate('approvals', decided.missionId ?? undefined);
+        this.deps.scheduler.wake();
+        throw e;
+      }
+    }
+    if (decided.kind === 'intervention' && decided.selectedOptionId === CANCEL_MISSION_OPTION && decided.missionId !== null) {
+      await this.deps.cancelMission?.(decided.missionId, `Cancelled on the card: ${decided.title}`);
     }
 
     // A worker blocked mid-call gets its answer as soon as the decision stands:
@@ -333,6 +351,8 @@ export class ApprovalServiceImpl implements ApprovalService {
     };
 
     if (approval.kind === 'intervention') {
+      // Cancel ends the mission once the answer stands; nothing to change on the step first.
+      if (approval.selectedOptionId === CANCEL_MISSION_OPTION) return null;
       if (approval.selectedOptionId === ACCEPT_RESULT_OPTION) {
         this.#setTaskStatus(task, scope, 'SUCCEEDED', 'A human accepted the result as it stands.');
         if (mission.status === 'BLOCKED') {
@@ -432,6 +452,8 @@ export class ApprovalServiceImpl implements ApprovalService {
       const item = this.deps.rounds.record({ task, text: note, artifactId: null, authorId: actorId, recordedBy, status: 'open', round: null });
       return this.deps.rounds.beginRound({ task, feedbackIds: [item.id], actorId, keepCardId: approval.id, downstream: 'none' });
     }
+    // Re-check reads CI once the answer stands (`recheckCiRound`): the steps stay held until it has.
+    if (approval.selectedOptionId === RECHECK_SHIP_OPTION) return null;
     if (approval.selectedOptionId === SKIP_REST_OPTION) {
       const all = this.deps.tasks.listByMission(task.missionId);
       const reason = skippedForPlanFit(task);

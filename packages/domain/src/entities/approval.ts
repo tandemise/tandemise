@@ -122,6 +122,14 @@ export const SKIP_REST_OPTION = 'skip_rest';
 export const CONTINUE_PLAN_OPTION = 'continue_plan';
 /** Plan fit's fourth answer: a new plan for what is left, keeping what is done (replan spec). */
 export const REPLAN_REST_OPTION = 'replan_rest';
+/**
+ * A plan-fit card on a step in a round that a red CI check started (#200):
+ * CI is read again, and if that check passes now on the same commit the
+ * round is dropped and the mission goes on to ship.
+ */
+export const RECHECK_SHIP_OPTION = 'recheck_ship';
+/** A card that stops a mission's rounds (#196) can end the mission. */
+export const CANCEL_MISSION_OPTION = 'cancel_mission';
 
 /** A plan-fit card, told from other interventions by its options, as a limit card is. */
 export function isPlanFitCard(approval: Pick<Approval, 'kind' | 'taskId' | 'options'>): boolean {
@@ -145,7 +153,7 @@ export function isAffirmative(kind: ApprovalKind, optionId: string): boolean {
   return kind === 'choice'
     ? optionId !== REJECT_OPTION
     : optionId === APPROVE_OPTION || optionId === APPROVE_FOR_TASK_OPTION || optionId === ACCEPT_RESULT_OPTION
-      || optionId === RAISE_LIMIT_OPTION || optionId === CONTINUE_PLAN_OPTION;
+      || optionId === RAISE_LIMIT_OPTION || optionId === CONTINUE_PLAN_OPTION || optionId === RECHECK_SHIP_OPTION;
 }
 
 export const DEFAULT_APPROVAL_OPTIONS: readonly ApprovalOption[] = [

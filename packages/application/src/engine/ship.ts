@@ -17,6 +17,7 @@ import type { FeedbackRounds } from './feedback-rounds.js';
 import type { OutcomeRecorder } from './outcomes.js';
 import type { EventRecorder, EventScope } from '../support/event-recorder.js';
 import type { BranchIntegrationService } from './branch-integration.js';
+import { ROUND_CAP_LABEL, missionRounds, roundStopCard } from './ci-rounds.js';
 
 /**
  * The ship step (#53 §8.1): the daemon-owned last step of every code plan. No
@@ -47,6 +48,8 @@ export const SHIP_CI_POLL_MS = 30_000;
 export const SHIP_CI_TIMEOUT_MS = 3_600_000;
 /** A workflow can take a few minutes to register its first check after a push. */
 export const SHIP_CI_GRACE_MS = 180_000;
+/** Rounds a mission takes on its own before a person decides (#196), unless planner.yaml says otherwise. */
+export const DEFAULT_MAX_ROUNDS = 3;
 /** Lines of a failing check's output given to the next round. */
 export const SHIP_LOG_TAIL_LINES = 40;
 
@@ -200,6 +203,16 @@ export class ShipService {
       ? integrated.integrationBranch
       : this.#codeBranch(mission));
     if (branch === null) return { kind: 'skipped', reason: 'No step changed any code, so there is nothing to ship.' };
+    // #196: a branch with no commit beyond the remote base would open a pull request on a commit already there,
+    // whose CI is the base's own; a red check on it sent the step back for ever.
+    if (fixed === undefined) {
+      const base = mission.baseBranch ?? repository.defaultBranch;
+      if (await this.#ahead(repository, base, branch) === 0) {
+        const reason = `Nothing to ship: the change is already on ${base}.`;
+        this.deps.recorder.note(scope, `${reason} The branch ${branch} has no commit beyond it, so no pull request was opened.`);
+        return { kind: 'skipped', reason };
+      }
+    }
     // #138: what ships must hold every step's final work. A round that redid
     // a step leaves its new commit on that step's branch only; shipping a
     // branch cut before it would ship code without the fix that was reviewed.
@@ -276,7 +289,7 @@ export class ShipService {
         pr = now;
         continue;
       }
-      if (checks.state === 'FAIL') return this.#ciFailed(mission, task, checks.failing[0] ?? { name: 'a check', link: null, logTail: null }, pr.headSha);
+      if (checks.state === 'FAIL') return await this.#ciFailed(mission, task, checks.failing[0] ?? { name: 'a check', link: null, logTail: null }, pr.headSha);
       const decision = await this.#decide(mission, task, repository, pr, checks, existing?.commentId ?? null);
       return this.#settle(mission, task, repository, pr, decision);
     }
@@ -524,7 +537,7 @@ export class ShipService {
   }
 
   /** CI failed on a pull request a wait step watched (#143): the same path as the ship step's own CI. */
-  ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
+  async ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): Promise<ShipOutcome> {
     if (this.deps.decide === undefined) return { kind: 'blocked', reason: `CI failed on ${failing.name}.` };
     return this.#ciFailed(mission, task, failing, head);
   }
@@ -537,7 +550,7 @@ export class ShipService {
   }
 
   /** CI failed: the code step gets another round with the log tail, up to its attempts (§8.1 step 3). */
-  #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): ShipOutcome {
+  async #ciFailed(mission: Mission, task: MissionTask, failing: { name: string; link: string | null; logTail: string | null }, head?: string): Promise<ShipOutcome> {
     const d = this.deps.decide!;
     // An agent's step: a wait or a person's step reads as `implement` by its role, but has no code to redo.
     const code = [...this.deps.tasks.listByMission(mission.id)].reverse()
@@ -556,6 +569,18 @@ export class ShipService {
       this.#ciRepeatCard(mission, task, failing, reason);
       return { kind: 'blocked', reason };
     }
+    // #196: rounds per mission are capped (planner.yaml ci.maxRounds); past the cap a person decides.
+    const cap = await this.#roundCap(mission);
+    const done = missionRounds(this.deps.tasks.listByMission(mission.id));
+    const allowed = cap + d.approvals.list({ missionId: mission.id })
+      .filter((a) => a.kind === 'intervention' && a.status === 'APPROVED' && a.evidence.some((e) => e.label === ROUND_CAP_LABEL)).length;
+    if (done >= allowed) {
+      const reason = `CI failed on ${failing.name} again after ${done} rounds on this mission, the most it may take on its own (ci.maxRounds: ${cap} in planner.yaml).`;
+      roundStopCard({ approvals: d.approvals, approvalFactory: d.approvalFactory, recorder: this.deps.recorder }, mission, task, {
+        title: `${this.title(mission)}: CI still fails after ${done} rounds`, reason, failure: headline, cap, logTail: tail, link: failing.link,
+      });
+      return { kind: 'blocked', reason };
+    }
     const note = `${headline}${tail.length > 0 ? `\n\n${tail}` : ''}`;
     const rounds = d.rounds();
     d.unitOfWork.transaction(() => {
@@ -563,6 +588,25 @@ export class ShipService {
       rounds.beginRound({ task: code, feedbackIds: [item.id], downstream: 'redo', actorId: RUNTIME_ACTOR });
     });
     return { kind: 'reopened', reason: `CI failed on ${failing.name}; ${code.title.toLowerCase()} goes again with the log.` };
+  }
+
+  /** `ci.maxRounds` from the project's planner.yaml (#196); the default when it can't be read. */
+  async #roundCap(mission: Mission): Promise<number> {
+    try {
+      return (await this.deps.decide?.factory(mission.workspaceId))?.planner.ci?.maxRounds ?? DEFAULT_MAX_ROUNDS;
+    } catch {
+      return DEFAULT_MAX_ROUNDS;
+    }
+  }
+
+  /** Commits on `branch` beyond the remote's `base` (fetched first); null when that can't be read. */
+  async #ahead(repository: Repository, base: string, branch: string): Promise<number | null> {
+    await this.#git(repository, ['fetch', '--quiet', 'origin', base], true);
+    const remote = await this.#git(repository, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${base}`], false);
+    const from = remote.exitCode === 0 ? `refs/remotes/origin/${base}` : base;
+    const count = await this.#git(repository, ['rev-list', '--count', `${from}..refs/heads/${branch}`], false);
+    const n = Number.parseInt(count.stdout.trim(), 10);
+    return count.exitCode === 0 && Number.isFinite(n) ? n : null;
   }
 
   /** A person chose on the "Review and merge" card (§8.1 step 6). */

@@ -217,16 +217,97 @@ await attempt('the same ci failure twice', async () => {
   await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
   const ship = h.container.resolve(h.app.SHIP_SERVICE);
   const failing = { name: 'test', link: `https://github.com/${REPO}/actions/runs/7`, logTail: 'expected 2, got 3' };
-  const first = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  const first = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
   check('a CI failure sends the code step back once', first.kind === 'reopened' && (task('implement').round ?? 1) === 2, [first, task('implement').round]);
-  const again = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  const again = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
   check('the same check failing on the same commit: no new round', again.kind === 'blocked' && (task('implement').round ?? 1) === 2, [again, task('implement').round]);
   const cards = h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).filter((x) => x.title.endsWith('CI fails the same way again'));
   check('…a card says so, with Retry and Leave blocked', cards.length === 1 && cards[0].options.map((o) => o.label).join() === 'Retry,Leave blocked', h.repo.approvals.list({ missionId: m.id }).map((x) => x.title));
   // The round runs; then CI fails again, on the commit it pushed.
   await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
-  const moved = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'b'.repeat(40));
+  const moved = await ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'b'.repeat(40));
   check('a failure on a new commit starts a round as before', moved.kind === 'reopened' && (task('implement').round ?? 1) === 3, [moved, task('implement').round]);
+});
+
+/**
+ * A mission whose ship step waits on running CI, paused there: the check then fails, the ship step (which keeps
+ * reading CI) starts a round on the code step, and nothing runs it while the mission is paused.
+ */
+const pausedInCiRound = async (title, beforeFailing = () => {}, setup = () => {}) => {
+  const base = await world();
+  setup(base);
+  const running = [{ name: 'unit', status: 'in_progress', conclusion: null }];
+  const fail = { name: 'unit', conclusion: 'failure', logTail: 'flaky: timed out after 5000 ms', startedAt: '2026-01-01T00:01:00Z' };
+  fake.setRepo(base.ghDir, REPO, { defaultChecks: running });
+  const m = await base.mission(title);
+  const task = (k) => base.h.repo.tasks.listByMission(m.id).find((t) => t.key === k);
+  await base.h.until(() => task('ship')?.status === 'AWAITING_EXTERNAL' && fake.pullRequests(base.ghDir, REPO).length > 0, 60000);
+  const head = fake.pullRequests(base.ghDir, REPO).at(-1).headRefOid;
+  await base.h.services.missions.pause(m.id);
+  beforeFailing(base);
+  fake.setChecks(base.ghDir, REPO, head, [fail]);
+  await base.h.until(() => (task('implement')?.round ?? 1) >= 2, 30000);
+  const runs = () => base.h.repo.runs.listByMission(m.id).filter((r) => r.taskId === task('implement').id).length;
+  /** The check is run again on GitHub and passes, on the same commit. */
+  const passAgain = () => fake.setChecks(base.ghDir, REPO, head, [fail, { name: 'unit', conclusion: 'success', startedAt: '2026-01-01T00:05:00Z' }]);
+  return { base, m, task, head, runs, passAgain };
+};
+
+await attempt('a ci round whose cause cleared while paused', async () => {
+  section('a CI round paused, its check passing during the pause, and the resume going straight to ship (#200)');
+  const { base, m, task, head, runs, passAgain } = await pausedInCiRound('fix: a flaky unit test');
+  const before = runs();
+  check('paused in round 2 of the code step, before it ran', (task('implement').round ?? 1) === 2 && task('implement').status === 'READY' && before === 1, [task('implement').round, task('implement').status, before]);
+  passAgain();
+  await base.h.services.missions.resume(m.id);
+  await base.h.until(() => task('ship')?.status === 'AWAITING_APPROVAL' || task('implement')?.status === 'RUNNING' || runs() > before, 60000);
+  check('the round is dropped: the code step does not run again', runs() === before && task('implement').status === 'SUCCEEDED', [runs(), before, task('implement').status, task('implement').statusReason]);
+  check('…and says why', (task('implement').statusReason ?? '').startsWith(`Round 2 dropped: unit passes now on commit ${head.slice(0, 7)}`), task('implement').statusReason);
+  check('the feed says so', base.h.repo.events.listByMission(m.id).some((e) => e.body.type === 'note' && e.body.text.includes("so round 2 of 'implement' is dropped and the mission goes on to ship")), base.h.repo.events.listByMission(m.id).filter((e) => e.body.type === 'note').map((e) => e.body.text));
+  check('the mission goes straight to ship: Review and merge, on the same commit', task('ship').status === 'AWAITING_APPROVAL' && base.h.repo.mergeDecisions.listByMission(m.id).at(-1)?.headSha === head, [task('ship').status, task('ship').statusReason]);
+  check('no second pull request', fake.calls(base.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'create').length === 1);
+});
+
+await attempt('a plan-fit card whose cause cleared', async () => {
+  section('a plan-fit card in a CI round offers "Re-check and continue to ship", and recommends it once CI passes (#200)');
+  const changeSet = (extra) => ['---', 'type: ChangeSet', 'title: Change', 'handoff:', '  headline: Fixed the title', ...extra, 'branch: b', 'commits: []', 'filesChanged: 1', 'testsRun: []', 'knownLimitations: []', '---', '', 'Done.'].join('\n');
+  // Round 1 fixes the code. The CI round's pass changes nothing and says the plan no longer fits: only a person
+  // can re-run the check. It answers the round's note, as a round must.
+  const steps = [
+    { kind: 'write-file', path: 'src/settings.ts', content: "export const title = 'Settings';\n" },
+    { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: changeSet([]) },
+    { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', when: { promptIncludes: 'CI failed: unit' }, content: changeSet([
+      '  stop: A person must re-run the unit check on GitHub; the code is fine.',
+      '  changed:', '    - what: Nothing to change in the code; the check is flaky', '      feedback: {{fb}}',
+    ]) },
+    { kind: 'complete', summary: 'done' },
+  ];
+  const { base, m, task, passAgain } = await pausedInCiRound('fix: a test only a person can re-run', undefined, (b) => {
+    const dev = b.h.repo.profiles.list().find((p) => p.name === 'dev');
+    b.h.repo.profiles.update(dev.id, { settings: { script: { steps, captures: { fb: '(fb_[0-9a-z]{20})' } } } });
+  });
+  await base.h.services.missions.resume(m.id);
+  const card = () => base.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.options.some((o) => o.id === 'skip_rest'));
+  await base.h.until(() => card() !== undefined, 60000);
+  check('the card offers "Re-check and continue to ship"', card()?.options.some((o) => o.id === 'recheck_ship' && o.label === 'Re-check and continue to ship'), card()?.options);
+  let refused = null;
+  try { await base.h.services.approvals.decide(base.caller, card().id, { optionId: 'recheck_ship' }); } catch (e) { refused = e.message; }
+  check('while CI still fails, Re-check says so and the card stays open', /unit still fails on commit/.test(refused ?? '') && card() !== undefined, [refused, card()?.status]);
+  passAgain();
+  await base.h.until(() => card()?.recommendedOptionId === 'recheck_ship', 30000);
+  check('once CI passes, the card recommends Re-check, not skipping ship', card()?.recommendedOptionId === 'recheck_ship' && card().options.find((o) => o.id === 'skip_rest')?.recommended !== true, card() && [card().recommendedOptionId, card().options]);
+  await base.h.services.approvals.decide(base.caller, card().id, { optionId: 'recheck_ship' });
+  await base.h.until(() => task('ship')?.status === 'AWAITING_APPROVAL', 60000);
+  check('Re-check drops the round and the mission goes to Review and merge', task('ship').status === 'AWAITING_APPROVAL' && (task('implement').statusReason ?? '').startsWith('Round 2 dropped'), [task('ship').status, task('implement').statusReason]);
+});
+
+await attempt('never recommend skipping ship while the pull request is green', async () => {
+  section('a plan-fit card never recommends skipping ship while the pull request is open and green (#200)');
+  const { recommendedFor } = h.app;
+  const options = [{ id: 'skip_rest' }, { id: 'request_changes' }, { id: 'replan_rest' }, { id: 'continue_plan' }];
+  check('green and open: Continue as planned', recommendedFor({ options }, { green: true, cleared: false }) === 'continue_plan');
+  check('red: Skip the steps after it, as before', recommendedFor({ options }, { green: false, cleared: false }) === 'skip_rest');
+  check('in a CI round whose cause cleared: Re-check and continue to ship', recommendedFor({ options: [{ id: 'recheck_ship' }, ...options] }, { green: true, cleared: true }) === 'recheck_ship');
 });
 
 await attempt('waits that are not about a pull request', async () => {

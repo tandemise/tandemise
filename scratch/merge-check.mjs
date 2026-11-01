@@ -792,6 +792,71 @@ await attempt('review: holds are measured, or unmeasured', async () => {
   check('unmeasured holds (null) make a rule on them ask, never pass', d.verdict === 'ask', d.reasons);
 });
 
+await attempt('nothing to ship', async () => {
+  section('a step whose branch has nothing beyond the base ships nothing (#196)');
+  const fake = await import('./fake-gh.mjs');
+  // The agent writes the file exactly as it already is on main: its branch has no commit of its own.
+  const w = await world({ scripts: { dev: [
+    { kind: 'write-file', path: 'README.md', content: '# web\n' },
+    { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: ['---', 'type: ChangeSet', 'title: Change', 'handoff:', '  headline: Nothing needed', 'branch: b', 'commits: []', 'filesChanged: 0', 'testsRun: []', 'knownLimitations: []', '---', '', 'Already done.'].join('\n') },
+    { kind: 'complete', summary: 'done' },
+  ] } });
+  fake.setRepo(w.ghDir, REPO, { defaultChecks: [{ name: 'unit', conclusion: 'failure', logTail: 'main is red' }] });
+  const m = await w.mission('fix: typo already fixed on main');
+  const ship = () => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
+  await w.h.until(() => ['SUCCEEDED', 'BLOCKED', 'FAILED', 'SKIPPED', 'AWAITING_APPROVAL', 'AWAITING_EXTERNAL'].includes(ship()?.status), 60000);
+  await w.h.until(() => w.h.repo.missions.get(m.id).status === 'COMPLETE', 10000);
+  check('the ship step opens nothing: "Nothing to ship: the change is already on main."', ship().status === 'SKIPPED' && ship().statusReason === 'Nothing to ship: the change is already on main.', [ship().status, ship().statusReason]);
+  check('…no pull request was opened, and no CI was read', !fake.calls(w.ghDir).some((c) => c.args[0] === 'pr' && c.args[1] === 'create') && !fake.calls(w.ghDir).some((c) => (c.args.join(' ')).includes('check-runs')), fake.calls(w.ghDir).map((c) => c.args.slice(0, 3).join(' ')));
+  check('…the code step never went again', (w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'implement').round ?? 1) === 1);
+  check('the mission is complete and its feed says so', w.h.repo.missions.get(m.id).status === 'COMPLETE' && w.h.repo.events.listByMission(m.id).some((e) => e.body.type === 'note' && e.body.text.startsWith('Nothing to ship: the change is already on main.')), [w.h.repo.missions.get(m.id).status, w.h.repo.missions.get(m.id).statusReason]);
+  check('GET /ship says "Nothing to ship"', w.h.services.factory.ship(m.id).headline === 'Nothing to ship', w.h.services.factory.ship(m.id));
+});
+
+await attempt('round cap', async () => {
+  section('CI rounds per mission are capped by planner.yaml (#196)');
+  const fake = await import('./fake-gh.mjs');
+  // Every round changes the code (the harness's agent writes its run id), and CI fails on every commit pushed.
+  const w = await world({ factory: { planner: { ...app.SHIPPED_PLANNER, ci: { ...(app.SHIPPED_PLANNER.ci ?? {}), maxRounds: 2 } } } });
+  fake.setRepo(w.ghDir, REPO, { followPushes: true, defaultChecks: [{ name: 'unit', conclusion: 'failure', logTail: 'expected 1 to be 2' }] });
+  const m = await w.mission('fix: a test that keeps failing');
+  const task = (k) => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === k);
+  await w.h.until(() => task('ship')?.status === 'BLOCKED', 120000);
+  check('two rounds, then the ship step stops', (task('implement').round ?? 1) === 3 && task('ship').status === 'BLOCKED', [task('implement').round, task('ship').status, task('ship').statusReason]);
+  check('…saying why, with the cap', /after 2 rounds on this mission, the most it may take on its own \(ci\.maxRounds: 2 in planner\.yaml\)/.test(task('ship').statusReason ?? ''), task('ship').statusReason);
+  const card = () => w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.taskId === task('ship').id);
+  check('a card has the last failure, with Try again, Hold and Cancel the mission', card()?.options.map((o) => o.label).join() === 'Try again,Hold,Cancel the mission' && card().evidence.some((e) => e.label === 'Last failure' && e.value.startsWith('CI failed: unit')), card() && [card().title, card().options, card().evidence]);
+  const shipped = fake.pullRequests(w.ghDir, REPO).length;
+  await w.h.services.approvals.decide(w.caller, card().id, { optionId: 'approve' });
+  await w.h.until(() => (task('implement').round ?? 1) === 4 && task('ship').status === 'BLOCKED', 120000);
+  check('Try again allows one more round, then it asks again', (task('implement').round ?? 1) === 4 && card() !== undefined, [task('implement').round, task('ship').status, task('ship').statusReason]);
+  check('…on the same pull request', fake.pullRequests(w.ghDir, REPO).length === shipped, fake.pullRequests(w.ghDir, REPO).length);
+  await w.h.services.approvals.decide(w.caller, card().id, { optionId: 'cancel_mission' });
+  await w.h.until(() => w.h.repo.missions.get(m.id).status === 'CANCELLED', 30000);
+  check('Cancel the mission cancels it', w.h.repo.missions.get(m.id).status === 'CANCELLED', [w.h.repo.missions.get(m.id).status, w.h.repo.missions.get(m.id).statusReason]);
+});
+
+await attempt('identical redo', async () => {
+  section('a round whose redo leaves the code as it was stops at once (#196)');
+  const fake = await import('./fake-gh.mjs');
+  // The agent writes the same file every time: its second pass changes nothing.
+  const w = await world({ scripts: { dev: [
+    { kind: 'write-file', path: 'src/settings.ts', content: "export const title = 'Settings';\n" },
+    { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: ['---', 'type: ChangeSet', 'title: Change', 'handoff:', '  headline: Fixed the title', 'branch: b', 'commits: []', 'filesChanged: 1', 'testsRun: []', 'knownLimitations: []', '---', '', 'Done.'].join('\n') },
+    { kind: 'complete', summary: 'done' },
+  ] } });
+  fake.setRepo(w.ghDir, REPO, { followPushes: true, defaultChecks: [{ name: 'unit', conclusion: 'failure', logTail: 'expected 1 to be 2' }] });
+  const m = await w.mission('fix: a change that never helps');
+  const task = (k) => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === k);
+  await w.h.until(() => task('implement')?.status === 'BLOCKED' || (task('implement')?.round ?? 1) >= 3, 120000);
+  check('round 2 changed nothing: the code step stops instead of going to CI again', task('implement').status === 'BLOCKED' && (task('implement').round ?? 1) === 2, [task('implement').status, task('implement').round, task('implement').statusReason]);
+  check('…saying so', /^Round 2 made no change: 'implement' left the code as it was on commit [0-9a-f]{7}, where unit failed/.test(task('implement').statusReason ?? ''), task('implement').statusReason);
+  const card = w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.taskId === task('implement').id);
+  check('a card says so, with Try again, Hold and Cancel the mission', card?.title.includes('made no change in round 2') && card.options.map((o) => o.label).join() === 'Try again,Hold,Cancel the mission', card && [card.title, card.options]);
+  check('the ship step did not run again', task('ship').status === 'PENDING' && fake.calls(w.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'create').length === 1, [task('ship').status, task('ship').statusReason]);
+  check('the mission waits on it', w.h.repo.missions.get(m.id).status === 'BLOCKED', w.h.repo.missions.get(m.id).statusReason);
+});
+
 // @sections
 
 clearInterval(keepAlive);

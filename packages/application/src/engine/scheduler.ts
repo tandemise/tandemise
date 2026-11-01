@@ -16,6 +16,7 @@ import type { LifecycleComponent } from '@tandemise/kernel';
 import type { WaitOutcome, Waiter } from './waiter.js';
 import { ciWaitTarget, type PullRequestWait } from './pr-wait.js';
 import type { ShipService } from './ship.js';
+import { isHeldForCiCheck, type CiRoundGuard } from './ci-rounds.js';
 import type { OutcomeRecorder } from './outcomes.js';
 import type { EventRecorder, EventScope } from '../support/event-recorder.js';
 import type { BranchIntegrationService } from './branch-integration.js';
@@ -69,6 +70,8 @@ export interface SchedulerDeps {
    * module always passes it.
    */
   readonly planFit?: Pick<PlanFit, 'holdBehind'>;
+  /** Checks a CI-started round against CI as it is now before its next step starts (#196, #200). */
+  readonly ciRounds?: Pick<CiRoundGuard, 'review' | 'waitsBeforeStart' | 'holdBehind'>;
   /**
    * Plans the next queued drafts while a project has room under its
    * work-in-progress limit (P7). Optional so harnesses built before the
@@ -261,6 +264,7 @@ export class SchedulerService implements LifecycleComponent {
       .sort(compareBacklog);
 
     for (const mission of missions) {
+      await this.#reviewCiRounds(mission);
       this.#promoteReady(mission);
       this.#dispatchFor(mission);
     }
@@ -343,7 +347,19 @@ export class SchedulerService implements LifecycleComponent {
     }
   }
 
+  async #reviewCiRounds(mission: Mission): Promise<void> {
+    try {
+      await this.deps.ciRounds?.review(mission);
+    } catch (e) {
+      this.deps.log.warn('scheduler.ci_rounds_failed', { missionId: mission.id, error: errorMessage(e) });
+    }
+  }
+
   #planFitHold(mission: Mission, dependencies: readonly MissionTask[]): string | null {
+    for (const dependency of dependencies) {
+      const checking = this.deps.ciRounds?.holdBehind(dependency) ?? null;
+      if (checking !== null) return checking;
+    }
     if (this.deps.planFit === undefined) return null;
     for (const dependency of dependencies) {
       try {
@@ -408,6 +424,8 @@ export class SchedulerService implements LifecycleComponent {
       .filter((t) => t.status === 'READY')
       .filter((t) => !this.#active.has(t.id))
       .filter((t) => (this.#retryAfter.get(t.id) ?? 0) <= now)
+      // A CI round's code step starts once its round is checked against CI as it is now (#200).
+      .filter((t) => !(this.deps.ciRounds?.waitsBeforeStart(t) ?? false))
       .sort((a, b) => a.orderHint - b.orderHint || a.key.localeCompare(b.key));
 
     // Asked once per mission per pass, and only when an agent run would start:
@@ -542,7 +560,7 @@ export class SchedulerService implements LifecycleComponent {
         return;
       case 'ciFailed': {
         const ship = this.deps.ship;
-        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : ship.ciFailed(mission, current(), outcome.failing, outcome.pr.headSha);
+        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : await ship.ciFailed(mission, current(), outcome.failing, outcome.pr.headSha);
         if (sent.kind === 'reopened') {
           this.#failedHead.set(task.id, outcome.pr.headSha);
           this.#setStatus(current(), scope, 'PENDING', sent.reason);
@@ -756,7 +774,7 @@ export class SchedulerService implements LifecycleComponent {
       return;
     }
 
-    const movable = tasks.some((t) => ACTIVE_TASK_STATUSES.includes(t.status) || isHeldForPlanFit(t));
+    const movable = tasks.some((t) => ACTIVE_TASK_STATUSES.includes(t.status) || isHeldForPlanFit(t) || isHeldForCiCheck(t));
     if (!movable && this.#active.size === 0) {
       const stuck = tasks.filter((t) => t.status === 'BLOCKED');
       this.#setMissionStatus(

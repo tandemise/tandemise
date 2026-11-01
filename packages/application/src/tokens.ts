@@ -123,6 +123,7 @@ export const PLANNER_SERVICE = token<import('./planning/planner-service.js').Pla
 export const PULL_REQUEST_FLOW = token<import('@tandemise/domain').PullRequestPort>('port.PullRequestFlow');
 /** The daemon-owned ship step (#53 §8.1). */
 export const SHIP_SERVICE = token<import('./engine/ship.js').ShipService>('application.ShipService');
+export const CI_ROUND_GUARD = token<import('./engine/ci-rounds.js').CiRoundGuard>('application.CiRoundGuard');
 /** Outcomes for routing and learning (#53 §9.1). */
 export const MERGE_WATCH = token<import('./engine/merge-watch.js').MergeWatch>('application.MergeWatch');
 export const SHIP_REVERT = token<import('./engine/ship-revert.js').ShipRevert>('application.ShipRevert');
