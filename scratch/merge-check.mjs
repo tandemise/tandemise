@@ -25,7 +25,9 @@ const check = (label, cond, detail) => {
 };
 const section = (t) => console.log(`\n== ${t}`);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// MERGE_ONLY=<text> runs only the sections whose label holds it.
 const attempt = async (label, fn) => {
+  if (process.env.MERGE_ONLY !== undefined && !label.includes(process.env.MERGE_ONLY)) return;
   try { await fn(); } catch (e) { failures.push(label); console.log(`  FAIL ${label} threw: ${e?.stack ?? e}`); }
 };
 const keepAlive = setInterval(() => {}, 1000);
@@ -790,6 +792,66 @@ await attempt('review: holds are measured, or unmeasured', async () => {
   const policy = D.parseMergePolicy({ ...app.SHIPPED_MERGE, autoMerge: 'on', never: [{ when: 'process.holds > 0' }] });
   const d = D.decideMerge({ ...facts, process: { ...facts.process, holds: null } }, policy);
   check('unmeasured holds (null) make a rule on them ask, never pass', d.verdict === 'ask', d.reasons);
+});
+
+await attempt('#184: a merge that fails after Merge asks', async () => {
+  section('#184: a merge that fails after Merge asks');
+  const fake = await import('./fake-gh.mjs');
+  const w = await world();
+  fake.setRepo(w.ghDir, REPO, { defaultChecks: [{ name: 'unit', conclusion: 'success' }] });
+  const ship = (m) => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
+  const merges = () => fake.calls(w.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'merge');
+  const failedCard = (m) => w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.title.startsWith('Merge failed'));
+  const approve = async (title) => {
+    const m = await w.mission(title);
+    await w.h.until(() => ship(m)?.status === 'AWAITING_APPROVAL', 60000);
+    const card = w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).find((a) => a.title.startsWith('Review and merge'));
+    await w.h.services.approvals.decide(w.caller, card.id, { optionId: 'approve' });
+    return m;
+  };
+
+  // gh refuses the merge for good (#183: a field it doesn't know): a card at once, naming GitHub's reason.
+  const REFUSED = 'GraphQL: Field \'mergeCommitBody\' doesn\'t exist on type \'MergePullRequestInput\'';
+  fake.setRepo(w.ghDir, REPO, { refuseMerge: REFUSED });
+  const before = merges().length;
+  const a = await approve('fix: typo in the settings title');
+  await w.h.until(() => failedCard(a) !== undefined, 30000).catch(() => {});
+  const card = failedCard(a);
+  check('a refused merge blocks the step with a card naming the reason', card !== undefined && ship(a).status === 'BLOCKED' && card.rationale.includes(REFUSED) && (ship(a).statusReason ?? '').includes(REFUSED), [ship(a).status, ship(a).statusReason, card?.title]);
+  check('…with Retry merge, Open the pull request and "I\'ll merge it in GitHub"', card?.options.map((o) => o.label).join('|') === 'Retry merge|I\'ll merge it in GitHub' && card.evidence.some((e) => e.kind === 'link' && e.label === 'Open the pull request'), card && [card.options, card.evidence]);
+  check('…tried once: a refusal a retry can\'t change is not retried', merges().length - before === 1, merges().length - before);
+  check('…and it waits on you in the Inbox', card?.kind !== 'check' && card?.addresseeIds?.length !== 0, card?.addresseeIds);
+  fake.setRepo(w.ghDir, REPO, { refuseMerge: undefined });
+  await w.h.services.approvals.decide(w.caller, card.id, { optionId: 'approve' });
+  await w.h.until(() => w.h.repo.missions.get(a.id).status === 'COMPLETE', 30000).catch(() => {});
+  check('Retry merge merges it', w.h.repo.missions.get(a.id).status === 'COMPLETE' && ship(a).status === 'SUCCEEDED', [ship(a).status, ship(a).statusReason]);
+
+  // GitHub failing for a while: tried again with backoff, then a card that says how many tries were made.
+  fake.setRepo(w.ghDir, REPO, { refuseMerge: 'gh: Something went wrong (HTTP 502)' });
+  const before2 = merges().length;
+  const b = await approve('fix: typo in the footer');
+  await w.h.until(() => failedCard(b) !== undefined, 30000).catch(() => {});
+  const card2 = failedCard(b);
+  check(`a passing failure is tried ${app.MERGE_TRIES} times before it asks`, merges().length - before2 === app.MERGE_TRIES && card2 !== undefined, merges().length - before2);
+  check('…and the card says how many tries were made', (card2?.rationale ?? '').includes(`after ${app.MERGE_TRIES} tries`) && card2.evidence.some((e) => e.label === 'Tries' && e.value === `${app.MERGE_TRIES} of ${app.MERGE_TRIES}`), card2 && [card2.rationale, card2.evidence]);
+  await w.h.services.approvals.decide(w.caller, card2.id, { optionId: 'reject' });
+  await w.h.until(() => ship(b).status === 'AWAITING_EXTERNAL', 10000).catch(() => {});
+  const looks = merges().length;
+  const end = Date.now() + 1500;
+  while (Date.now() < end) { await w.h.scheduler.tick(); await w.h.sleep(100); }
+  check('"I\'ll merge it in GitHub": it waits for you and tries no more', ship(b).status === 'AWAITING_EXTERNAL' && ship(b).statusReason === 'Waiting for you to merge it in GitHub.' && merges().length === looks, [ship(b).status, ship(b).statusReason, merges().length - looks]);
+  fake.putPullRequest(w.ghDir, REPO, { ...fake.pullRequests(w.ghDir, REPO).at(-1), state: 'MERGED', mergedBy: { login: 'sam' }, mergeCommit: { oid: 'a'.repeat(40) } });
+  await w.h.until(() => w.h.repo.missions.get(b.id).status === 'COMPLETE', 30000).catch(() => {});
+  check('…and finishes when GitHub says it merged', w.h.repo.missions.get(b.id).status === 'COMPLETE', ship(b).statusReason);
+
+  // GitHub merges it, but the call answers "Merge already in progress": that is a merge, not a refusal.
+  fake.setRepo(w.ghDir, REPO, { refuseMerge: undefined, mergeInProgress: true });
+  const before3 = merges().length;
+  const e = await approve('fix: typo in the sidebar');
+  await w.h.until(() => w.h.repo.missions.get(e.id).status === 'COMPLETE', 30000).catch(() => {});
+  const said = [...w.h.repo.events.listByMission(e.id).map((x) => JSON.stringify(x.body)), ship(e).statusReason ?? ''].join('\n');
+  check('"Merge already in progress" on a merge that happened: the mission completes', w.h.repo.missions.get(e.id).status === 'COMPLETE' && ship(e).status === 'SUCCEEDED', [ship(e).status, ship(e).statusReason]);
+  check('…with one merge call, no card and no refusal said anywhere', merges().length - before3 === 1 && failedCard(e) === undefined && !/refused|didn't take|merge failed/i.test(said), { calls: merges().length - before3, said: said.match(/.{0,80}(refused|didn't take|merge failed).{0,80}/i)?.[0] });
 });
 
 // @sections

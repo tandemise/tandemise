@@ -352,14 +352,8 @@ for (const { type, destination } of outputs) {
     // fits in its first pass; a round (the person sent it back with a note) no longer does, nor does any other step.
     ...(mode('SCRIPTED_STOP') && !inRound && /^Look into the request/.test(objective) ? { stop: 'The role is US-only, so the steps after this have nothing to work on.' } : {}),
   };
-  // #191: SCRIPTED_REVIEW_SPLIT (in the goal) gives each review step its own verdict: the security review
-  // passes, every other review asks for changes with one major finding.
   const typeFront = type === 'ReviewReport' && REVIEW_BLOCKING
     ? { verdict: 'fail', reviewedRef: 'HEAD', findings: [{ severity: 'blocking', title: 'The greeting ignores the visitor name', location: 'hello.txt' }] }
-    : type === 'ReviewReport' && mode('SCRIPTED_REVIEW_SPLIT')
-      ? (/Security review/.test(prompt)
-        ? { verdict: 'pass', reviewedRef: 'HEAD', findings: [] }
-        : { verdict: 'needs_changes', reviewedRef: 'HEAD', findings: [{ severity: 'major', title: 'Retries are not idempotent', location: 'src/a.js' }] })
     : type === 'ChangeSet'
       ? { ...FRONT.ChangeSet, filesChanged: 1 }
       : FRONT[type] ?? {};

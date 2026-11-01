@@ -10,7 +10,7 @@
 /** Protocol revisions this client will negotiate, newest first. */
 export const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
 
-export const CLIENT_INFO = { name: 'tandemise', version: '0.12.2' } as const; // x-release-please-version
+export const CLIENT_INFO = { name: 'tandemise', version: '0.12.1' } as const; // x-release-please-version
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
