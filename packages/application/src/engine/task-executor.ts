@@ -70,6 +70,12 @@ const MAX_FEEDBACK_PASSES = 5;
  * "Continue"). The session already holds everything the person and the agent
  * said; the prompt only hands the work back.
  */
+/** The file tools a step writes its artifact with. */
+const FILE_WRITE_TOOLS: readonly string[] = ['Write', 'Edit', 'MultiEdit'];
+
+/** Documents that describe what to build; a role that consumes them is always handed them (#191). */
+const PLANNING_ARTIFACTS: readonly ArtifactType[] = ['ProblemBrief', 'ProductSpec', 'DesignBrief', 'ArchitecturePlan', 'ImplementationPlan'];
+
 export const CONTINUATION_PROMPT = 'A person held this task and worked with you directly in this session. '
   + 'Their changes are in the worktree. Continue the task from where things stand now and finish it.';
 
@@ -1422,6 +1428,18 @@ export class TaskExecutor {
       return this.#settle(task, scope, 'BLOCKED', reason, { retryFeedback: timeoutFeedback(timedOut) });
     }
 
+    // 11(a'''). The step's own output was refused by its runtime (#191): the
+    //          write to its out folder came back denied, so the artifact the
+    //          gate needs could never land. Retrying the same grants refuses
+    //          the same write; a person is asked now, with the refusal.
+    const refused = harvest.missing.length > 0 ? this.#refusedOutputWrites(input.runId) : [];
+    if (refused.length > 0 && !isTrialMission(mission)) {
+      const reason = `Its ${harvest.missing.join(', ')} could not be saved: the write to ${refused[0]} was refused by the runtime. `
+        + 'The step did not succeed, and its result is not used.';
+      this.#createInterventionApproval(task, mission, workspace, reason, { title: `${task.title}: its output was refused`, rationale: reason });
+      return this.#settle(task, scope, 'BLOCKED', reason, { retryFeedback: verdict.detail });
+    }
+
     // 11(b). Gate feedback into the retry. Shown on the row, and kept in
     //        `retryFeedback` so the next attempt's prompt can quote it verbatim
     //        however long the task waits - even past a block and a manual retry.
@@ -1980,7 +1998,7 @@ export class TaskExecutor {
 
   async #compilePrompt(input: PromptInput): Promise<{ readonly prompt: string; readonly includedArtifactIds: readonly ArtifactId[]; readonly brain?: import('@tandemise/domain').RunBrain }> {
     const { task, mission, workspace, role, trial, grants, target, scope } = input;
-    const dependencies = await this.#loadDependencies(task, scope);
+    const dependencies = await this.#loadDependencies(task, scope, input.role);
     // #51: what this attempt reads from the brain, at one commit.
     const brain = await this.deps.brain?.forAttempt({
       task, mission, role, trial, dependencies, round: task.round ?? 1,
@@ -2120,10 +2138,18 @@ export class TaskExecutor {
     return notes;
   }
 
-  async #loadDependencies(task: MissionTask, scope: EventScope): Promise<readonly LoadedArtifact[]> {
+  async #loadDependencies(task: MissionTask, scope: EventScope, role?: RoleTemplate): Promise<readonly LoadedArtifact[]> {
     const loaded: LoadedArtifact[] = [];
     const upstream = upstreamTaskIds(task, this.deps.tasks.listByMission(task.missionId));
-    for (const requirement of task.inputArtifacts) {
+    // #191: the planning documents the role checks work against (a reviewer
+    // reads the ProductSpec and ArchitecturePlan), when the mission has them,
+    // even if the step listed only the change. They sit outside the worktree,
+    // so a step not handed them cannot read them at all.
+    const listed = new Set(task.inputArtifacts.map((r) => r.type));
+    const planning = (role?.consumesArtifacts ?? [])
+      .filter((type) => PLANNING_ARTIFACTS.includes(type) && !listed.has(type) && !task.expectedOutputs.includes(type))
+      .map((type) => ({ type, required: false }));
+    for (const requirement of [...task.inputArtifacts, ...planning]) {
       // Every live artifact of the type from an upstream task, not just the
       // newest in the mission: a product document fed by web and mobile
       // research needs both briefs. Falls back to the newest when nothing
@@ -2451,6 +2477,7 @@ export class TaskExecutor {
     mission: Mission,
     workspace: Workspace,
     detail: string,
+    words?: { readonly title: string; readonly rationale: string },
   ): Approval {
     const gateNow = this.deps.gates.evaluate(task);
     const approval = this.deps.approvalFactory.createOrThrow({
@@ -2459,8 +2486,8 @@ export class TaskExecutor {
       taskId: task.id,
       kind: 'intervention',
       risk: 'read',
-      title: `${task.title} exhausted its retries`,
-      rationale: `'${task.key}' failed its completion gate on every one of its ${task.retryPolicy.maxAttempts} attempts.`,
+      title: words?.title ?? `${task.title} exhausted its retries`,
+      rationale: words?.rationale ?? `'${task.key}' failed its completion gate on every one of its ${task.retryPolicy.maxAttempts} attempts.`,
       effect: 'Retrying returns the task to the queue for one more attempt. Accepting marks its result good enough and lets dependent work continue. Leaving it blocked stops here.',
       evidence: [
         { kind: 'text', label: 'Last measurement', value: summarize(detail, 1000) },
@@ -2537,6 +2564,28 @@ export class TaskExecutor {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Writes into the step's out folder its runtime refused during this run
+   * (#191): a file tool started on a path under `.tandemise/out/` and came
+   * back an error. Paths as the tool reported them.
+   */
+  #refusedOutputWrites(runId: RunId): string[] {
+    const refused: string[] = [];
+    let pending: string | null = null;
+    for (const event of this.deps.events.listByRun(runId)) {
+      const body = event.body;
+      if (body.type === 'tool.started') {
+        pending = FILE_WRITE_TOOLS.includes(body.tool) && body.inputSummary.includes(`${ARTIFACT_OUT_DIR}/`)
+          ? /([^\s"'{:]*\.tandemise\/out\/[^\s"',}]+)/.exec(body.inputSummary)?.[1] ?? `${ARTIFACT_OUT_DIR}/`
+          : null;
+      } else if (body.type === 'tool.completed') {
+        if (pending !== null && body.outcome === 'error') refused.push(pending);
+        pending = null;
+      }
+    }
+    return refused;
   }
 
   // -------------------------------------------------------------- transitions
