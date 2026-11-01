@@ -87,6 +87,7 @@ export const OFFLINE_CHECKS = [
   'routing-overcommit-check',
   'runtime-concurrency-check',
   'round-redo-head-check',
+  'review-artifact-scope-check',
   'rounds-check',
   'schema-constraint-check',
   'secrets-check',

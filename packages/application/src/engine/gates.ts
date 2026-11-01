@@ -58,13 +58,20 @@ export class GateService {
 
     builder.withChecks(this.#currentChecks(task.missionId));
 
-    builder.withArtifacts(this.artifacts.listByMission(task.missionId));
+    // #191: a step's own output types count only what this step produced. In
+    // the careful lane two review steps both write a ReviewReport; scoped to
+    // the mission, the second step's gate passed on the first one's report
+    // after its own write was refused, and its verdict was lost.
+    const own = new Set<string>(task.expectedOutputs);
+    const produced = measured.producedArtifactIds;
+    builder.withArtifacts(this.artifacts.listByMission(task.missionId).filter((a) => !own.has(a.type)
+      || (produced !== undefined ? produced.includes(a.id) : a.taskId === task.id)));
     builder.expectingArtifactTypes(task.expectedOutputs);
 
-    const review = this.#latestEvaluation(task.missionId, 'review');
+    const review = this.#evaluationFor(task, 'review');
     if (review) builder.withReview(review);
 
-    const qa = this.#latestEvaluation(task.missionId, 'qa');
+    const qa = this.#evaluationFor(task, 'qa');
     // Before withQa: the ledger's coverage replaces the one QA's own list implies.
     builder.withCriteria(this.trace(task.missionId, qa).trace);
     if (qa) {
@@ -175,6 +182,18 @@ export class GateService {
     return [...newest.values()].flatMap((byName) => [...byName.values()]);
   }
 
+  /**
+   * The evaluation a step's review.* or qa.* facts read: its own when it writes
+   * that report itself (#191), never another reviewer's; otherwise the
+   * mission's newest, as a step downstream of a review reads it.
+   */
+  #evaluationFor(task: MissionTask, evaluatorRoleId: string): Evaluation | undefined {
+    const writesIt = OWN_EVALUATIONS.some(([type, role]) => role === evaluatorRoleId && (task.expectedOutputs as readonly string[]).includes(type));
+    if (!writesIt) return this.#latestEvaluation(task.missionId, evaluatorRoleId);
+    return this.evaluations.listEvaluations(task.id).filter((e) => e.evaluatorRoleId === evaluatorRoleId)
+      .reduce<Evaluation | undefined>((latest, e) => (latest === undefined || e.createdAt >= latest.createdAt ? e : latest), undefined);
+  }
+
   #latestEvaluation(missionId: MissionId, evaluatorRoleId: string): Evaluation | undefined {
     let latest: Evaluation | undefined;
     for (const task of this.tasks.listByMission(missionId)) {
@@ -189,7 +208,16 @@ export class GateService {
 
 export interface TaskMeasurements {
   readonly filesChanged?: number;
+  /**
+   * The artifacts this attempt delivered (its harvest), when the gate is
+   * judged for an attempt. A step's own output types are then counted from
+   * these alone (#191); without it, from this step's artifacts.
+   */
+  readonly producedArtifactIds?: readonly string[];
 }
+
+/** The evaluator role whose facts a step that writes this report must produce itself (#191). */
+const OWN_EVALUATIONS: ReadonlyArray<readonly [string, string]> = [['ReviewReport', 'review'], ['QAReport', 'qa']];
 
 /**
  * The most consequential thing the task may do. A task that asks for nothing
