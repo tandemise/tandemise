@@ -71,10 +71,12 @@
   }
 
   .topbar__inner {
+    display: flex;
     flex-wrap: wrap;
   }
 
   .topbar__titles {
+    display: block;
     flex-basis: 100%;
   }
 
