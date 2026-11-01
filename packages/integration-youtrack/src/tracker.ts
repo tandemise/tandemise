@@ -154,11 +154,12 @@ export class YouTrackTracker implements PrimaryTracker {
       issueSchema,
     );
     const key = created.idReadable;
-    const words = [
-      ...(draft.type !== undefined ? [`Type ${commandValue(draft.type)}`] : []),
-      ...Object.entries(draft.fields ?? {}).map(([name, value]) => `${name} ${commandValue(value)}`),
-    ];
-    if (words.length > 0) await this.#command(key, words.join(' '));
+    const values: Record<string, string> = {
+      ...(draft.type !== undefined ? { Type: draft.type } : {}),
+      ...(draft.fields ?? {}),
+    };
+    const words = Object.keys(values);
+    if (words.length > 0) await this.#setFields(key, values);
     for (const a of draft.attachments ?? []) {
       // A URL-only attachment has nothing to upload; the description links it.
       if (a.content === undefined) continue;
@@ -166,7 +167,7 @@ export class YouTrackTracker implements PrimaryTracker {
       form.append('file', new Blob([a.content], { type: a.mediaType }), a.name);
       await this.#client.postForm(`/api/issues/${encodeURIComponent(key)}/attachments`, { fields: 'id,name' }, form, z.unknown());
     }
-    // Read back, so the type and state the commands set are what the caller sees.
+    // Read back, so the type and fields just set are what the caller sees.
     return words.length > 0 ? this.get(trackerRef('youtrack', key)) : this.#item(created);
   }
 
@@ -187,7 +188,7 @@ export class YouTrackTracker implements PrimaryTracker {
   }
 
   async transition(ref: TrackerRef, state: string): Promise<void> {
-    await this.#command(this.#key(ref), `State ${commandValue(state)}`);
+    await this.#setFields(this.#key(ref), { State: state });
   }
 
   async updateDescription(ref: TrackerRef, description: string): Promise<void> {
@@ -199,7 +200,7 @@ export class YouTrackTracker implements PrimaryTracker {
   }
 
   async assign(ref: TrackerRef, login: string): Promise<void> {
-    await this.#command(this.#key(ref), `Assignee ${commandValue(login)}`);
+    await this.#setFields(this.#key(ref), { Assignee: login });
   }
 
   viewer(): Promise<string> {
@@ -273,6 +274,36 @@ export class YouTrackTracker implements PrimaryTracker {
     return this.#projectId;
   }
 
+  /**
+   * Sets fields by name through the issue's own customFields (#187): the
+   * value is sent as data, so a state with a space (`In Progress`, `To
+   * Verify`) or a brace or quote in it reaches YouTrack as written. A real
+   * YouTrack refused `State {In Progress}` as a command ("State expected").
+   * Each field is sent with the type the issue reports for it. A field this
+   * cannot set as a value (a state machine, which moves by event; text, dates
+   * and periods; a field the issue does not report) falls back to a command,
+   * and only a value without a space can go that way.
+   */
+  async #setFields(key: string, values: Readonly<Record<string, string>>): Promise<void> {
+    const issue = await this.#client.get(`/api/issues/${encodeURIComponent(key)}`, { fields: 'customFields(name,$type)' }, fieldTypesSchema);
+    const typeOf = new Map((issue.customFields ?? []).map((f) => [f.name, f.$type]));
+    const customFields: unknown[] = [];
+    const words: string[] = [];
+    for (const [name, value] of Object.entries(values)) {
+      const type = typeOf.get(name);
+      if (type !== undefined && SETTABLE_FIELD.test(type)) {
+        const one = /User/.test(type) ? { login: value } : { name: value };
+        customFields.push({ name, $type: type, value: type.startsWith('Multi') ? [one] : one });
+      } else if (/\s/.test(value)) {
+        throw new TandemiseError('INTEGRATION_FAILED', `YouTrack cannot set ${name} to '${value}' here: its field takes no value with a space through a command.`, { details: { key, name, type: type ?? null } });
+      } else {
+        words.push(`${name} ${value}`);
+      }
+    }
+    if (customFields.length > 0) await this.#client.post(`/api/issues/${encodeURIComponent(key)}`, { fields: 'id' }, { customFields }, z.unknown());
+    if (words.length > 0) await this.#command(key, words.join(' '));
+  }
+
   async #command(key: string, query: string): Promise<void> {
     await this.#client.post('/api/commands', {}, { query, issues: [{ idReadable: key }] }, z.unknown());
   }
@@ -320,14 +351,12 @@ export class YouTrackTracker implements PrimaryTracker {
   }
 }
 
-/**
- * A value as a YouTrack command takes it: a value with a space is braced
- * (`State {In Progress}`, `Subsystem {Web App}`), or YouTrack would read its
- * second word as the start of another command (RULINGS ruling 9).
- */
-function commandValue(value: string): string {
-  return /\s/.test(value) ? `{${value}}` : value;
-}
+/** The issue custom field types whose value is a bundle element or a user, so `#setFields` can send it as data. */
+const SETTABLE_FIELD = /^(StateIssueCustomField|(Single|Multi)(Enum|User|Owned|Build|Version|Group)IssueCustomField)$/;
+
+const fieldTypesSchema = z.object({
+  customFields: z.array(z.object({ name: z.string(), $type: z.string() }).passthrough()).nullish(),
+}).passthrough();
 
 function commentText(marker: string, body: string): string {
   return `${markerLine(marker)}\n\n${body}`;

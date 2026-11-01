@@ -51,7 +51,35 @@ export interface PullRequestChecks {
   readonly state: 'PASS' | 'FAIL' | 'PENDING' | 'NONE';
   readonly done: number;
   readonly total: number;
+  /** Checks GitHub has registered (runs and statuses), not counting a workflow still to create its runs; 0 is "not started". */
+  readonly registered?: number;
   readonly failing: readonly { readonly name: string; readonly link: string | null; readonly logTail: string | null }[];
+  /** Every check run on the commit, by name; optional for readers built before the merge watch needed it. */
+  readonly runs?: readonly CheckRunSummary[];
+}
+
+/** One check run or Actions job: done or not, and whether it passed. */
+export interface CheckRunSummary {
+  readonly name: string;
+  /** null while it runs. */
+  readonly passed: boolean | null;
+  readonly link: string | null;
+}
+
+/** One GitHub Actions workflow run on a commit, with its jobs. */
+export interface WorkflowRunSummary {
+  readonly id: number;
+  /** The workflow's name, as GitHub shows it. */
+  readonly workflow: string;
+  /** `.github/workflows/ci.yml`, or `dynamic/…` for Dependabot and code scanning. */
+  readonly path: string;
+  /** What triggered it: `push`, `pull_request`, `dynamic`, `schedule`, … */
+  readonly event: string;
+  readonly headBranch: string | null;
+  /** null while it runs. */
+  readonly passed: boolean | null;
+  readonly link: string | null;
+  readonly jobs: readonly CheckRunSummary[];
 }
 
 export interface PullRequestPort {
@@ -67,6 +95,8 @@ export interface PullRequestPort {
   /** Posts, or edits in place when `existingId` is set. */
   comment(cwd: string, repo: string, number: number, body: string, existingId: number | null): Promise<{ readonly id: number }>;
   requestReviewers(cwd: string, repo: string, number: number, reviewers: readonly string[]): Promise<void>;
+  /** Retitles the pull request (#194): GitHub sends `edited`, which runs a title check again. */
+  editTitle(cwd: string, repo: string, number: number, title: string): Promise<void>;
   reviews(cwd: string, repo: string, number: number): Promise<readonly { readonly state: string; readonly author: string }[]>;
   /** Always bound to the decided head: GitHub refuses it if the head moved. */
   merge(cwd: string, repo: string, number: number, opts: {
@@ -76,6 +106,10 @@ export interface PullRequestPort {
   /** Cancels a merge queued with `--auto`, so a decision voided or a kill switch takes effect on GitHub too. */
   disableAutoMerge(cwd: string, repo: string, number: number): Promise<void>;
   repoSettings(cwd: string, repo: string): Promise<{ readonly allowAutoMerge: boolean }>;
+  /** The Actions workflow runs on one commit, with their jobs (#186). */
+  workflowRuns(cwd: string, repo: string, sha: string): Promise<readonly WorkflowRunSummary[]>;
+  /** A commit's first parent: on a merge commit on main, the main it was merged into. */
+  parentOf(cwd: string, repo: string, sha: string): Promise<string | null>;
   /** Commit subjects on a branch since a time, newest first: how a revert by someone else is seen. */
   commits(cwd: string, repo: string, branch: string, sinceIso: string): Promise<readonly { readonly sha: string; readonly subject: string }[]>;
 }

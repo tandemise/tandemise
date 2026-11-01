@@ -22,7 +22,8 @@ if (REAL_YOUTRACK) {
 }
 
 const ws = c.env.workspaceId;
-const KEY = 'GAR-50';
+// Its own key: I11 starts a GAR-50 of its own, whose mission keeps writing to it.
+const KEY = 'GAR-150';
 const posts = async () => (await yt.state()).calls.filter((x) => x.method === 'POST' && (x.path.includes(KEY) || x.path === '/api/commands'));
 
 // The mapping gains the Draft state, as a person would set it in Settings → Intake. From
@@ -138,6 +139,13 @@ const startedHash = await until(async () => { const h = await page.evaluate('loc
 ev.check('Start opens the same mission, not a second one', startedHash !== null, startedHash);
 const progressed = await until(async () => { const i = await yt.issue(KEY); return i.state === 'In Progress' && i; }, { label: `${KEY} In Progress`, timeoutMs: 30_000 }).catch(() => null);
 ev.check(`proof (fake YouTrack): Start moved ${KEY} to In Progress`, progressed !== null, (await yt.issue(KEY)).state);
+// #187: Draft → Open → In Progress, and it stays there across write-back passes, with no refusal on its card.
+await sleep(7_000);
+const stayed = (await yt.issue(KEY)).state;
+const states = (await yt.state()).fieldSets.filter((x) => x.issue === KEY).flatMap((x) => x.fields).filter((f) => f.startsWith('State='));
+const startedCard = (await api.get(`/v1/workspaces/${c.env.workspaceId}/board`)).groups.inProgress.find((i) => i.key === KEY);
+ev.check(`proof (fake YouTrack): ${KEY} went Draft → Open → In Progress and stayed In Progress`, stayed === 'In Progress'
+  && JSON.stringify(states) === JSON.stringify(['State=Open', 'State=In Progress']) && (startedCard?.moveProblem ?? null) === null, { stayed, states, moveProblem: startedCard?.moveProblem });
 const status = (await api.get(`/v1/missions/${missionId}`)).mission.status;
 ev.check('proof (API): the refined mission left draft for planning', status !== 'DRAFT', status);
 const finalComments = await yt.comments(KEY);

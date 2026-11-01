@@ -400,6 +400,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       repositories: r.resolve(t.REPO_REPOSITORY), mergeDecisions: r.resolve(t.MERGE_DECISION_REPOSITORY), outcomeRows: r.resolve(t.OUTCOME_HISTORY),
       pullRequests: r.resolve(t.PULL_REQUEST_FLOW), approvals: r.resolve(t.APPROVAL_REPOSITORY), approvalFactory: r.resolve(APPROVAL_FACTORY),
       outcomes: () => r.tryResolve(t.OUTCOME_RECORDER), recorder: r.resolve(t.EVENT_RECORDER), clock: clock(r), log: log(r).child({ component: 'merge-watch' }),
+      events: r.resolve(t.EVENT_REPOSITORY),
     }), { source: SOURCE });
     bind(t.SHIP_REVERT, (r) => new ShipRevert({
       missions: r.resolve(t.MISSION_REPOSITORY), tasks: r.resolve(t.TASK_REPOSITORY), repositories: r.resolve(t.REPO_REPOSITORY),
@@ -701,6 +702,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       readiness: r.resolve(t.READINESS_SERVICE),
       limits: r.resolve(t.LIMIT_SERVICE),
       liveness: r.resolve(t.LIVENESS_SERVICE),
+      // Start moves the tracker refused (#187), resolved per call: the tracker service reads missions through these.
+      trackerStalled: (workspaceId) => r.resolve(it.TRACKER_SERVICE).moveRefusals(workspaceId),
       // Resolved per call: the desk reads the inbox and the backlog, which are built on projections.
       desk: {
         metrics: (workspaceId) => r.resolve(t.DESK_SERVICE).metrics(workspaceId),
@@ -1052,6 +1055,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       gates: r.resolve(t.GATE_SERVICE),
       limits: r.resolve(t.LIMIT_SERVICE),
       liveness: r.resolve(t.LIVENESS_SERVICE),
+      // Start moves the tracker refused (#187), resolved per call: the tracker service reads missions through these.
+      trackerStalled: (workspaceId) => r.resolve(it.TRACKER_SERVICE).moveRefusals(workspaceId),
       readiness: r.resolve(t.READINESS_SERVICE),
       backlog: (workspaceId) => r.resolve(t.BACKLOG_SERVICE).view(workspaceId),
       recorder: r.resolve(t.EVENT_RECORDER),

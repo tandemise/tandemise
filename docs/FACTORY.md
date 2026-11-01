@@ -71,6 +71,8 @@ modules:                     # only ever add
               gate: 'artifact.ReviewReport.exists && review.blocking_findings == 0' }
 holdApproval: { minTasks: 5, rate: 0.4 }
 tiebreak: on                 # a cheap model breaks ties only when the rules can't tell
+ci:                          # what a failing CI check is about: metadata | code | unknown
+  checks: { "deploy-*": code }
 ```
 
 - **Profile**: type, size and risk, each with the signals that set it. Any
@@ -276,6 +278,18 @@ Conventional Commit, because that says what changed. Otherwise it is the
 item's title. A tracker key, an acronym or a name keeps its case (`KEY-77`,
 `API`, `GitHub`). The Review and merge card shows the pull request as GitHub
 has it: `Review and merge #45: fix(settings): …`.
+**When CI fails**, each failing check is classified before anything is redone.
+A check on the pull request itself (its title, labels, description, a linked
+issue, a Conventional Commit or DCO rule) never sends the code back: a title
+check is fixed in the ship step by retitling the pull request as above, which
+runs the check again, and anything else is a card naming the check. A check on
+the code (build, test, lint, typecheck) sends the code step back for a round
+with the check's log. A check Tandemise can't place is a card with its name and
+log, and a round starts only once you say it is about code. The name decides
+first, then what the check printed; `ci.checks` in `planner.yaml` maps a name
+or a glob to `metadata`, `code` or `unknown` and wins over both. Until GitHub
+has registered a check, the step reads "Waiting for checks to start".
+
 **Revert** on the ship card undoes a merge through its own pull request. For a
 day after a merge, a failing check on main puts a card in the Inbox; Tandemise
 never reverts on its own.

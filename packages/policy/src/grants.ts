@@ -1,7 +1,7 @@
 import type {
   AutonomySettings, Capability, CapabilityGrant, MissionTask, RiskClass, RoleTemplate,
 } from '@tandemise/domain';
-import { anyCapabilityMatches } from '@tandemise/domain';
+import { CORE_CAPABILITIES, anyCapabilityMatches } from '@tandemise/domain';
 import type { Clock } from '@tandemise/shared';
 import { systemClock } from '@tandemise/shared';
 import { riskForCapability } from './risk.js';
@@ -95,12 +95,24 @@ export function createGrantBuilder(options: { clock?: Clock } = {}): GrantBuilde
  */
 function narrowToRole(role: RoleTemplate, task: MissionTask): readonly Capability[] {
   const asked = unique([...task.executionPolicy.capabilities, ...task.requiredCapabilities]);
-  if (asked.length === 0) return unique(role.defaultCapabilities);
+  // A step that must deliver an artifact may always write it (#191): the
+  // careful lane's review step listed read-only capabilities, so its own
+  // ReviewReport write was refused and its verdict lost. `artifact.write`
+  // reaches only the step's out folder, never the tree.
+  const withOutputWrite = (granted: readonly Capability[]): Capability[] =>
+    task.expectedOutputs.length > 0 && !anyCapabilityMatches(granted, ARTIFACT_WRITE) && !anyCapabilityMatches(granted, FILESYSTEM_WRITE)
+      ? unique([...granted, ARTIFACT_WRITE])
+      : unique(granted);
+  if (asked.length === 0) return withOutputWrite(role.defaultCapabilities);
   // Keeping the *task's* string rather than the role's keeps the grant as
   // narrow as possible: role `github` + task `github.pr.create` yields the
   // latter.
-  return asked.filter((c) => anyCapabilityMatches(role.defaultCapabilities, c));
+  return withOutputWrite(asked.filter((c) => anyCapabilityMatches(role.defaultCapabilities, c)));
 }
+
+const FILESYSTEM_WRITE: Capability = CORE_CAPABILITIES.filesystemWrite;
+
+const ARTIFACT_WRITE: Capability = CORE_CAPABILITIES.artifactWrite;
 
 function modeFor(risk: RiskClass, autonomy: AutonomySettings): CapabilityGrant['approvalMode'] {
   switch (risk) {

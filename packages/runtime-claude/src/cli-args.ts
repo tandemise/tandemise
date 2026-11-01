@@ -99,12 +99,27 @@ export function allowedToolRules(
   grants: readonly Capability[],
   settings: Readonly<Record<string, unknown>> = {},
   mode: PermissionMode = permissionMode(grants, settings),
+  workingDirectory?: string,
 ): string[] {
-  const rules = artifactOnly(grants) ? [ARTIFACT_WRITE_RULE] : [];
+  const rules = artifactOnly(grants) ? [ARTIFACT_WRITE_RULE, ...artifactWriteRulesAt(workingDirectory)] : [];
   if (!pinnedMode(settings) && anyCapabilityMatches(grants, CORE_CAPABILITIES.shell) && mode !== 'bypassPermissions') {
     rules.push(...SHELL_TOOLS);
   }
   return rules;
+}
+
+/**
+ * The out folder as absolute rules too, under both spellings of the working
+ * directory (#191). The relative rule is matched against the CLI's current
+ * directory, which it resolves through symlinks; a step that wrote its report
+ * by the absolute path its prompt names (the unresolved one) matched no rule
+ * and was refused, while a later pass that wrote it relatively was let through.
+ * `//` starts an absolute path in a permission rule.
+ */
+function artifactWriteRulesAt(workingDirectory: string | undefined): string[] {
+  if (workingDirectory === undefined) return [];
+  const spellings = [...new Set([workingDirectory, realPath(workingDirectory)])];
+  return spellings.map((dir) => `Edit(//${dir.replace(/^\/+/, '').replace(/\/+$/, '')}/${ARTIFACT_OUT_DIR}/**)`);
 }
 
 function pinnedMode(settings: Readonly<Record<string, unknown>>): boolean {
@@ -215,7 +230,7 @@ function sharedFlags(request: RunRequest, interactive = false): string[] {
   for (const dir of request.skill?.pluginDirs ?? []) args.push('--plugin-dir', dir);
 
   const allowed = [...new Set([
-    ...allowedToolRules(request.grants, settings, mode),
+    ...allowedToolRules(request.grants, settings, mode, request.workingDirectory),
     // The run-scoped gateway only publishes tools this assignment was granted,
     // and every call through it is decided by Tandemise's policy engine - with
     // an approval card when the grant says ask. Without an allow rule headless

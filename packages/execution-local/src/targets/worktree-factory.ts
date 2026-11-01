@@ -50,6 +50,9 @@ export interface WorktreeTargetDeps {
  */
 const SEEDED_DEPENDENCY_DIRS = ['node_modules', '.venv', 'vendor/bundle'] as const;
 
+/** How long fetching the base branch may take before the step starts from the clone's copy. */
+const FETCH_TIMEOUT_MS = 60_000;
+
 export class WorktreeTargetFactory implements ExecutionTargetFactory {
   readonly id = 'worktree';
   readonly displayName = 'Git worktree';
@@ -137,6 +140,43 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
   }
 
   /**
+   * Where a new task branch is cut from (#167). The clone's local default
+   * branch only moves when someone pulls it, so on a factory clone it can be
+   * many commits behind what the pull request will merge into. With an
+   * `origin`, fetch its copy of the branch and start from that, unless the
+   * local branch already holds it (unpublished work on top of the remote is
+   * kept). Offline, start from the local branch and say so on the target.
+   */
+  async #resolveStart(repositoryPath: string, base: string, fetch: boolean): Promise<{ ref: string; note: string | null }> {
+    const { git, log } = this.deps;
+    // A commit, not a branch (an eval case pins its base): nothing to fetch.
+    if (/^[0-9a-f]{7,40}$/i.test(base)) return { ref: base, note: null };
+    if ((await git.run(repositoryPath, ['remote', 'get-url', 'origin'])).exitCode !== 0) return { ref: base, note: null };
+    let note: string | null = null;
+    if (fetch) {
+      const fetched = await git.run(repositoryPath, [
+        'fetch', '--quiet', '--no-tags', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`,
+      ], { timeoutMs: FETCH_TIMEOUT_MS });
+      if (fetched.exitCode !== 0) {
+        const why = (fetched.stderr.trim() || fetched.stdout.trim()).split('\n')[0] ?? '';
+        // The branch was never published: the local one is all there is.
+        if (/couldn't find remote ref/i.test(why)) return { ref: base, note: null };
+        note = `could not fetch origin/${base}, so this started from what the clone had: ${why.slice(0, 200)}`;
+        log.warn('worktree.fetch_failed', { repositoryPath, base, error: why });
+      }
+    }
+    const remoteRef = `origin/${base}`;
+    const known = async (ref: string): Promise<boolean> =>
+      (await git.run(repositoryPath, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).exitCode === 0;
+    if (!(await known(`refs/remotes/${remoteRef}`))) return { ref: base, note };
+    if (await known(`refs/heads/${base}`)) {
+      const holdsRemote = await git.run(repositoryPath, ['merge-base', '--is-ancestor', `refs/remotes/${remoteRef}`, `refs/heads/${base}`]);
+      if (holdsRemote.exitCode === 0) return { ref: base, note };
+    }
+    return { ref: remoteRef, note };
+  }
+
+  /**
    * Short, stable suffix from a task id. The full branded id is long and its
    * prefix is constant, so the tail carries the entropy.
    */
@@ -168,6 +208,14 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
     await git.pruneWorktrees(repositoryPath);
     const existing = await this.#findWorktree(repositoryPath, directory);
 
+    // #167: a step with nothing upstream starts from the remote's current
+    // default branch. Only a new worktree fetches; a reused one keeps the
+    // commit it was cut from. An upstream step's branch is the mission's own
+    // local work, so it is used as it is.
+    const start = request.syncToBase === true
+      ? { ref: base, note: null }
+      : await this.#resolveStart(repositoryPath, base, existing === undefined);
+
     if (existing) {
       if (existing.branch === null) {
         // A detached HEAD has no branch to commit onto, so release()'s salvage
@@ -187,14 +235,17 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
     } else {
       await this.#clearEmptyDirectory(directory);
       const createBranch = !(await git.branchExists(repositoryPath, branch));
-      await git.addWorktree(repositoryPath, directory, branch, base, { createBranch });
-      log.info('worktree.created', { directory, branch, base, createBranch });
+      await git.addWorktree(repositoryPath, directory, branch, start.ref, { createBranch });
+      log.info('worktree.created', { directory, branch, base: start.ref, createBranch });
       await this.#seedDependencies(repositoryPath, directory);
     }
 
     if (request.syncToBase === true) await this.#syncToBase(directory, branch, base);
 
-    const baseCommit = await git.revParse(repositoryPath, base);
+    const baseCommit = await git.revParse(repositoryPath, start.ref);
+    const detail = baseCommit
+      ? `base ${baseCommit}${start.ref !== base ? ` (${start.ref})` : ''}${start.note ? `; ${start.note}` : ''}`
+      : start.note;
     const record: ExecutionTargetRecord = {
       id: request.id ?? ids.executionTarget(),
       workspaceId: request.workspaceId,
@@ -204,9 +255,12 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
       name: request.name,
       workingDirectory: directory,
       branch,
-      baseBranch: base,
+      // The ref the branch was cut from, so a diff against it (`base...HEAD`)
+      // shows the step's own work and not the commits a stale local branch
+      // lacks.
+      baseBranch: start.ref,
       status: 'READY',
-      detail: baseCommit ? `base ${baseCommit}` : null,
+      detail,
       createdAt: this.#clock.now(),
       releasedAt: null,
     };

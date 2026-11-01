@@ -87,6 +87,7 @@ export const OFFLINE_CHECKS = [
   'routing-overcommit-check',
   'runtime-concurrency-check',
   'round-redo-head-check',
+  'review-artifact-scope-check',
   'rounds-check',
   'schema-constraint-check',
   'secrets-check',
@@ -97,6 +98,7 @@ export const OFFLINE_CHECKS = [
   'trust-boundary-check',
   'version-check',
   'workflow-check',
+  'worktree-base-check',
 ];
 
 const TIMEOUT_MS = 5 * 60_000;
