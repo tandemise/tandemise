@@ -451,6 +451,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
         return last !== undefined && last.type === 'ship.pr_opened' ? last.headSha : null;
       },
       opened: (mission) => openedPullRequests(r, mission.id),
+      kept: (mission) => r.resolve(t.EVENT_REPOSITORY).listByMission(mission.id)
+        .flatMap((e) => (e.body.type === 'merge.approval_kept' ? [{ approvalId: e.body.approvalId, by: e.body.by, toHead: e.body.toHead }] : [])),
       decide: {
         missions: r.resolve(t.MISSION_REPOSITORY),
         mergeDecisions: r.resolve(t.MERGE_DECISION_REPOSITORY),

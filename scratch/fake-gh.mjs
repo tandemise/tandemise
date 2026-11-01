@@ -485,7 +485,19 @@ function prCommand(dir, state, args, out) {
     return;
   }
   if (verb === 'update-branch') {
-    pr.headRefOid = `${pr.headRefOid.slice(0, 39)}u`.replace(/[^0-9a-fu]/g, '0').replace('u', 'e');
+    // With a local remote, GitHub's own update: a merge commit of the base into the head, pushed to the head branch;
+    // a conflict is refused, as GitHub refuses it. Otherwise a made-up head.
+    let oid = `${pr.headRefOid.slice(0, 39)}u`.replace(/[^0-9a-fu]/g, '0').replace('u', 'e');
+    try {
+      const g = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      g('fetch', '-q', 'origin', pr.baseRefName, pr.headRefName);
+      const base = g('rev-parse', `origin/${pr.baseRefName}`);
+      let tree;
+      try { tree = g('merge-tree', '--write-tree', `origin/${pr.headRefName}`, base).split('\n')[0]; } catch { fail('GraphQL: Merge conflict while updating the branch (updatePullRequestBranch)'); }
+      oid = execFileSync('git', ['-c', 'user.name=GitHub', '-c', 'user.email=noreply@github.com', 'commit-tree', tree, '-p', `origin/${pr.headRefName}`, '-p', base, '-m', `Merge branch '${pr.baseRefName}' into ${pr.headRefName}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      g('push', '-q', 'origin', `${oid}:refs/heads/${pr.headRefName}`);
+    } catch (e) { if (e?.status === undefined) throw e; /* not a local remote: a made-up head */ }
+    pr.headRefOid = oid;
     save();
     return;
   }

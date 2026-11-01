@@ -123,6 +123,8 @@ export type OrchestrationEvent =
   | { readonly type: 'merge.decided'; readonly decisionId: string; readonly verdict: 'merge' | 'ask'; readonly score: number; readonly repo: string; readonly number: number; readonly headSha: string }
   | { readonly type: 'merge.merged'; readonly decisionId: string; readonly mergeSha: string; readonly by: string }
   | { readonly type: 'merge.asked'; readonly decisionId: string; readonly reasons: readonly string[] }
+  /** A person's Merge still stands after the pull request brought its base branch in with its own changes unchanged (#173). */
+  | { readonly type: 'merge.approval_kept'; readonly decisionId: string; readonly approvalId: string; readonly by: string; readonly fromHead: string; readonly toHead: string }
   | { readonly type: 'merge.reverted'; readonly decisionId: string; readonly revertPr: string | null; readonly by: string }
   | { readonly type: 'note'; readonly text: string; readonly level?: 'info' | 'warn' | 'error' };
 
@@ -161,7 +163,7 @@ export const SEMANTIC_EVENT_TYPES: ReadonlySet<string> = new Set([
   'artifact.tighten_requested', 'artifact.over_budget',
   'feedback.given', 'feedback.addressed', 'feedback.dismissed', 'task.round_started', 'mission.pulled',
   'task.parked_external', 'task.unparked', 'task.handed_back', 'mission.intake_completed',
-  'plan.decided', 'ship.pr_opened', 'task.outcome', 'merge.decided', 'merge.merged', 'merge.asked', 'merge.reverted',
+  'plan.decided', 'ship.pr_opened', 'task.outcome', 'merge.decided', 'merge.merged', 'merge.asked', 'merge.approval_kept', 'merge.reverted',
   'task.held', 'task.hold_ended',
   'brain.learned',
 ]);
