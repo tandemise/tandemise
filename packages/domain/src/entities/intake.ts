@@ -149,6 +149,17 @@ export interface TrackerConfig {
   /** What Tandemise writes when a mission completes. */
   readonly onComplete: 'in_review' | 'done';
   readonly workflows?: Readonly<Record<string, string>>;
+  /**
+   * The item types this project builds (`[Bug, Task]`); Start refuses any
+   * other type in words (#136). Absent or empty: every type is buildable.
+   */
+  readonly buildTypes?: readonly string[];
+  /**
+   * The tag that marks this project's repository (`repo:web`). An item
+   * carrying another tag with the same prefix (`repo:api`) belongs to another
+   * repository, and Start refuses it (#136). Absent: no item is refused for it.
+   */
+  readonly repoTag?: string;
 }
 
 /** Spec §4.1 per-source noise rules. */

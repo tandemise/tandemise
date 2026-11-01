@@ -6,9 +6,14 @@ import {
 import { z } from 'zod';
 import { YouTrackClient } from './client.js';
 
-/** What every issue read asks YouTrack for (plan Task 4). */
+/**
+ * What every issue read asks YouTrack for (plan Task 4), with the item's tags
+ * and its subtasks' resolution, so the Board can tell a container and another
+ * repository's item (#136).
+ */
 export const ISSUE_FIELDS =
-  'idReadable,summary,description,created,updated,resolved,project(shortName),customFields(name,value(name,login))';
+  'idReadable,summary,description,created,updated,resolved,project(shortName),customFields(name,value(name,login)),'
+  + 'tags(name),subtasks(issues(idReadable,resolved))';
 const COMMENT_FIELDS = 'id,text,author(login)';
 /** The title words a similarity search sends (spec §5 step 4: title words). */
 const MAX_SEARCH_WORDS = 8;
@@ -23,6 +28,11 @@ const issueSchema = z.object({
   updated: z.number().nullish(),
   resolved: z.number().nullish(),
   customFields: z.array(z.object({ name: z.string(), value: z.unknown() }).passthrough()).nullish(),
+  tags: z.array(z.object({ name: z.string().nullish() }).passthrough()).nullish(),
+  // The "subtask" link: the issues it lists are this item's subtasks.
+  subtasks: z.object({
+    issues: z.array(z.object({ resolved: z.number().nullish() }).passthrough()).nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 type RawIssue = z.infer<typeof issueSchema>;
 
@@ -225,6 +235,13 @@ export class YouTrackTracker implements PrimaryTracker {
       updatedAt: new Date(raw.updated ?? raw.created ?? 0).toISOString(),
       createdAt: new Date(raw.created ?? 0).toISOString(),
       ...(type !== null ? { type } : {}),
+      // Only what YouTrack answered: an answer without them says nothing either way.
+      ...(raw.subtasks !== undefined && raw.subtasks !== null
+        ? { subtasks: (raw.subtasks.issues ?? []).filter((i) => i.resolved === null || i.resolved === undefined).length }
+        : {}),
+      ...(raw.tags !== undefined && raw.tags !== null
+        ? { tags: raw.tags.map((t) => t.name ?? '').filter((n) => n !== '') }
+        : {}),
     };
   }
 

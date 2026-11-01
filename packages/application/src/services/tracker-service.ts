@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   FACTORY_WORKFLOW_ID, activityCommentBody, activityMilestone, activityMilestoneOf, activityStepState, decideTrackerWriteBack, isTerminalMissionStatus, parseCriteria,
-  parseSourcesSection, runtimeSlotWait, sourceLabel, trackerGoal, trackerLabel, trackerRef,
+  parseSourcesSection, runtimeSlotWait, sourceLabel, startRefusal, trackerGoal, trackerLabel, trackerRef,
 } from '@tandemise/domain';
 import type { BoardItemView, BoardView, CreateMissionRequest } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, TrackerItemId, WorkspaceId } from '@tandemise/shared';
@@ -404,10 +404,11 @@ export class TrackerService {
       state: item.state,
       assignee: item.assignee,
       sources,
+      type: item.type ?? null,
       mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title, waiting: active ? this.#slotWait(mission) : null },
       // The Start refusals, read from the cache without asking the tracker.
       startable: active ? { ok: false, reason: 'Has a mission' }
-        : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : { ok: true },
+        : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : startableOf(item, config),
     };
   }
 
@@ -440,6 +441,9 @@ export class TrackerService {
         ? `${fresh.key} is already in progress.`
         : `${fresh.key} is already in progress (${fresh.assignee}).`);
     }
+    // A container, a type this project does not build, another repository's item (#136): the Board's sentence.
+    const refusal = startRefusal(fresh, config);
+    if (refusal !== null) throw new TandemiseError('CONFLICT', refusal);
     // Claimed before the mission exists (spec §7 step 1), under the id it will
     // have, so the mission's own start finds the claim already its own (Ruling 22).
     const missionId = ids.mission();
@@ -738,6 +742,12 @@ export class TrackerService {
   #invalidate(): void {
     this.deps.projections?.invalidate('intake');
   }
+}
+
+/** Whether the project starts this item at all (#136), from the cached item and the tracker config. */
+function startableOf(item: TrackedItem, config: TrackerConfig): BoardItemView['startable'] {
+  const reason = startRefusal(item, config);
+  return reason === null ? { ok: true } : { ok: false, reason };
 }
 
 /** A source chip: `Sentry · 132 events`, `Slack · thread`. */

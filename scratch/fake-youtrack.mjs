@@ -28,7 +28,7 @@
 //
 // The acceptance run seeds, edits and inspects it over HTTP, never through the token:
 //
-//   POST /_fake/issues          { idReadable?, summary, description, state, type, … }  puts an issue
+//   POST /_fake/issues          { idReadable?, summary, description, state, type, tags?, parent?, … }  puts an issue
 //   POST /_fake/issues/<key>    { state?, description?, … }                             a person edits it
 //   GET  /_fake/state                                                                   issues, comments, commands, calls (with their authorization)
 //
@@ -36,6 +36,11 @@
 // string is a substring match on summary, description and comments, and the
 // remaining words must all appear in the summary. `sort by: …` is ignored;
 // results are newest-updated first.
+//
+// Tags and subtasks (#136): an issue's `tags` is a list of names, and an issue
+// whose `parent` names another is one of that issue's subtasks. An issue read
+// answers `tags(name)` and `subtasks(issues(idReadable,resolved))` only when
+// its `fields` ask for them, as YouTrack does.
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
@@ -102,7 +107,7 @@ export async function startFakeYouTrack(options = {}) {
     const t = now();
     const issue = {
       id: `2-${n}`, idReadable: key, summary: '', description: '', created: t, updated: t, resolved: null,
-      state: states[0], type: null, assignee: null, fields: {}, links: [], ...i,
+      state: states[0], type: null, assignee: null, fields: {}, links: [], tags: [], parent: null, ...i,
     };
     if (i.state !== undefined) issue.resolved = resolvedStates.has(i.state) ? t : null;
     issues.set(key, issue);
@@ -126,7 +131,15 @@ export async function startFakeYouTrack(options = {}) {
     return comment;
   };
 
-  const issueJson = (i) => ({
+  const issueJson = (i, fields = '') => ({
+    ...(fields.includes('tags(') ? { tags: (i.tags ?? []).map((name) => ({ $type: 'IssueTag', name })) } : {}),
+    ...(fields.includes('subtasks(') ? {
+      subtasks: {
+        $type: 'IssueLink',
+        issues: [...issues.values()].filter((c) => c.parent === i.idReadable)
+          .map((c) => ({ $type: 'Issue', idReadable: c.idReadable, resolved: c.resolved })),
+      },
+    } : {}),
     $type: 'Issue',
     id: i.id,
     idReadable: i.idReadable,
@@ -283,14 +296,14 @@ export async function startFakeYouTrack(options = {}) {
         const q = u.searchParams.get('query') ?? '';
         const top = Number(u.searchParams.get('$top') ?? 42);
         const found = [...issues.values()].filter((i) => matches(i, q)).sort((a, b) => b.updated - a.updated).slice(0, top);
-        return send(200, found.map(issueJson));
+        return send(200, found.map((i) => issueJson(i, u.searchParams.get('fields') ?? '')));
       }
       if (req.method === 'POST' && path === '/api/issues') {
         const body = json();
         if (body.project?.id !== PROJECT_ID) return fail(400, 'bad_request', 'Unknown project');
         if (typeof body.summary !== 'string' || body.summary === '') return fail(400, 'bad_request', 'Summary is required');
         const issue = putIssue({ summary: body.summary, description: body.description ?? '' });
-        return send(200, issueJson(issue));
+        return send(200, issueJson(issue, u.searchParams.get('fields') ?? ''));
       }
       if (req.method === 'POST' && path === '/api/commands') {
         const body = json();
@@ -310,7 +323,7 @@ export async function startFakeYouTrack(options = {}) {
         if (!issue) return fail(404, 'Not Found', 'Entity with id not found');
         const sub = m[2] ?? '';
         const key = issue.idReadable;
-        if (req.method === 'GET' && sub === '') return send(200, issueJson(issue));
+        if (req.method === 'GET' && sub === '') return send(200, issueJson(issue, u.searchParams.get('fields') ?? ''));
         if (req.method === 'GET' && sub === '/comments') {
           return send(200, (comments.get(key) ?? []).map((c) => ({ $type: 'IssueComment', id: c.id, text: c.text, author: { $type: 'User', login: c.author } })));
         }

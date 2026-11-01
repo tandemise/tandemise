@@ -27,6 +27,7 @@ import { migration023 } from './023_brain.js';
 import { migration024 } from './024_intake.js';
 import { migration025 } from './025_planner_and_merge.js';
 import { migration026 } from './026_check_timeouts_and_reuse.js';
+import { migration027 } from './027_tracker_item_shape.js';
 
 export type { Migration } from './types.js';
 
@@ -45,6 +46,7 @@ export const MIGRATIONS: readonly Migration[] = [
   migration008, migration009, migration010, migration011, migration012, migration013, migration014,
   migration015, migration016, migration017, migration018, migration019, migration020,
   migration021, migration022, migration023, migration024, migration025, migration026,
+  migration027,
 ];
 
 /** The newest schema version this binary understands. */
