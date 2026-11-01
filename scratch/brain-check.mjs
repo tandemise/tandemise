@@ -343,6 +343,19 @@ if (wants('git')) {
   check('findPr finds it by head', (await host.findPr(a, 'tandemise/x'))?.url === pr.url);
   check('prState reads open', (await host.prState(a, pr.url)) === 'open');
   check('the host is available', (await host.available()).ok === true);
+
+  // Sharing into a repository a person made first (dogfood #112): empty is used, one with commits is refused in words.
+  const made = await host.createRepo('acme', 'made-first');
+  const again = await host.createRepo('acme', 'made-first').catch((e) => e);
+  check('createRepo on a repository that exists and is empty uses it', again?.remote === made.remote && made.remote === 'https://github.com/acme/made-first.git', again?.message ?? again);
+  const seeded = join(HOME, 'seeded');
+  mkdirSync(seeded, { recursive: true });
+  git(seeded, 'init', '-q', '-b', 'main');
+  git(seeded, 'commit', '-q', '--allow-empty', '-m', 'someone else');
+  git(seeded, 'push', '-q', join(FAKE.remotes, 'acme', 'made-first.git'), 'main');
+  const taken = await host.createRepo('acme', 'made-first').catch((e) => e);
+  check('createRepo on a repository with commits is refused, pointing at Use an existing brain',
+    taken?.code === 'CONFLICT' && /has commits/.test(taken.message) && /Use an existing brain/.test(taken.message), taken?.message ?? taken);
 }
 
 // ------------------------------------------------------------------ fold

@@ -84,7 +84,7 @@ keepPainting([PORT]);
 const scenarios = [
   'h08-now.mjs', 'h01-hold-running.mjs', 'h12-accessible-terminal.mjs', 'h02-iterate.mjs', 'h04-close-reopen.mjs', 'h05-daemon-restart.mjs', 'h03-continue.mjs',
   'h09-refusals.mjs', 'h06-ask-human.mjs', 'h07-hold-ready.mjs', 'h10-under-review.mjs', 'h11-profile-pinning.mjs',
-  ...(skipClaude ? [] : ['h03-real-claude.mjs']),
+  ...(skipClaude ? [] : ['h03-real-claude.mjs', 'h13-claude-prompts.mjs']),
 ].filter((file) => !only || only.some((o) => file.startsWith(o)));
 
 let failed = null;
@@ -112,7 +112,7 @@ if (!process.argv.includes('--hold')) {
 
 // ---------------------------------------------------------------- report
 const results = readdirSync(EVIDENCE).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(EVIDENCE, f), 'utf8')));
-const order = ['H1', 'H2', 'H3', 'H3-claude', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11', 'H12'];
+const order = ['H1', 'H2', 'H3', 'H3-claude', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9', 'H10', 'H11', 'H12', 'H13-claude-prompts'];
 results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 const lines = [
   '# Hold and interact: acceptance report',
