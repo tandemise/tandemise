@@ -263,6 +263,8 @@ const trackerStates = z
     in_review: stateName.optional(),
     done: z.array(stateName).min(1),
     wont_do: z.array(stateName),
+    /** Work still to be refined (#135): the Board offers Refine on it. */
+    draft: z.array(stateName).optional(),
   })
   .strict();
 
@@ -437,6 +439,26 @@ export interface BoardItemView {
     readonly waiting?: string | null;
   } | null;
   readonly startable: { readonly ok: true } | { readonly ok: false; readonly reason: string };
+  /**
+   * A draft item (#135): whether Refine is offered, and the refinement under
+   * way, if any. Absent on items that are not in a draft state, and from a
+   * daemon older than this field.
+   */
+  readonly refine?: {
+    readonly ok: boolean;
+    /** Why Refine is not offered; null when it is. */
+    readonly reason: string | null;
+    /** The refinement mission's state; null before Refine. */
+    readonly refinement: {
+      readonly running: boolean;
+      /** The pass could not run, in the daemon's words; null otherwise. */
+      readonly failure: string | null;
+      /** Ready to write back: the P6 readiness gate passes. */
+      readonly ready: boolean;
+      /** What is left before it can be written back, or what the write does, in the daemon's words. */
+      readonly sentence: string;
+    } | null;
+  };
 }
 
 /** The project's board, from the tracker cache (plan Task 8). */
@@ -446,6 +468,8 @@ export interface BoardView {
     readonly ready: readonly BoardItemView[];
     readonly inProgress: readonly BoardItemView[];
     readonly inReview: readonly BoardItemView[];
+    /** Items in a mapped draft state (#135); absent when the project maps none, or from an older daemon. */
+    readonly draft?: readonly BoardItemView[];
   };
   readonly refreshedAt: string | null;
   readonly problem: string | null;
@@ -551,6 +575,15 @@ export const startBoardItemRequest = z
   })
   .strict();
 export type StartBoardItemRequest = z.infer<typeof startBoardItemRequest>;
+
+/**
+ * `POST /v1/workspaces/:id/board/refine` and `…/board/ready` (#135): Refine a
+ * draft item, and write the refined item back to the tracker as ready.
+ */
+export const boardItemKeyRequest = z
+  .object({ key: z.string().trim().min(1, 'Name the item.').max(200) })
+  .strict();
+export type BoardItemKeyRequest = z.infer<typeof boardItemKeyRequest>;
 
 /** The answer to minting: the token is shown this once, and only its sha256 is kept (spec §2). */
 export interface IntakeTokenMintedView {

@@ -180,6 +180,10 @@ export class YouTrackTracker implements PrimaryTracker {
     await this.#command(this.#key(ref), `State ${commandValue(state)}`);
   }
 
+  async updateDescription(ref: TrackerRef, description: string): Promise<void> {
+    await this.#client.post(`/api/issues/${encodeURIComponent(this.#key(ref))}`, { fields: 'id' }, { description }, z.unknown());
+  }
+
   async markDuplicate(dup: TrackerRef, of: TrackerRef): Promise<void> {
     await this.#command(this.#key(dup), `duplicates ${this.#key(of)}`);
   }

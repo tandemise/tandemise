@@ -122,6 +122,15 @@
   text-align: right;
 }
 
+/* A draft item's Refine and write-back (#135): the state in words, then its two actions. */
+.board__draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
 .intake-list__line {
   display: flex;
   align-items: baseline;

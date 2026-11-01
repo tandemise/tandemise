@@ -200,6 +200,11 @@ export class GhPrimaryTracker implements PrimaryTracker {
     ], this.#opts());
   }
 
+  /** The issue's body (#135). `--body` takes the text as one argument; nothing is read from a shell. */
+  async updateDescription(ref: TrackerRef, description: string): Promise<void> {
+    await gh(this.#ctx, ['issue', 'edit', String(this.#number(ref)), '--repo', this.#repo, '--body', description], this.#opts());
+  }
+
   /**
    * GitHub has no native duplicate link: a comment says which, then the
    * duplicate is closed. The comment carries its own marker, so a repeated
@@ -336,7 +341,7 @@ function commentText(marker: string, body: string): string {
 
 /** Every mapped state that is a label: all but GitHub's own `open` and `closed`, once each, in the mapping's order. */
 export function githubStateLabels(states: TrackerConfig['states']): readonly string[] {
-  const named = [...states.ready, states.in_progress, ...(states.in_review === undefined ? [] : [states.in_review]), ...states.done, ...states.wont_do];
+  const named = [...states.ready, states.in_progress, ...(states.in_review === undefined ? [] : [states.in_review]), ...states.done, ...states.wont_do, ...(states.draft ?? [])];
   return [...new Set(named.filter((s) => s !== 'open' && s !== 'closed'))];
 }
 

@@ -6,9 +6,9 @@ import type {
 } from '@tandemise/domain';
 import {
   FACTORY_WORKFLOW_ID, activityCommentBody, activityMilestone, activityMilestoneOf, activityStepState, decideTrackerWriteBack, isTerminalMissionStatus, parseCriteria,
-  parseSourcesSection, runtimeSlotWait, sourceLabel, trackerGoal, trackerLabel, trackerRef,
+  parseSourcesSection, readinessTodo, refinedActivityLine, refinedDescription, refinedLineOf, runtimeSlotWait, sourceLabel, trackerGoal, trackerLabel, trackerRef,
 } from '@tandemise/domain';
-import type { BoardItemView, BoardView, CreateMissionRequest } from '@tandemise/api-contract';
+import type { BoardItemView, BoardView, CreateMissionRequest, RefinementView } from '@tandemise/api-contract';
 import type { Clock, Logger, MissionId, TrackerItemId, WorkspaceId } from '@tandemise/shared';
 import { TandemiseError, asId, errorMessage, ids } from '@tandemise/shared';
 import type { SettingsStorePort } from '../ports.js';
@@ -35,6 +35,15 @@ export interface TrackerServiceDeps {
    * readiness gate and stays a draft to refine. Resolved per call.
    */
   readonly planDraft?: (missionId: MissionId) => Promise<unknown>;
+  /**
+   * P6 refinement, for a draft item's Refine (#135): `begin` starts the
+   * product agent's pass, `view` says what the person has left to decide.
+   * Resolved per call; optional for harnesses, which then cannot Refine.
+   */
+  readonly refinement?: {
+    begin(caller: Caller, missionId: MissionId): RefinementView;
+    view(missionId: MissionId): RefinementView;
+  };
   /** Who works on what across daemons; always granted without the relay (#54). */
   readonly claims: IntakeClaimsPort;
   /** Personal settings: `trackerLogins[<workspace>]`, the person's login in the tracker. */
@@ -131,15 +140,18 @@ export class TrackerService {
     if (config === null) {
       return { trackerLabel: '', groups: { ready: [], inProgress: [], inReview: [] }, refreshedAt: null, problem: "Set this project's tracker first." };
     }
+    const drafts = config.states.draft ?? [];
     const cached = this.deps.items.list(workspaceId);
     const missions = this.#missionsByItem(workspaceId);
     const ready: BoardItemView[] = [];
     const inProgress: BoardItemView[] = [];
     const inReview: BoardItemView[] = [];
+    const draft: BoardItemView[] = [];
     const onBoard = this.#onBoard.get(workspaceId);
     for (const item of cached) {
       if (onBoard !== undefined && !onBoard.has(item.ref)) continue;
-      const group = config.states.ready.includes(item.state) ? ready
+      const group = drafts.includes(item.state) ? draft
+        : config.states.ready.includes(item.state) ? ready
         : item.state === config.states.in_progress ? inProgress
           : config.states.in_review !== undefined && item.state === config.states.in_review ? inReview : null;
       group?.push(this.#itemView(workspaceId, item, config, missions.get(item.id) ?? []));
@@ -149,7 +161,8 @@ export class TrackerService {
     const cachedAt = cached.reduce<string | null>((max, i) => (max === null || i.refreshedAt > max ? i.refreshedAt : max), null);
     return {
       trackerLabel: trackerLabel(config.kind),
-      groups: { ready, inProgress, inReview },
+      // The Draft group only when the project maps a draft state (#135): older windows never see it.
+      groups: { ready, inProgress, inReview, ...(drafts.length > 0 ? { draft } : {}) },
       refreshedAt: last?.at ?? cachedAt,
       problem: last?.problem ?? null,
     };
@@ -375,6 +388,9 @@ export class TrackerService {
   #itemView(workspaceId: WorkspaceId, item: TrackedItem, config: TrackerConfig, missions: readonly Mission[]): BoardItemView {
     const mission = missions.find((m) => !isTerminalMissionStatus(m.status)) ?? missions[0] ?? null;
     const active = mission !== null && !isTerminalMissionStatus(mission.status);
+    // A refined draft's mission (#135): Start adopts it rather than refusing.
+    const unstarted = mission !== null && active && isUnstarted(mission, item);
+    const isDraft = config.states.draft?.includes(item.state) ?? false;
     const sources: { label: string; detail: string }[] = [];
     for (const link of this.deps.intake.linksForItem(workspaceId, item.ref)) {
       const signal = this.deps.intake.getSignal(link.signalId);
@@ -390,8 +406,37 @@ export class TrackerService {
       sources,
       mission: mission === null ? null : { id: mission.id, status: mission.status, title: mission.title, waiting: active ? this.#slotWait(mission) : null },
       // The Start refusals, read from the cache without asking the tracker.
-      startable: active ? { ok: false, reason: 'Has a mission' }
-        : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : { ok: true },
+      startable: isDraft ? { ok: false, reason: 'Refine it first' }
+        : active && !unstarted ? { ok: false, reason: 'Has a mission' }
+          : item.state === config.states.in_progress ? { ok: false, reason: 'Already in progress' } : { ok: true },
+      ...(isDraft ? {
+        refine: active && !unstarted
+          ? { ok: false, reason: 'Has a mission', refinement: null }
+          : { ok: true, reason: null, refinement: mission !== null && unstarted ? this.#refinementOf(mission.id, trackerLabel(config.kind)) : null },
+      } : {}),
+    };
+  }
+
+  /** Where a draft's refinement stands, in words the Board shows beside its buttons (#135). */
+  #refinementOf(missionId: MissionId, label: string): NonNullable<NonNullable<BoardItemView['refine']>['refinement']> | null {
+    let view: RefinementView;
+    try {
+      const v = this.deps.refinement?.view(missionId);
+      if (v === undefined) return null;
+      view = v;
+    } catch {
+      return null;
+    }
+    const r = view.readiness;
+    const running = view.state === 'running';
+    const accepted = view.criteria.filter((c) => c.status === 'accepted').length;
+    return {
+      running,
+      failure: view.failure,
+      ready: !running && r.ready,
+      sentence: running ? 'The product agent is reading it and will propose Done-when lines and questions.'
+        : r.ready ? `Ready to write to ${label}: ${accepted} Done-when ${accepted === 1 ? 'line' : 'lines'}.`
+          : `${readinessTodo(r)} on its mission, then write it to ${label}.`,
     };
   }
 
@@ -419,11 +464,16 @@ export class TrackerService {
     const fresh = await tracker.get(cached?.ref ?? refForKey(config, key));
     const item = this.deps.items.upsert(workspaceId, fresh);
     this.#refuseIfStarted(workspaceId, item);
+    if (config.states.draft?.includes(fresh.state) === true) {
+      throw new TandemiseError('CONFLICT', `${fresh.key} is a draft in ${trackerLabel(config.kind)}. Refine it first.`);
+    }
     if (fresh.state === config.states.in_progress) {
       throw new TandemiseError('CONFLICT', fresh.assignee === null
         ? `${fresh.key} is already in progress.`
         : `${fresh.key} is already in progress (${fresh.assignee}).`);
     }
+    const refined = this.#unstartedMission(workspaceId, item);
+    if (refined !== undefined) return this.#startRefined(workspaceId, tracker, config, item, refined);
     // Claimed before the mission exists (spec §7 step 1), under the id it will
     // have, so the mission's own start finds the claim already its own (Ruling 22).
     const missionId = ids.mission();
@@ -484,8 +534,141 @@ export class TrackerService {
   }
 
   #refuseIfStarted(workspaceId: WorkspaceId, item: TrackedItem): void {
-    const active = (this.#missionsByItem(workspaceId).get(item.id) ?? []).find((m) => !isTerminalMissionStatus(m.status));
-    if (active !== undefined) throw new TandemiseError('CONFLICT', `${item.key} already has a mission: ${active.title}.`);
+    const active = this.#activeMission(workspaceId, item);
+    if (active !== undefined && !isUnstarted(active, item)) throw new TandemiseError('CONFLICT', `${item.key} already has a mission: ${active.title}.`);
+  }
+
+  #activeMission(workspaceId: WorkspaceId, item: TrackedItem): Mission | undefined {
+    return (this.#missionsByItem(workspaceId).get(item.id) ?? []).find((m) => !isTerminalMissionStatus(m.status));
+  }
+
+  /** The item's mission when it is a refined draft no Start has taken yet (#135). */
+  #unstartedMission(workspaceId: WorkspaceId, item: TrackedItem): Mission | undefined {
+    const active = this.#activeMission(workspaceId, item);
+    return active !== undefined && isUnstarted(active, item) ? active : undefined;
+  }
+
+  /**
+   * Start on an item refined from a draft (#135): its mission already holds
+   * the accepted Done-when lines, so Start plans that mission rather than
+   * making a second one, then writes to the tracker as any Start does.
+   */
+  async #startRefined(workspaceId: WorkspaceId, tracker: PrimaryTracker, config: TrackerConfig, item: TrackedItem, mission: Mission): Promise<Mission> {
+    const label = trackerLabel(config.kind);
+    const claim = await this.deps.claims.item({ workspaceId, itemRef: item.ref, itemTitle: item.title, itemUrl: item.url, localRef: mission.id });
+    if (!claim.ok) throw new TandemiseError('CONFLICT', claim.reason);
+    try {
+      await this.deps.planDraft?.(mission.id);
+    } catch (e) {
+      this.deps.log.info('tracker.start_left_draft', { workspaceId, missionId: mission.id, reason: errorMessage(e) });
+    }
+    this.deps.log.info('tracker.started_refined', { workspaceId, ref: item.ref, missionId: mission.id });
+    await this.#writeStart(workspaceId, tracker, config, item, mission);
+    const started = this.deps.missions.get(mission.id) ?? mission;
+    try {
+      await this.#syncActivity(workspaceId, tracker, config, this.deps.items.get(item.id) ?? item, started, undefined, true);
+    } catch (e) {
+      this.deps.recorder.note({ workspaceId, missionId: mission.id }, `Couldn't comment on ${item.key} in ${label}: ${sentence(e)}.`, 'warn');
+    }
+    this.deps.recorder.note({ workspaceId, missionId: mission.id }, `Started from ${label} ${item.key}.`);
+    this.deps.recorder.invalidate('missions', mission.id);
+    this.#invalidate();
+    return this.deps.missions.get(mission.id) ?? mission;
+  }
+
+  // ------------------------------------------------------------------ Refine a draft (#135)
+
+  /**
+   * Refine on a draft item: a draft mission linked to the item, and P6's
+   * refinement pass on it. Nothing is written to the tracker: the person
+   * decides each proposal on the mission, then writes the result back with
+   * `markReady`. A second Refine answers the same mission.
+   */
+  async refine(caller: Caller, workspaceId: WorkspaceId, key: string): Promise<Mission> {
+    this.#requireWorkspace(workspaceId);
+    const seat = requireSeat(this.deps, workspaceId, caller);
+    const refiner = this.deps.people.get(caller.personId)?.displayName ?? seat.name;
+    return this.#serial(workspaceId, async () => {
+      const { tracker, config } = await this.deps.trackers.for(workspaceId);
+      const label = trackerLabel(config.kind);
+      const drafts = config.states.draft ?? [];
+      if (drafts.length === 0) throw new TandemiseError('PRECONDITION_FAILED', `Map ${label}'s draft state in Settings → Intake first.`);
+      const refinement = this.deps.refinement;
+      if (refinement === undefined) throw new TandemiseError('PRECONDITION_FAILED', 'Refinement is not available on this daemon.');
+      const cached = this.deps.items.byKey(workspaceId, key.trim());
+      const fresh = await tracker.get(cached?.ref ?? refForKey(config, key.trim()));
+      const item = this.deps.items.upsert(workspaceId, fresh);
+      if (!drafts.includes(fresh.state)) {
+        throw new TandemiseError('CONFLICT', `${fresh.key} is not a draft in ${label} (${fresh.state}). Start it instead.`);
+      }
+      const active = this.#activeMission(workspaceId, item);
+      if (active !== undefined) {
+        if (!isUnstarted(active, item)) throw new TandemiseError('CONFLICT', `${fresh.key} already has a mission: ${active.title}.`);
+        return active;
+      }
+      const workflow = (fresh.type === undefined ? undefined : config.workflows?.[fresh.type]) ?? FACTORY_WORKFLOW_ID;
+      // A draft, never planned or queued: refinement happens before planning (P6).
+      const mission = await this.deps.createMission(caller, {
+        workspaceId,
+        title: missionTitle(fresh),
+        goal: trackerGoal({
+          label, key: fresh.key, starterName: refiner, url: fresh.url, title: fresh.title, description: fresh.description,
+          sources: this.#linkedSignals(workspaceId, item.ref).map((s) => ({ label: sourceLabel(s.kind), instance: s.instance, context: goalContext(s) })),
+        }),
+        successCriteria: [...parseCriteria(fresh.description)],
+        workflowPreset: workflow,
+      }, { trackerItemId: item.id });
+      this.deps.recorder.note({ workspaceId, missionId: mission.id },
+        `Refining ${label} ${fresh.key}. Nothing is written to ${label} until you write it back from the Board.`);
+      refinement.begin(caller, mission.id);
+      this.deps.log.info('tracker.refining', { workspaceId, ref: item.ref, missionId: mission.id });
+      this.#invalidate();
+      return this.deps.missions.get(mission.id) ?? mission;
+    });
+  }
+
+  /**
+   * "Write to <tracker> and mark ready" (#135), the person's click and the
+   * only tracker write of a refinement: the refined description (the accepted
+   * Done-when lines and the answered questions), the first ready state, and
+   * the activity comment saying who refined it. Each write is safe to repeat.
+   */
+  async markReady(caller: Caller, workspaceId: WorkspaceId, key: string): Promise<BoardView> {
+    this.#requireWorkspace(workspaceId);
+    const seat = requireSeat(this.deps, workspaceId, caller);
+    const by = this.deps.people.get(caller.personId)?.displayName ?? seat.name;
+    await this.#serial(workspaceId, async () => {
+      const { tracker, config } = await this.deps.trackers.for(workspaceId);
+      const label = trackerLabel(config.kind);
+      const cached = this.deps.items.byKey(workspaceId, key.trim());
+      const fresh = await tracker.get(cached?.ref ?? refForKey(config, key.trim()));
+      const item = this.deps.items.upsert(workspaceId, fresh);
+      if (!(config.states.draft ?? []).includes(fresh.state)) {
+        throw new TandemiseError('CONFLICT', `${fresh.key} is no longer a draft in ${label} (${fresh.state}).`);
+      }
+      const mission = this.#unstartedMission(workspaceId, item);
+      const view = mission === undefined ? undefined : this.deps.refinement?.view(mission.id);
+      if (mission === undefined || view === undefined) throw new TandemiseError('CONFLICT', `Refine ${fresh.key} first.`);
+      if (view.state === 'running') throw new TandemiseError('CONFLICT', `${fresh.key} is still being refined. Wait for the proposals.`);
+      if (!view.readiness.ready) throw new TandemiseError('PRECONDITION_FAILED', `${readinessTodo(view.readiness)} on its mission first.`);
+      const criteria = view.criteria.filter((c) => c.status === 'accepted').map((c) => c.statement);
+      const answered = view.questions.flatMap((q) => (q.status === 'answered' && q.answer !== null ? [{ question: q.text, answer: q.answer }] : []));
+      const ready = config.states.ready[0]!;
+      const description = refinedDescription(fresh.description, criteria, answered);
+      await tracker.updateDescription(item.ref, description);
+      await tracker.transition(item.ref, ready);
+      this.deps.items.upsert(workspaceId, { ...fresh, description, state: ready });
+      const body = refinedActivityLine({ by, criteria: criteria.length, answered: answered.length, from: fresh.state, to: ready });
+      const stored = this.deps.items.comment(workspaceId, item.ref, 'tandemise:activity');
+      const { commentId } = await tracker.comment(item.ref, { marker: 'tandemise:activity', body, ...(stored === undefined ? {} : { knownId: stored.commentId }) });
+      this.deps.items.saveComment(workspaceId, item.ref, 'tandemise:activity', commentId, body);
+      this.deps.recorder.note({ workspaceId, missionId: mission.id, actorId: seat.id },
+        `${by} wrote the refined description and ${criteria.length} Done-when ${criteria.length === 1 ? 'line' : 'lines'} to ${label} ${fresh.key} and moved it from ${fresh.state} to ${ready}. Start it from the Board.`);
+      this.deps.log.info('tracker.refined_written', { workspaceId, ref: item.ref, missionId: mission.id, criteria: criteria.length });
+      this.deps.recorder.invalidate('missions', mission.id);
+      this.#invalidate();
+    });
+    return this.board(workspaceId);
   }
 
   /**
@@ -530,6 +713,8 @@ export class TrackerService {
       const mission = missions.find((m) => !isTerminalMissionStatus(m.status));
       const item = this.deps.items.get(itemId);
       if (mission === undefined || item === undefined) return [];
+      // A draft no Start has taken (a refinement, #135) is never moved on Tandemise's own initiative.
+      if (isUnstarted(mission, item)) return [];
       return item.writtenState === null && config.states.ready.includes(item.state) ? [{ item, mission }] : [];
     });
     if (waiting.length === 0) return;
@@ -566,6 +751,8 @@ export class TrackerService {
       if ((this.#writeBackRetryAfter.get(itemId) ?? 0) > nowMs) continue;
       const item = this.deps.items.get(itemId);
       if (item === undefined) continue;
+      // A refinement's mission (#135): the tracker hears of it only when the person writes it back, or starts it.
+      if (isUnstarted(mission, item)) continue;
       try {
         const settled = await this.#bringUpToDate(workspaceId, config, tracker, item, mission);
         this.#writeBackRetryAfter.delete(itemId);
@@ -625,10 +812,13 @@ export class TrackerService {
   async #syncActivity(
     workspaceId: WorkspaceId, tracker: PrimaryTracker | (() => Promise<PrimaryTracker>), config: TrackerConfig, item: TrackedItem, mission: Mission,
     links: readonly DeliveryLink[] = deliveryLinks(this.deps.artifacts, mission.id, this.deps.events),
+    /** A Start is a milestone: its comment lands at once, whenever the last edit was (#135). */
+    milestone = false,
   ): Promise<boolean> {
-    const input = this.#activityInput(config, item, mission, links);
-    const body = activityCommentBody(input);
     const stored = this.deps.items.comment(workspaceId, item.ref, 'tandemise:activity');
+    // A draft refined here keeps its "Refined in Tandemise by …" line on top (#135).
+    const input = { ...this.#activityInput(config, item, mission, links), refined: refinedLineOf(stored?.body) };
+    const body = activityCommentBody(input);
     if (stored?.body === body) return true;
     const t = typeof tracker === 'function' ? await tracker() : tracker;
     if (!t.capabilities.editComments) {
@@ -637,7 +827,7 @@ export class TrackerService {
       this.deps.items.saveComment(workspaceId, item.ref, 'tandemise:activity', commentId, body);
       return true;
     }
-    if (stored !== undefined && this.deps.clock.epochMs() - Date.parse(stored.updatedAt) < ACTIVITY_EDIT_EVERY_MS) return false;
+    if (!milestone && stored !== undefined && this.deps.clock.epochMs() - Date.parse(stored.updatedAt) < ACTIVITY_EDIT_EVERY_MS) return false;
     const { commentId } = await t.comment(item.ref, {
       marker: 'tandemise:activity', body, ...(stored === undefined ? {} : { knownId: stored.commentId }),
     });
@@ -743,6 +933,16 @@ function goalContext(signal: IntakeSignal): string {
 function refForKey(config: TrackerConfig, key: string): TrackerRef {
   if (config.kind === 'github-issues') return trackerRef('github', `${config.repo ?? ''}#${key.replace(/^.*#/, '')}`);
   return trackerRef('youtrack', key.toUpperCase());
+}
+
+/**
+ * A mission linked to its item that no Start has taken: still a draft, and
+ * the item never moved by Tandemise. Only Refine (#135) makes one; Start
+ * adopts it, and neither the write-back nor the Start retry touch the tracker
+ * for it.
+ */
+function isUnstarted(mission: Mission, item: TrackedItem): boolean {
+  return mission.status === 'DRAFT' && item.writtenState === null;
 }
 
 function missionTitle(item: Pick<TrackerItem, 'title' | 'key'>): string {

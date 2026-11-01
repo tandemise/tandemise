@@ -31,6 +31,7 @@ export const brainTrackerFile = z.object({
       in_review: STATE.optional(),
       done: z.array(STATE).min(1),
       wont_do: z.array(STATE).default([]),
+      draft: z.array(STATE).optional(),
     }),
     onComplete: z.enum(['in_review', 'done']).default('in_review'),
     workflows: z.record(z.string(), z.string()).optional(),

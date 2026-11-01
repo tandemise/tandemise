@@ -75,7 +75,9 @@ async function startFake(name, script, args = []) {
   }
   return readFileSync(`${dir}/url`, 'utf8').trim();
 }
-const ytUrl = REAL ? process.env.TANDEMISE_YOUTRACK_URL : await startFake('youtrack', 'fake-youtrack.mjs', ['--project', 'GAR', '--token', 'perm:acceptance', '--login', 'tandemise-bot']);
+// The fake's own states, plus Draft for I15 (#135): a new issue still starts Open.
+const YT_STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete', 'Draft'].join(',');
+const ytUrl = REAL ? process.env.TANDEMISE_YOUTRACK_URL : await startFake('youtrack', 'fake-youtrack.mjs', ['--project', 'GAR', '--token', 'perm:acceptance', '--login', 'tandemise-bot', '--states', YT_STATES]);
 const sentryUrl = await startFake('sentry', 'fake-sentry.mjs', ['--token', 'sntrys_acceptance', '--org', 'acme', '--project', 'web', '--repos', 'acme/web']);
 const slackUrl = await startFake('slack', 'fake-slack.mjs', ['--workspace', 'acme', '--app-token', 'xapp-acceptance', '--bot-token', 'xoxb-acceptance']);
 // I10's second address for the tracker (Ruling 23): it would take the same token, so a request carrying it shows.
@@ -199,7 +201,7 @@ keepPainting([PORT]);
 
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
-const all = ['i01-board.mjs', 'i02-sentry.mjs', 'i03-slack-same-error.mjs', 'i04-held-back.mjs', 'i05-unsure.mjs', 'i06-start.mjs', 'i07-complete.mjs', 'i08-close-the-loop.mjs', 'i09-cli.mjs', 'i10-brain-sources-and-moved-tracker.mjs', 'i11-factory-ux.mjs', 'i12-setup-papercuts.mjs'];
+const all = ['i01-board.mjs', 'i02-sentry.mjs', 'i03-slack-same-error.mjs', 'i04-held-back.mjs', 'i05-unsure.mjs', 'i06-start.mjs', 'i07-complete.mjs', 'i08-close-the-loop.mjs', 'i09-cli.mjs', 'i10-brain-sources-and-moved-tracker.mjs', 'i11-factory-ux.mjs', 'i12-setup-papercuts.mjs', 'i15-refine-draft.mjs'];
 const scenarios = all
   .filter((file) => !REAL || ['i01', 'i02', 'i06'].some((id) => file.startsWith(id)))
   .filter((file) => !only || only.some((o) => file.includes(o)));
@@ -230,7 +232,7 @@ if (!process.argv.includes('--hold')) {
 
 // ---------------------------------------------------------------- report
 const results = readdirSync(EVIDENCE).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(EVIDENCE, f), 'utf8')));
-const order = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10'];
+const order = ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9', 'I10', 'I11', 'I12', 'I13', 'I14', 'I15'];
 results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 const missing = scenarios.map((f) => `I${Number(f.slice(1, 3))}`).filter((id) => !results.some((r) => r.id === id));
 const lines = [
