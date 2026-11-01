@@ -243,6 +243,11 @@ export class DaemonClient {
     return this.#request('POST', '/repositories/probe', { path });
   }
 
+  /** A repository's name, path or checks (#111: commands and their time budgets). */
+  updateRepository(id: string, body: Partial<AddRepositoryRequest>): Promise<Repository> {
+    return this.#request('PATCH', `/repositories/${id}`, body);
+  }
+
   removeRepository(id: string): Promise<void> {
     return this.#request('DELETE', `/repositories/${id}`);
   }

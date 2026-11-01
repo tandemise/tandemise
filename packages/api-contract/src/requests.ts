@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createEndpointRequest } from './relay.js';
 import {
-  ACCESS_LEVELS, ARTIFACT_TYPES, skillNameProblem, AUTONOMY_LEVELS, CONTRIBUTION_MAX_BYTES, decodedSize, LIMIT_METRICS, MAX_LADDER, MAX_MODEL_NAME, MISSION_PRIORITIES, MISSION_STATUSES, OVERSIGHT_MODES, ROUTINE_HOURS, ROUTINE_KINDS, RUNTIME_CAPABILITIES,
+  ACCESS_LEVELS, ARTIFACT_TYPES, CHECK_NAMES, MAX_CHECK_BUDGET_MINUTES, skillNameProblem, AUTONOMY_LEVELS, CONTRIBUTION_MAX_BYTES, decodedSize, LIMIT_METRICS, MAX_LADDER, MAX_MODEL_NAME, MISSION_PRIORITIES, MISSION_STATUSES, OVERSIGHT_MODES, ROUTINE_HOURS, ROUTINE_KINDS, RUNTIME_CAPABILITIES,
   staffingPatchSchema,
 } from '@tandemise/domain';
 
@@ -135,6 +135,8 @@ export const addRepositoryRequest = z.object({
     lint: z.string().nullable(), test: z.string().nullable(),
     build: z.string().nullable(), devServer: z.string().nullable(),
     devServerUrl: z.string().nullable(),
+    /** Minutes per check (#111); replaces the repository's budgets as a whole. */
+    budgets: z.record(z.enum(CHECK_NAMES), z.number().positive().max(MAX_CHECK_BUDGET_MINUTES)),
   }).partial().optional(),
 });
 export type AddRepositoryRequest = z.infer<typeof addRepositoryRequest>;

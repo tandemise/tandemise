@@ -181,7 +181,7 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
         ...base,
         icon: body.outcome === 'PASS' ? 'check' : body.outcome === 'FAIL' ? 'x' : 'info',
         tone: body.outcome === 'PASS' ? 'succeeded' : body.outcome === 'FAIL' ? 'failed' : 'pending',
-        title: `${titleCase(body.name.replace(/^checks\./, ''))} ${body.outcome === 'PASS' ? 'passed' : body.outcome === 'FAIL' ? 'failed' : 'skipped'}`,
+        title: `${titleCase(body.name.replace(/^checks\./, ''))} ${body.outcome === 'PASS' ? 'passed' : body.outcome === 'FAIL' ? 'failed' : body.outcome === 'TIMEOUT' ? 'ran out of time' : 'skipped'}`,
         detail: body.detail ?? null,
         link: null,
       };

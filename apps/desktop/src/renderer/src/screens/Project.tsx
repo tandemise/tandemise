@@ -13,6 +13,7 @@ import { Merge } from './project/Merge.js';
 import { Issues } from './project/Issues.js';
 import { SetupAsCode } from './project/SetupAsCode.js';
 import { BrainLink } from './project/BrainLink.js';
+import { RepositoryChecks } from './project/RepositoryChecks.js';
 import { Badge, Button, Card, Chip, Tooltip } from '@tandemise/design/react';
 
 const AUTONOMY_ROWS: readonly { key: keyof AutonomySettings; label: string; hint: string; options: readonly string[] }[] = [
@@ -117,6 +118,7 @@ export function Project(): JSX.Element {
                                             {shortenPath(repository.path, 4)}
                                           </div>
                                         </Tooltip>
+                                        <RepositoryChecks repository={repository} />
                                       </div>
                                       <div className="list__aside">
                                         <Chip muted>{repository.defaultBranch}</Chip>
