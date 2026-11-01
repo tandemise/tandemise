@@ -2,7 +2,7 @@
   "name": "@tandemise/desktop",
   "productName": "Tandemise",
   "description": "A local-first desktop OS for running a software company with interchangeable AI workers.",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "license": "Apache-2.0",
   "private": true,
   "author": {
