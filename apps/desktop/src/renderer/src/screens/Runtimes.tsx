@@ -5,7 +5,7 @@ import { PageHeader } from '../components/PageHeader.js';
 import { Icon } from '../components/Icon.js';
 import { ConfirmDialog, Modal } from '../components/Modal.js';
 import { Empty, ErrorState, Field, SkeletonList, StatusDot, Switch } from '../components/primitives.js';
-import { useDaemonMutation, useRuntimes } from '../lib/queries.js';
+import { useDaemonMutation, useRuntimes, useSettings } from '../lib/queries.js';
 import { useWorkspaceId } from '../lib/workspace.js';
 import { dateTime, healthTone, pluralize, shortenPath, titleCase } from '../lib/format.js';
 import { Badge, Banner, Button, Card, Chip, Tooltip } from '@tandemise/design/react';
@@ -261,7 +261,10 @@ function versionLabel(version: string): string {
   return /^\d/.test(version) ? `v${version}` : version;
 }
 
-function DiscoveryModal({ results, onClose }: { results: readonly RuntimeDiscoveryView[]; onClose: () => void }): JSX.Element {
+function DiscoveryModal({ results: found, onClose }: { results: readonly RuntimeDiscoveryView[]; onClose: () => void }): JSX.Element {
+  // The fake runtime is for tests and demos: offered only with developer mode on (#108).
+  const developer = useSettings().data?.developerMode === true;
+  const results = developer ? found : found.filter((d) => d.adapterId !== 'fake');
   // A runtime belongs to the project. Two projects frequently want the same CLI
   // under different logins - a different `configDir` is the whole point of a
   // second profile - so a runtime configured here is this project's, not the

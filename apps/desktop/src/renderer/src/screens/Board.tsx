@@ -176,16 +176,25 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
       </div>
       <div className="list__aside">
         {/* A disabled button takes no focus, so why it cannot start is said beside it, not in a tooltip. */}
-        {blocked !== null ? <span className="dim board__blocked">{blocked}</span> : null}
-        <Tooltip content={`Start ${item.key} as a mission`}>
-          <Button
-            variant="primary" className="board__start"
-            disabled={blocked !== null || start.isPending}
-            onClick={() => start.mutate()}
-          >
-            {start.isPending ? 'Starting…' : 'Start'}
-          </Button>
-        </Tooltip>
+        {item.mission ? (
+          // Already a mission (#108): open it, rather than a Start that can only be refused.
+          <Link href={`/missions/${item.mission.id}`} className="btn board__open">
+            Open mission<span className="visually-hidden"> for {item.key}</span>
+          </Link>
+        ) : (
+          <>
+            {blocked !== null ? <span className="dim board__blocked">{blocked}</span> : null}
+            <Tooltip content={`Start ${item.key} as a mission`}>
+              <Button
+                variant="primary" className="board__start"
+                disabled={blocked !== null || start.isPending}
+                onClick={() => start.mutate()}
+              >
+                {start.isPending ? 'Starting…' : 'Start'}
+              </Button>
+            </Tooltip>
+          </>
+        )}
       </div>
     </div>
   );

@@ -2171,3 +2171,16 @@
   padding: 0 var(--s2) var(--s3);
   background: var(--surface-sunken);
 }
+
+/* A repository path typed or pasted, beside the folder picker (#108). */
+.path-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.path-input .input {
+  flex: 1 1 16rem;
+  min-width: 0;
+}

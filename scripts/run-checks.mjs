@@ -46,6 +46,7 @@ export const OFFLINE_CHECKS = [
   'hold-check',
   'terminal-check',
   'hold-daemon-check',
+  'inherited-fd-check',
   'mcp-integration-check',
   'multirepo-check',
   'p3-contributions-check',
