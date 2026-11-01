@@ -1,0 +1,537 @@
+{
+  "id": "I11",
+  "title": "The factory explains itself: lane before Start, a readable header, what decided the plan, the pull request link",
+  "ok": true,
+  "checks": [
+    {
+      "label": "the Board offers the lane before Start, named for the item",
+      "ok": true,
+      "observed": {
+        "label": "Lane for GAR-50",
+        "options": [
+          "Factory decides",
+          "Quick",
+          "Careful"
+        ],
+        "value": "auto"
+      }
+    },
+    {
+      "label": "proof (API): the mission carries the lane chosen on the Board",
+      "ok": true,
+      "observed": "quick"
+    },
+    {
+      "label": "the header leads with the item, who started it and a link to it",
+      "ok": true,
+      "observed": "YouTrack GAR-50 · started by Demostenes Garcia · Open the issue GAR-50 in YouTrack"
+    },
+    {
+      "label": "then a short summary in plain words (no Markdown)",
+      "ok": true,
+      "observed": "The receipt shows the sum without a label, so people cannot tell it is the amount they paid. The copy should say Total."
+    },
+    {
+      "label": "the whole task is behind a closed disclosure",
+      "ok": true,
+      "observed": {
+        "lead": "YouTrack GAR-50 · started by Demostenes Garcia · Open the issue GAR-50 in YouTrack",
+        "summary": "The receipt shows the sum without a label, so people cannot tell it is the amount they paid. The copy should say Total.",
+        "open": false,
+        "raw": false
+      }
+    },
+    {
+      "label": "1100px light, task closed: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px light, task closed: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px light, task closed: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px light, task open: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 226.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 482
+      }
+    },
+    {
+      "label": "1100px light, task open: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 226.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 482
+      }
+    },
+    {
+      "label": "1100px light, task open: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 226.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 482
+      }
+    },
+    {
+      "label": "1100px dark, task closed: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px dark, task closed: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px dark, task closed: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 94.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 218
+      }
+    },
+    {
+      "label": "1100px dark, task open: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 478.75,
+        "titleTop": 48.5,
+        "titleBottom": 71,
+        "delRight": 1072,
+        "delBottom": 253.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 611.5
+      }
+    },
+    {
+      "label": "1100px dark, task open: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 478.75,
+        "titleTop": 48.5,
+        "titleBottom": 71,
+        "delRight": 1072,
+        "delBottom": 253.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 611.5
+      }
+    },
+    {
+      "label": "1100px dark, task open: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 478.75,
+        "titleTop": 48.5,
+        "titleBottom": 71,
+        "delRight": 1072,
+        "delBottom": 253.875,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 611.5
+      }
+    },
+    {
+      "label": "1440px light, task closed: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px light, task closed: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px light, task closed: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px light, task open: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "1440px light, task open: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "1440px light, task open: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "1440px dark, task closed: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px dark, task closed: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px dark, task closed: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 160.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 94.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 274.75
+      }
+    },
+    {
+      "label": "1440px dark, task open: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "1440px dark, task open: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "1440px dark, task open: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 424.75,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 226.875,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 538.75
+      }
+    },
+    {
+      "label": "a plain mission at 1100px: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 58.125,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission at 1100px: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 58.125,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission at 1100px: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1072,
+        "delBottom": 58.125,
+        "width": 1100,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission at 1440px: the title sits inside the header, and the header contains it",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 58.125,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission at 1440px: Delete stays inside the window",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 58.125,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission at 1440px: the tabs stay on screen",
+      "ok": true,
+      "observed": {
+        "barTop": 0,
+        "barBottom": 87.25,
+        "titleTop": 32,
+        "titleBottom": 54.5,
+        "delRight": 1412,
+        "delBottom": 58.125,
+        "width": 1440,
+        "height": 820,
+        "tabsBottom": 144.5
+      }
+    },
+    {
+      "label": "a plain mission still shows its goal as written",
+      "ok": true,
+      "observed": "Tidy the onboarding copy"
+    },
+    {
+      "label": "\"Why these steps\" says which signal set each of type, size and risk",
+      "ok": true,
+      "observed": "Type feature: the tracker calls it a Feature.\nSize tiny: the item says \"copy\".\nRisk low: nothing it names is in a sensitive area."
+    },
+    {
+      "label": "Done-when shows the line's Markdown as text: bold and code, not asterisks",
+      "ok": true,
+      "observed": {
+        "text": "Done when\nYou check these at review\n\nNo step in this plan verifies these lines, so you check them when you review the pull request.\n\nU1\nThe receipt says Total next to amount\nNo step in this plan verifies this; you check it at review\nAt your review",
+        "code": "amount",
+        "strong": "Total"
+      }
+    },
+    {
+      "label": "with no step to verify it, it says once that you check it at review",
+      "ok": true,
+      "observed": "Done when\nYou check these at review\n\nNo step in this plan verifies these lines, so you check them when you review the pull request.\n\nU1\nThe receipt says Total next to amount\nNo step in this plan verifies this; you check it at review\nAt your review"
+    }
+  ],
+  "notes": [
+    "the ship step did not open a pull request within 4 minutes in this run; the link is covered by merge-check"
+  ],
+  "shots": [
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-board-lane.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1100-light-closed.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1100-light-open.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1100-dark-closed.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1100-dark-open.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1440-light-closed.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1440-light-open.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1440-dark-closed.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-1440-dark-open.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-plain-1100.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-header-plain-1440.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-why-these-steps.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-ae91803e15e76e196/scratch/acceptance/intake/evidence/I11-done-when.png"
+  ]
+}

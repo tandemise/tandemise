@@ -117,6 +117,8 @@ const UI_PACKAGE_NAMES = new Set(Object.keys(UI_PACKAGES).map((n) => `@tandemise
   // value imports or re-exports of any kind (type-only ones are erased).
   const PURE_SUBPATH_SOURCES = new Map([
     ['@tandemise/domain/staffing-presets', 'packages/domain/src/staffing-presets.ts'],
+    // The mission header reads a tracker item's goal with the rule the intake check proves.
+    ['@tandemise/domain/tracker-goal', 'packages/domain/src/tracker-goal.ts'],
     // The terminal panel reads Claude Code's start-up questions with the rule the hold check proves.
     ['@tandemise/domain/claude-prompts', 'packages/domain/src/claude-prompts.ts'],
     // The artifact reader hides YAML front matter with the same rule the daemon uses.

@@ -61,6 +61,24 @@ section('pure: refs, markers and the Sources section');
 }
 
 // ------------------------------------------------------------------ youtrack
+section('pure: the mission header for a tracker item (#105)');
+{
+  const G = await import('@tandemise/domain/tracker-goal');
+  const goal = D.trackerGoal({
+    label: 'GitHub', key: '#97', starterName: 'Demostenes Garcia', url: 'https://github.com/tandemise/tandemise/issues/97',
+    title: 'docs: say how to add Claude Code',
+    description: '## What happened\n\nQUICKSTART step 2 says Claude Code is **detected automatically**; it is not, you press `Discover runtimes`.\n\n## Done when\n\n- QUICKSTART step 2 says to press **Discover runtimes**\n- `npm run ci` passes.',
+    sources: [],
+  });
+  const parts = G.parseTrackerGoal(goal);
+  check('a tracker goal parses into its lead', parts?.label === 'GitHub' && parts.key === '#97' && parts.starter === 'Demostenes Garcia' && parts.url.endsWith('/issues/97'), parts);
+  check('its summary is the first prose paragraph, Markdown out', parts?.summary === 'QUICKSTART step 2 says Claude Code is detected automatically; it is not, you press Discover runtimes.', parts?.summary);
+  check('a hand-written goal is not a tracker goal', G.parseTrackerGoal('Make the onboarding faster') === null);
+  const long = G.parseTrackerGoal(D.trackerGoal({ label: 'YouTrack', key: 'APP-1', starterName: 'Ana', url: 'https://x.youtrack.cloud/issue/APP-1', title: 't', description: `${'word '.repeat(80)}end.`, sources: [] }));
+  check('a long summary is cut short', long !== null && long.summary.length <= G.GOAL_SUMMARY_CHARS + 1 && long.summary.endsWith('…'), long?.summary);
+  check('inline Markdown reads as text', G.plainInline('Press **Discover runtimes** in `Settings`, see [docs](https://x)') === 'Press Discover runtimes in Settings, see docs');
+}
+
 section('youtrack: the adapter against the fake');
 let Y;
 try {

@@ -189,8 +189,9 @@
 .topbar {
   display: flex;
   align-items: center;
-  height: 74px;
-  padding: 0 var(--s7);
+  /* Grows with a subtitle of several lines (a tracker item's header, #105) instead of clipping it. */
+  min-height: 74px;
+  padding: var(--s3) var(--s7);
   flex: none;
   -webkit-app-region: drag;
   border-bottom: 1px solid var(--border);
@@ -250,8 +251,12 @@
 .topbar__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s2);
-  flex: none;
+  /* Shrinks and wraps rather than pushing an action out of the window. */
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .page {
