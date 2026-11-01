@@ -96,6 +96,14 @@
   color: var(--text);
 }
 
+.terminal-panel__hint--question {
+  flex-wrap: wrap;
+}
+
+.terminal-panel__answer {
+  margin-left: auto;
+}
+
 /* An "ask" tool waiting on a decision while the step is held. */
 .terminal-panel__asking {
   display: flex;

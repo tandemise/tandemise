@@ -75,13 +75,35 @@ export const SHELL_TOOLS: readonly string[] = CAPABILITY_TOOL_GUARDS[0]!.tools;
 export function allowedToolRules(
   grants: readonly Capability[],
   settings: Readonly<Record<string, unknown>> = {},
+  mode: PermissionMode = permissionMode(grants, settings),
 ): string[] {
   const rules = artifactOnly(grants) ? [ARTIFACT_WRITE_RULE] : [];
-  const pinned = typeof settings['permissionMode'] === 'string' && (PERMISSION_MODES as readonly string[]).includes(settings['permissionMode']);
-  if (!pinned && anyCapabilityMatches(grants, CORE_CAPABILITIES.shell) && permissionMode(grants, settings) !== 'bypassPermissions') {
+  if (!pinnedMode(settings) && anyCapabilityMatches(grants, CORE_CAPABILITIES.shell) && mode !== 'bypassPermissions') {
     rules.push(...SHELL_TOOLS);
   }
   return rules;
+}
+
+function pinnedMode(settings: Readonly<Record<string, unknown>>): boolean {
+  return typeof settings['permissionMode'] === 'string' && (PERMISSION_MODES as readonly string[]).includes(settings['permissionMode']);
+}
+
+/**
+ * The mode of a held (interactive) session. Interactive Claude Code opens
+ * `bypassPermissions` on a "Bypass Permissions mode" warning whose default
+ * answer is "No, exit" (#102): a person pressing Enter to get past it ends the
+ * session they meant to steer. A person is at the keyboard during a hold, so
+ * the grants' bypass becomes `acceptEdits` with the granted shell tools
+ * allowed by rule: the same reach, and anything else asks the person present.
+ * A profile that pins its mode keeps it (`interactiveSettings` then
+ * acknowledges the warning for that session only).
+ */
+export function interactivePermissionMode(
+  grants: readonly Capability[],
+  settings: Readonly<Record<string, unknown>>,
+): PermissionMode {
+  const mode = permissionMode(grants, settings);
+  return mode === 'bypassPermissions' && !pinnedMode(settings) ? 'acceptEdits' : mode;
 }
 
 /**
@@ -145,15 +167,16 @@ export interface ClaudeInvocation {
  * the strict MCP config. Headless and interactive each add their own framing
  * around this one list, so the two cannot drift apart.
  */
-function sharedFlags(request: RunRequest): string[] {
+function sharedFlags(request: RunRequest, interactive = false): string[] {
   const settings = request.profile.settings;
   const args: string[] = [];
+  const mode = interactive ? interactivePermissionMode(request.grants, settings) : permissionMode(request.grants, settings);
 
   // The engine resolves the model per run (P12); an older caller leaves it to the profile.
   const model = request.model !== undefined ? request.model : settings['model'];
   if (typeof model === 'string' && model.length > 0) args.push('--model', model);
 
-  args.push('--permission-mode', permissionMode(request.grants, settings));
+  args.push('--permission-mode', mode);
 
   // The user's own settings stay out unless the profile says otherwise. Loaded
   // by default, a worker ran the user's PreToolUse hooks (rewriting its shell
@@ -164,7 +187,7 @@ function sharedFlags(request: RunRequest): string[] {
   if (settings['userSettings'] !== 'inherit') args.push('--setting-sources', 'project,local');
 
   const allowed = [...new Set([
-    ...allowedToolRules(request.grants, settings),
+    ...allowedToolRules(request.grants, settings, mode),
     // The run-scoped gateway only publishes tools this assignment was granted,
     // and every call through it is decided by Tandemise's policy engine - with
     // an approval card when the grant says ask. Without an allow rule headless
@@ -261,9 +284,15 @@ export function buildInteractiveInvocation(
   sessionRef: string | null,
   opts: { readonly sessionFile: string; readonly initialPrompt: string | null },
 ): Pick<InteractiveInvocation, 'args' | 'sessionFile'> {
-  const args = sharedFlags(request);
+  const args = sharedFlags(request, true);
   args.push('--settings', JSON.stringify({
     hooks: { SessionStart: [{ hooks: [{ type: 'command', command: sessionHookCommand(opts.sessionFile) }] }] },
+    // A profile that pinned bypassPermissions chose it for Tandemise's own
+    // worktree: the warning is acknowledged in this session's flag settings,
+    // never in the person's Claude Code config. Verified on Claude Code 2.1.316.
+    ...(interactivePermissionMode(request.grants, request.profile.settings) === 'bypassPermissions'
+      ? { skipDangerousModePermissionPrompt: true }
+      : {}),
   }));
   if (sessionRef !== null) args.push('--resume', sessionRef);
   args.push(...stringList(request.profile.args));

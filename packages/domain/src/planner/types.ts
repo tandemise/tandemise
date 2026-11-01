@@ -29,6 +29,12 @@ export interface ProfileSignal {
   readonly value: string;
   /** What it contributed, e.g. "type fix". An overruled signal's effect starts with "disagrees:". */
   readonly effect: string;
+  /**
+   * The signal in a person's words, when its name and value would not say it
+   * plainly (#103): `the item says "copy"` for a keyword rule. Absent on
+   * decisions stored before it existed.
+   */
+  readonly said?: string;
 }
 
 export interface ProfileArea {
