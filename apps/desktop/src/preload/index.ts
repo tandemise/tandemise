@@ -31,6 +31,8 @@ const bridge: TandemiseBridge = {
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   revealInFinder: (path) => ipcRenderer.invoke(IPC.revealInFinder, path),
   testNotification: () => ipcRenderer.invoke(IPC.notificationTest),
+  notificationHealth: () => ipcRenderer.invoke(IPC.notificationHealth),
+  notificationDesktopEntry: (action) => ipcRenderer.invoke(IPC.notificationDesktopEntry, action),
   onNotificationOpen(listener) {
     const handler = (_event: unknown, target: NotificationOpen): void => listener(target);
     ipcRenderer.on(IPC.notificationOpen, handler);
