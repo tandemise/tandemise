@@ -43,6 +43,55 @@ export interface NotificationOpen {
   readonly workspaceId: string | null;
 }
 
+/**
+ * Whether a notification from Tandemise reaches the person, as far as the app
+ * can tell from the operating system (Settings → Notifications).
+ *
+ * - `ready`: the system takes notifications and shows them as banners.
+ * - `hidden`: the system takes them but shows no banner (GNOME's Do Not
+ *   Disturb, banners or notifications turned off for Tandemise); they wait in
+ *   the system's notification list.
+ * - `unavailable`: the system takes none. Nothing is recorded as notified, so
+ *   every item is announced once it can be.
+ * - `unknown`: the system does not say (macOS and Windows keep the person's
+ *   choice to themselves); a test notification is the way to check.
+ */
+export type NotificationReach = 'ready' | 'hidden' | 'unavailable' | 'unknown';
+
+export interface NotificationHealth {
+  readonly reach: NotificationReach;
+  /** One plain sentence on what happens to a notification now. */
+  readonly summary: string;
+  /** What to do about it, or null when nothing needs doing. */
+  readonly advice: string | null;
+  /** The notification server, "GNOME Shell 50.1"; null when the platform has none to name. */
+  readonly server: string | null;
+  /**
+   * Linux only: the app's `.desktop` entry, which is how the desktop finds the
+   * name and icon to show on a notification. An AppImage installs none of its
+   * own; `install` offers to add one (with the person's consent, from Settings),
+   * `remove` takes back the one Tandemise added.
+   */
+  readonly desktopEntry: {
+    readonly state: 'installed' | 'missing' | 'not-applicable';
+    readonly offer: 'install' | 'remove' | null;
+    readonly path: string | null;
+  };
+  /** The last notification the system refused, if any since the app started. */
+  readonly lastFailure: { readonly at: string; readonly reason: string } | null;
+}
+
+/** What "Send a test notification" found out. */
+export interface NotificationTestResult {
+  /** The notification server took it (it answered with an id; macOS and Windows reported it shown). */
+  readonly accepted: boolean;
+  /** `yes`: a banner is on screen now. `no`: taken, but no banner. `unknown`: the system does not say. */
+  readonly shown: 'yes' | 'no' | 'unknown';
+  /** One sentence for Settings. */
+  readonly message: string;
+  readonly health: NotificationHealth;
+}
+
 export type Platform = 'darwin' | 'win32' | 'linux' | (string & {});
 
 export interface TandemiseBridge {
@@ -55,8 +104,12 @@ export interface TandemiseBridge {
   selectDirectory(title?: string): Promise<string | null>;
   openExternal(url: string): Promise<void>;
   revealInFinder(path: string): Promise<void>;
-  /** Settings → "Send a test notification" (P16). */
-  testNotification(): Promise<void>;
+  /** Settings → "Send a test notification" (P16): whether the system took it, and whether it shows. */
+  testNotification(): Promise<NotificationTestResult>;
+  /** Settings → Notifications: whether notifications reach the person, and why not. */
+  notificationHealth(): Promise<NotificationHealth>;
+  /** Linux AppImage: add (`install`) or take back (`remove`) Tandemise's `.desktop` entry. Only on the person's click. */
+  notificationDesktopEntry(action: 'install' | 'remove'): Promise<NotificationHealth>;
   /** A notification was clicked: open this route. Returns an unsubscribe. */
   onNotificationOpen(listener: (target: NotificationOpen) => void): () => void;
   /**
@@ -88,6 +141,8 @@ export const IPC = {
   notificationTest: 'notifications:test',
   notificationOpen: 'notifications:open',
   notificationDebug: 'notifications:debug',
+  notificationHealth: 'notifications:health',
+  notificationDesktopEntry: 'notifications:desktop-entry',
   appInfo: 'app:info',
   testAboutPanelOptions: 'test:about-panel-options',
 } as const;
