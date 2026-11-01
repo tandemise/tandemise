@@ -402,16 +402,16 @@ export class TrackerService {
    * moves to in progress in the tracker. Refusals are `CONFLICT` with the
    * sentence to show.
    */
-  async start(caller: Caller, workspaceId: WorkspaceId, key: string): Promise<Mission> {
+  async start(caller: Caller, workspaceId: WorkspaceId, key: string, lane?: 'quick' | 'careful'): Promise<Mission> {
     this.#requireWorkspace(workspaceId);
     const seat = requireSeat(this.deps, workspaceId, caller);
     const starter = this.deps.people.get(caller.personId)?.displayName ?? seat.name;
     // In the project's queue: a second Start of the same item waits for the
     // first, and then finds its mission (Review Focus 4).
-    return this.#serial(workspaceId, () => this.#start(caller, starter, workspaceId, key.trim()));
+    return this.#serial(workspaceId, () => this.#start(caller, starter, workspaceId, key.trim(), lane));
   }
 
-  async #start(caller: Caller, starter: string, workspaceId: WorkspaceId, key: string): Promise<Mission> {
+  async #start(caller: Caller, starter: string, workspaceId: WorkspaceId, key: string, lane?: 'quick' | 'careful'): Promise<Mission> {
     const { tracker, config } = await this.deps.trackers.for(workspaceId);
     const cached = this.deps.items.byKey(workspaceId, key);
     if (cached !== undefined) this.#refuseIfStarted(workspaceId, cached);
@@ -447,6 +447,8 @@ export class TrackerService {
       // `queued`: a started item is the person's work, not the backlog's.
       ...(criteria.length > 0 ? { planNow: true } : {}),
       workflowPreset: workflow,
+      // A lane the person chose on the Board (#103); only the factory plans by lane.
+      ...(lane !== undefined && workflow === FACTORY_WORKFLOW_ID ? { lane } : {}),
     };
     let mission: Mission;
     try {

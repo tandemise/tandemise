@@ -1340,12 +1340,16 @@ export class TaskExecutor {
     // 11(b). Gate feedback into the retry. Shown on the row, and kept in
     //        `retryFeedback` so the next attempt's prompt can quote it verbatim
     //        however long the task waits - even past a block and a manual retry.
-    const feedback = verdict.detail;
+    // The gate only says which fact failed ("checks.tests is FAIL"); the check's
+    // own detail says why - a test's output, or that it ran out of time. An
+    // agent told only the first went looking for a broken test that a timeout
+    // never implied, so the retry quotes the failed checks the gate names too.
+    const feedback = withFailedChecks(verdict.detail, checks);
     const retrying = task.attempts < task.retryPolicy.maxAttempts;
     // The agent gets the measurement verbatim; a person reading the row gets the
     // round's line when that measurement is only an unanswered note, since its
     // ids and paths say nothing to them.
-    const reason = unansweredLine(harvest, gate, runFailure, retrying) ?? feedback;
+    const reason = unansweredLine(harvest, gate, runFailure, retrying) ?? verdict.detail;
     if (retrying) {
       this.#setStatus(task, scope, 'READY', reason, { retryFeedback: feedback });
       return {
@@ -2920,6 +2924,17 @@ function plannedChecksNote(planned: readonly PlannedCheck[]): string {
       + 'everything again. Run only the narrow, fast checks for what you changed (one test file, one package). '
       + 'A change to documentation only needs no test run at all.',
   ].join('\n');
+}
+
+/**
+ * The gate's own words, then the detail of each failed check the gate names:
+ * `checks.tests: \`npm test\` exceeded its time budget after 600008ms.`, or
+ * the tail of a failing test run. Nothing is added when no named check failed.
+ */
+function withFailedChecks(gateDetail: string, checks: readonly CheckResult[]): string {
+  const failed = checks.filter((c) => c.outcome === 'FAIL' && gateDetail.includes(c.name));
+  if (failed.length === 0) return gateDetail;
+  return [gateDetail, ...failed.map((c) => `${c.name}: ${c.detail}`)].join('\n');
 }
 
 function tightenRequest(feedback: string, destinations: readonly string[]): string {

@@ -544,7 +544,11 @@ export type DecideIntakeSignalRequest = z.infer<typeof decideIntakeSignalRequest
  * body, since a GitHub ref holds `/` and `#`.
  */
 export const startBoardItemRequest = z
-  .object({ key: z.string().trim().min(1, 'Name the item to start.').max(200) })
+  .object({
+    key: z.string().trim().min(1, 'Name the item to start.').max(200),
+    /** Quick or Careful, chosen on the Board before Start (#103); absent, the factory decides. */
+    lane: z.enum(['quick', 'careful']).optional(),
+  })
   .strict();
 export type StartBoardItemRequest = z.infer<typeof startBoardItemRequest>;
 

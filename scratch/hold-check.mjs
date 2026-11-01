@@ -47,6 +47,31 @@ section('pure: holdRefusal');
   check('a pending step is refused with some reason', typeof r({}, { status: 'PENDING' }) === 'string');
 }
 
+section('pure: Claude Code start-up questions (#102)');
+{
+  const { claudePromptOnScreen } = await import('@tandemise/domain/claude-prompts');
+  // As Claude Code 2.1.316 draws them (scratch/claude-prompt-probe.mjs).
+  const trust = (selected) => [
+    'Accessing workspace:', '/tmp/home/missions/m/worktrees/build-1',
+    'Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source',
+    "project, or work from your team). If not, take a moment to review what's in this folder first.",
+    "Claude Code'll be able to read, edit, and execute files here.", 'Security guide',
+    `${selected === 'no' ? '❯ ' : '  '}No, exit`, `${selected === 'yes' ? '❯ ' : '  '}Yes, I trust this folder`,
+    'Enter to confirm · Esc to cancel',
+  ].join('\n');
+  const atNo = claudePromptOnScreen(trust('no'));
+  check('the trust question with "No, exit" selected is answered Down then Enter',
+    atNo?.kind === 'trust' && atNo.keys === '\u001b[B\r' && atNo.answer === 'Yes, I trust this folder', atNo);
+  check('with "Yes" already selected, Enter alone', claudePromptOnScreen(trust('yes'))?.keys === '\r');
+  check('with no readable selection, no answer is offered (a blind key could pick "No, exit")', claudePromptOnScreen(trust('none')) === null);
+  const bypass = [
+    'WARNING: Claude Code running in Bypass Permissions mode', 'In Bypass Permissions mode, Claude Code will not ask for your approval before running potentially dangerous',
+    '❯ 1. No, exit', '  2. Yes, I accept', 'Enter to confirm · Esc to cancel',
+  ].join('\n');
+  check('the bypass warning is read too (numbered options)', claudePromptOnScreen(bypass)?.kind === 'bypass' && claudePromptOnScreen(bypass)?.keys === '\u001b[B\r', claudePromptOnScreen(bypass));
+  check('an ordinary screen asks nothing', claudePromptOnScreen('❯ Try "fix typecheck errors"\n⏵⏵ accept edits on (shift+tab to cycle)') === null);
+}
+
 section('pure: nowLine and describeHoldEnd');
 {
   const tool = (name, input) => ({ type: 'tool.started', tool: name, inputSummary: JSON.stringify(input) });
@@ -196,6 +221,26 @@ section('runtime: interactive invocations');
   check('a fresh session passes the initial prompt last, without --resume',
     fresh.at(-1) === 'start here' && !fresh.includes('--resume'), fresh.slice(-3));
   check('adapter declares interactive_resume', new ClaudeCodeAdapter().baseCapabilities.includes('interactive_resume'));
+
+  // #102: Claude Code shows a "Bypass Permissions mode" warning whose default is
+  // "No, exit". A person is at the keyboard during a hold, so the session runs
+  // in acceptEdits with the granted shell tools allowed by rule instead.
+  const full = req(p, { grants: ['filesystem.write', 'shell'] });
+  const fullHeadless = buildInvocation(full, 'sess_1').args;
+  const fullInter = buildInteractiveInvocation(full, 'sess_1', opts).args;
+  check('a write+shell step runs headless in bypassPermissions', after(fullHeadless, '--permission-mode') === 'bypassPermissions', fullHeadless);
+  check('the same step, held, opens in acceptEdits (no bypass warning)', after(fullInter, '--permission-mode') === 'acceptEdits', fullInter);
+  check('held, its granted shell tools are allowed by rule',
+    ['Bash', 'BashOutput', 'KillShell'].every((t) => after(fullInter, '--allowed-tools').split(',').includes(t)), after(fullInter, '--allowed-tools'));
+  check('held, nothing it was granted is disallowed', !fullInter.includes('--disallowed-tools'), fullInter);
+  check('held without a pinned bypass, the settings acknowledge no warning',
+    JSON.parse(after(fullInter, '--settings')).skipDangerousModePermissionPrompt === undefined);
+  const pinned = buildInteractiveInvocation(req(profile('claude-code', { permissionMode: 'bypassPermissions' }), { grants: ['filesystem.write', 'shell'] }), null, opts).args;
+  check('a profile that pins bypassPermissions keeps it when held', after(pinned, '--permission-mode') === 'bypassPermissions', pinned);
+  check('and its session settings acknowledge the warning (never the person\'s own settings)',
+    JSON.parse(after(pinned, '--settings')).skipDangerousModePermissionPrompt === true, after(pinned, '--settings'));
+  const strict = buildInteractiveInvocation(req(profile('claude-code', { permissionMode: 'plan' }), { grants: ['filesystem.write', 'shell'] }), null, opts).args;
+  check('a profile pinned to a stricter mode keeps it when held', after(strict, '--permission-mode') === 'plan', strict);
 
   const fake = new FakeRuntimeAdapter();
   check('the fake declares interactive_resume', fake.baseCapabilities.includes('interactive_resume'));

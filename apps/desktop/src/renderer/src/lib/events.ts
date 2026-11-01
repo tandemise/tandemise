@@ -361,7 +361,8 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
       return {
         ...base, icon: 'check', tone: 'running',
         title: body.ending === 'continued' ? 'Hold ended; the agent continues' : 'Hold released',
-        detail: null, link: null,
+        // Holding stopped the agent's run, and with it any command it had left running in the background (#102).
+        detail: 'Commands the agent had left running in the background were stopped by the hold.', link: null,
       };
     case 'task.handed_back':
       return {

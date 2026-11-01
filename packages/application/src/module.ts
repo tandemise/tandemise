@@ -10,6 +10,7 @@ import { ProposalService } from './services/proposal-service.js';
 import { MergePolicyService, autoMergeAuthorized } from './services/merge-policy-service.js';
 import { actorFor } from './support/identity.js';
 import type { PullRequestPort } from '@tandemise/domain';
+import { describeHoldEnd } from '@tandemise/domain';
 
 /** Until the daemon binds the `gh` flow: every pull request call says there is no GitHub here. */
 const NO_PULL_REQUESTS: PullRequestPort = new Proxy({} as PullRequestPort, {
@@ -438,6 +439,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       log: log(r).child({ component: 'ship' }),
       escalate: (mission, paths) => r.resolve(t.PLANNER_SERVICE).escalate(mission, paths, { fromShip: true }),
       revert: (decisionId, by) => r.resolve(t.SHIP_REVERT).revert(decisionId, by),
+      prFacts: (mission) => shipPrFacts(r, mission),
       pushedSha: (mission, pr) => {
         const opened = r.resolve(t.EVENT_REPOSITORY).listByMission(mission.id)
           .filter((e) => e.body.type === 'ship.pr_opened' && e.body.repo === pr.repo && e.body.number === pr.number);
@@ -1401,6 +1403,32 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
 
 /** Convenience binding for composition roots with no scheduler override. */
 export const applicationModule: TandemiseModule = createApplicationModule();
+
+/**
+ * What the ship step's pull request says beyond the plan (#113): the latest
+ * change set's headline and points, the tracker item the mission came from,
+ * one sentence per hold, and whether QA reported.
+ */
+function shipPrFacts(r: Resolver, mission: import('@tandemise/domain').Mission): import('./engine/ship.js').PrFacts {
+  const artifacts = r.resolve(t.ARTIFACT_REPOSITORY);
+  const change = artifacts.latest(mission.id, 'ChangeSet');
+  const summary = change === undefined ? null
+    : change.handoff != null ? { headline: change.handoff.headline, points: change.handoff.points }
+      : change.summary !== null ? { headline: change.summary, points: [] } : null;
+  const item = mission.trackerItemId == null ? undefined : r.tryResolve(it.TRACKER_ITEM_REPOSITORY)?.get(mission.trackerItemId);
+  const label = item === undefined ? '' : /^https:\/\/github\.com\//.test(item.url) ? 'GitHub' : /youtrack/i.test(item.url) ? 'YouTrack' : 'Tracker item';
+  const tasks = new Map(r.resolve(t.TASK_REPOSITORY).listByMission(mission.id).map((task) => [task.id, task.title]));
+  const members = r.resolve(t.MEMBER_REPOSITORY);
+  const holds = (r.tryResolve(t.TASK_HOLD_REPOSITORY)?.listByMission(mission.id) ?? [])
+    .filter((h) => h.endedAt !== null)
+    .map((h) => `${members.get(h.heldBy)?.name ?? 'A person'} held ${tasks.get(h.taskId) ?? 'a step'}: ${describeHoldEnd(h)}`);
+  return {
+    summary,
+    issue: item === undefined ? null : { label, key: item.key, url: item.url },
+    holds,
+    qaReported: artifacts.latest(mission.id, 'QAReport') !== undefined,
+  };
+}
 
 /**
  * The application's public surface, assembled.

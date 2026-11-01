@@ -175,6 +175,13 @@ section('daemon: intake config, tokens, pushes and the CLI');
     check("a second start exits 1 with the daemon's words", startedAgain.code === 1 && startedAgain.stderr.trim() === 'GAR-1 already has a mission: Checkout fails on Safari.', startedAgain);
     const viaRoute = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-1' });
     check('POST board/start refuses it as 409 too', viaRoute.status === 409 && viaRoute.body?.error?.message === 'GAR-1 already has a mission: Checkout fails on Safari.', viaRoute);
+    // #103: the lane chosen on the Board before Start goes with the mission.
+    fake.putIssue({ summary: 'Typo on the receipt', description: '## Done when\n- [ ] The receipt says "Total"', state: 'Open' });
+    await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+    const quick = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'careful' });
+    check('POST board/start with a lane starts the mission with it', quick.status === 200 && quick.body?.mission?.laneRequest === 'careful', quick.body?.mission ?? quick);
+    const badLane = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'fast' });
+    check('a lane that is not quick or careful is a 400', badLane.status === 400, badLane);
   } catch (e) {
     check('the daemon section ran', false, String(e?.stack ?? e));
   } finally {

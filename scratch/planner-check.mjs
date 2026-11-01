@@ -102,7 +102,8 @@ await attempt('profiles', async () => {
     ['docs title', input({ item: { title: 'docs: fix the install steps' } }), ['docs', 'xs', 'low', 'quick']],
     ['bug typo', input({ item: { trackerType: 'Bug', title: 'Fix typo in settings title' } }), ['fix', 'xs', 'low', 'quick']],
     ['billing feature', input({ item: { trackerType: 'Feature', title: 'Invoices page', criteria: 3 }, paths: ['apps/web/src/billing/page.tsx'] }), ['feature', 'm', 'high', 'careful']],
-    ['deps label', input({ item: { labels: ['dependencies'], title: 'Bump lodash' }, paths: ['package-lock.json'] }), ['deps', 's', 'medium', 'standard']],
+    // One file named and no Done-when lines: tiny (#103), still standard for its sensitive area.
+    ['deps label', input({ item: { labels: ['dependencies'], title: 'Bump lodash' }, paths: ['package-lock.json'] }), ['deps', 'xs', 'medium', 'standard']],
     ['migrate', input({ item: { title: 'Migrate users table', criteria: 2 } }), ['unknown', 'm', 'high', 'careful']],
     ['billing, you chose quick', input({ item: { trackerType: 'Feature', title: 'Invoices page', criteria: 3 }, paths: ['apps/web/src/billing/page.tsx'], person: 'quick' }), ['feature', 'm', 'high', 'quick']],
     ['bug typo + tiebreak payments', input({ item: { trackerType: 'Bug', title: 'Fix typo in settings title' }, tiebreak: { type: 'fix', size: 'xs', areas: ['payments'], why: 'mentions checkout' } }), ['fix', 'xs', 'high', 'careful']],
@@ -128,6 +129,31 @@ await attempt('profiles', async () => {
   check('a failed tiebreak takes the conservative default and says so', failed.size === 'm' && failed.risk === 'medium' && failed.type === 'unknown' && failed.signals.some((s) => s.effect.includes('conservative default')), failed);
   check('a tiebreak saying low never lowers the floor', D.profileTask(input({ item: { title: 'x' }, paths: ['db/migrations/1.sql'], tiebreak: { type: 'fix', size: 'xs', areas: [], why: 'small' } }), cfg).risk === 'high');
   check('history of reverts raises risk', D.profileTask({ ...input({ item: { trackerType: 'Bug', title: 'Fix typo' } }), history: { medianSize: 'xs', revertRate: 0.5, holdRate: 0, n: 4 } }, cfg).risk === 'medium');
+});
+
+await attempt('what decided the profile (#103)', async () => {
+  section('what decided the profile (#103)');
+  const cfg = D.parsePlannerConfig(SPEC_PLANNER).config;
+  const shipped = D.parsePlannerConfig(app.SHIPPED_PLANNER).config;
+  // #95: tiny only because its body said "copy".
+  const copy = D.profileTask(input({ item: { trackerType: 'Bug', title: 'Platform words on Linux', description: 'The copy says Finder on Linux.', criteria: 3 } }), shipped);
+  const lines = D.decidingLines(copy);
+  check('a keyword rule says which word it matched', lines.some((l) => l === 'Size tiny: the item says "copy".'), lines);
+  check('the type says where it came from', lines.some((l) => l === 'Type fix: the tracker calls it a Bug.'), lines);
+  check('risk with nothing raising it says so', lines.some((l) => l === 'Risk low: nothing it names is in a sensitive area.'), lines);
+  // #96: one line, no keyword: no longer a silent "medium".
+  const oneLine = D.profileTask(input({ item: { trackerType: 'Bug', title: 'Project name placeholder', description: 'The project name field shows "Beveloce" as its placeholder. It should say "My project".', criteria: 2 } }), shipped);
+  check('a short description with nothing else said is small, not medium', oneLine.size === 's', oneLine);
+  check('and it goes the quick lane', D.chooseLane(oneLine, shipped, 'auto').lane === 'quick');
+  check('and says why', D.decidingLines(oneLine).some((l) => /^Size small: its description is short \(\d+ words\)/.test(l)), D.decidingLines(oneLine));
+  const oneFile = D.profileTask(input({ item: { title: 'Fix the label', description: 'In `apps/desktop/src/renderer/src/screens/Board.tsx` the label is wrong and it has been wrong for a long time, which several people noticed while setting up their first project over the last weeks.', criteria: 1 }, paths: ['apps/desktop/src/renderer/src/screens/Board.tsx'] }), shipped);
+  check('one file named, few Done-when lines: tiny', oneFile.size === 'xs', oneFile);
+  check('and says which file', D.decidingLines(oneFile).some((l) => l === 'Size tiny: it names one file (apps/desktop/src/renderer/src/screens/Board.tsx).'), D.decidingLines(oneFile));
+  const unsaid = D.profileTask(input({ item: { title: 'Rework onboarding', criteria: 3 } }), cfg);
+  check('nothing said: the Done-when count decides, in words', D.decidingLines(unsaid).some((l) => l === 'Size medium: nothing else set it, and it has 3 Done-when lines.'), D.decidingLines(unsaid));
+  const billing = D.profileTask(input({ item: { trackerType: 'Feature', title: 'Invoices page', criteria: 3 }, paths: ['apps/web/src/billing/page.tsx'] }), cfg);
+  check('one file but three Done-when lines stays medium', billing.size === 'm', billing);
+  check('a sensitivity floor names the area', D.decidingLines(billing).some((l) => l.startsWith('Risk high: it touches payments')), D.decidingLines(billing));
 });
 
 await attempt('lanes', async () => {
