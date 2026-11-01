@@ -4,6 +4,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DaemonConnector } from './daemon-connection.js';
 import { Notifier } from './notifier.js';
+import { NotificationHealthProbe } from './notify-health.js';
 import { IPC, TEST_HOOKS_ARGUMENT, type NotificationOpen } from '../shared/bridge.js';
 import { aboutPanelOptions, appAboutFacts, installApplicationMenu } from './about.js';
 import { WINDOW_BACKGROUND } from '../shared/brand.js';
@@ -13,6 +14,8 @@ const isDev = !app.isPackaged;
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
 
 const APP_NAME = 'Tandemise';
+/** electron-builder's `appId` (electron-builder.config.mjs), which the NSIS installer gives its shortcut. */
+const APP_USER_MODEL_ID = 'dev.tandemise.desktop';
 /** Real-app suites only: exposes the About panel options to the renderer (see `TandemiseTestBridge`). */
 const testHooks = process.env['TANDEMISE_TEST_HOOKS'] === '1';
 /** Built from `@tandemise/design`'s `assets/app-icon.svg` by `npm run icons`. */
@@ -34,6 +37,12 @@ if (isDev && process.platform === 'darwin') {
   const icon = nativeImage.createFromPath(appIconPath);
   if (!icon.isEmpty()) app.dock?.setIcon(icon);
 }
+/**
+ * Windows shows a toast only for an app whose AppUserModelID matches a Start
+ * menu shortcut; the NSIS installer's shortcut carries electron-builder's
+ * `appId`. Linux names the app through package.json `desktopName` instead.
+ */
+if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID);
 
 const connector = new DaemonConnector();
 let mainWindow: BrowserWindow | null = null;
@@ -115,7 +124,8 @@ function openFromNotification(target: NotificationOpen): void {
   else send();
 }
 
-const notifier = new Notifier(connector, () => mainWindow, openFromNotification);
+const notificationProbe = new NotificationHealthProbe(appIconPath);
+const notifier = new Notifier(connector, () => mainWindow, openFromNotification, notificationProbe, appIconPath);
 
 function createTray(): void {
   const icon = nativeImage.createFromPath(join(here, '../../resources/trayTemplate.png'));
@@ -201,6 +211,14 @@ function registerIpc(): void {
   });
 
   ipcMain.handle(IPC.notificationTest, () => notifier.test());
+  ipcMain.handle(IPC.notificationHealth, () => notifier.health());
+  // Writes to the person's apps folder, so only from the Settings button they clicked.
+  ipcMain.handle(IPC.notificationDesktopEntry, (_event, action: unknown) => {
+    if (action === 'install') notificationProbe.installDesktopEntry();
+    else if (action === 'remove') notificationProbe.removeDesktopEntry();
+    else throw new Error(`Unknown action '${String(action)}'.`);
+    return notifier.health();
+  });
   ipcMain.handle(IPC.notificationDebug, (_event, op: unknown, arg: unknown) => {
     if (!Notifier.recording) throw new Error('Notification debugging is only available with TANDEMISE_NOTIFY_RECORD set.');
     return notifier.debug(typeof op === 'string' ? op : '', arg);

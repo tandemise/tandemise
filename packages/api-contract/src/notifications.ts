@@ -44,3 +44,14 @@ export const takeNotificationsRequest = z.object({
   suppress: z.boolean().optional(),
 }).strict();
 export type TakeNotificationsRequest = z.infer<typeof takeNotificationsRequest>;
+
+export const releaseNotificationsRequest = z.object({
+  /** The ids of a notice the operating system did not accept; they are announced again later. */
+  ids: z.array(z.string().min(1)).min(1).max(500),
+}).strict();
+export type ReleaseNotificationsRequest = z.infer<typeof releaseNotificationsRequest>;
+
+export interface NotificationReleaseView {
+  /** How many ids went back to "not yet announced". */
+  readonly released: number;
+}

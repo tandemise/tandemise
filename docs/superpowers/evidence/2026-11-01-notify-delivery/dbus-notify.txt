@@ -1,0 +1,151 @@
+method call time=1793546753.060959 sender=:1.37 -> destination=:1.12 serial=60 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Tandemise"
+   uint32 0
+   string ""
+   string "Decision needed"
+   string "Allow a network call"
+   array [
+      string "default"
+      string "Show"
+   ]
+   array [
+      dict entry(
+         string "sender-pid"
+         variant             int64 3514749
+      )
+      dict entry(
+         string "desktop-entry"
+         variant             string "tandemise"
+      )
+      dict entry(
+         string "urgency"
+         variant             byte 1
+      )
+      dict entry(
+         string "image-data"
+         variant             struct {
+               int32 512
+               int32 512
+               int32 2048
+               boolean true
+               int32 8
+               int32 4
+               array of bytes [ …the icon's RGBA pixels, elided… ]
+            }
+      )
+   ]
+   int32 -1
+method return time=1793546753.309159 sender=:1.12 -> destination=:1.37 serial=31 reply_serial=60
+   uint32 1
+
+method call time=1793546763.648658 sender=:1.37 -> destination=:1.12 serial=61 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Tandemise"
+   uint32 0
+   string ""
+   string "Notifications are on"
+   string "This is how Tandemise will tell you something needs you."
+   array [
+      string "default"
+      string "Show"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "tandemise"
+      )
+      dict entry(
+         string "urgency"
+         variant             byte 1
+      )
+      dict entry(
+         string "sender-pid"
+         variant             int64 3514749
+      )
+   ]
+   int32 -1
+method return time=1793546763.659202 sender=:1.12 -> destination=:1.37 serial=49 reply_serial=61
+   uint32 2
+
+method call time=1793546767.128570 sender=:1.37 -> destination=:1.12 serial=62 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Tandemise"
+   uint32 0
+   string ""
+   string "Notifications are on"
+   string "This is how Tandemise will tell you something needs you."
+   array [
+      string "default"
+      string "Show"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "tandemise"
+      )
+      dict entry(
+         string "urgency"
+         variant             byte 1
+      )
+      dict entry(
+         string "sender-pid"
+         variant             int64 3514749
+      )
+   ]
+   int32 -1
+method return time=1793546767.133864 sender=:1.12 -> destination=:1.37 serial=65 reply_serial=62
+   uint32 3
+
+method call time=1793546776.970531 sender=:1.66 -> destination=:1.12 serial=48 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify
+   string "Tandemise"
+   uint32 0
+   string ""
+   string "Decision needed"
+   string "Merge the release branch"
+   array [
+      string "default"
+      string "Show"
+   ]
+   array [
+      dict entry(
+         string "desktop-entry"
+         variant             string "tandemise"
+      )
+      dict entry(
+         string "urgency"
+         variant             byte 1
+      )
+      dict entry(
+         string "sender-pid"
+         variant             int64 3517716
+      )
+   ]
+   int32 -1
+method return time=1793546776.978818 sender=:1.12 -> destination=:1.66 serial=81 reply_serial=48
+   uint32 4
+
+signal time=1793546755.588234 sender=:1.1 -> destination=(null destination) serial=423 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "7b6ad876-6373-4bf3-ae4b-75cde0ddc1cf"
+signal time=1793546755.588249 sender=:1.1 -> destination=(null destination) serial=424 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1793546755.588344 sender=:1.1 -> destination=(null destination) serial=425 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+signal time=1793546755.588749 sender=:1.12 -> destination=:1.37 serial=32 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActivationToken
+   uint32 1
+   string "7b6ad876-6373-4bf3-ae4b-75cde0ddc1cf"
+signal time=1793546755.588874 sender=:1.12 -> destination=:1.37 serial=33 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=ActionInvoked
+   uint32 1
+   string "default"
+signal time=1793546755.589168 sender=:1.12 -> destination=:1.37 serial=34 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 1
+   uint32 2
+signal time=1793546766.065264 sender=:1.1 -> destination=(null destination) serial=534 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+signal time=1793546766.066210 sender=:1.12 -> destination=:1.37 serial=56 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 2
+   uint32 2
+signal time=1793546768.606042 sender=:1.1 -> destination=(null destination) serial=554 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=NotificationClosed
+   uint32 3
+   uint32 2

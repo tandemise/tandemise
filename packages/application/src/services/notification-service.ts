@@ -1,9 +1,9 @@
 import type { MemberRepositoryPort, NotifyItem, NotifyPreferences, WorkspaceRepositoryPort } from '@tandemise/domain';
 import {
-  RAISE_LIMIT_OPTION, inQuietHours, normalizeNotifyPreferences, normalizeNotifyState, planNotifications, quietForLabel,
+  RAISE_LIMIT_OPTION, inQuietHours, normalizeNotifyPreferences, normalizeNotifyState, planNotifications, quietForLabel, releaseNotified,
 } from '@tandemise/domain';
 import type {
-  InboxView, NotificationPreferencesView, NotificationTakeView, UpdateNotificationPreferencesRequest,
+  InboxView, NotificationPreferencesView, NotificationReleaseView, NotificationTakeView, UpdateNotificationPreferencesRequest,
 } from '@tandemise/api-contract';
 import { isApprovalWaitingOnMember, isHumanTaskForMember } from '@tandemise/api-contract';
 import type { Clock, WorkspaceId } from '@tandemise/shared';
@@ -62,6 +62,19 @@ export class NotificationService {
     });
     this.deps.settings.write({ [NOTIFY_STATE_KEY]: plan.state });
     return { notices: plan.notice === null ? [] : [plan.notice] };
+  }
+
+  /**
+   * The desktop took a notice but the operating system did not accept it: the
+   * ids go back to "not yet announced", so the next `take` offers them again.
+   */
+  release(ids: readonly string[]): NotificationReleaseView {
+    const stored = this.deps.settings.read();
+    const state = normalizeNotifyState(stored[NOTIFY_STATE_KEY]);
+    const next = releaseNotified(state, ids);
+    const released = state.notified.length + state.held.length - next.notified.length - next.held.length;
+    if (released > 0) this.deps.settings.write({ [NOTIFY_STATE_KEY]: next });
+    return { released };
   }
 
   /** Every Inbox item for the caller, in every project, as the diff sees it (spec §1). */

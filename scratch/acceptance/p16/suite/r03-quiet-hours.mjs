@@ -67,8 +67,9 @@ try {
   const tests = await waitShown(c, before, 10_000);
   const test = tests[tests.length - 1];
   ev.check('"Send a test notification" shows "Notifications are on"', test.test === true && test.title === 'Notifications are on' && test.body === 'This is how Tandemise will tell you something needs you.', test);
-  const flash = await page.waitForText('Test notification sent.', { timeoutMs: 5_000 }).then(() => true).catch(() => false);
-  ev.check('the window confirms "Test notification sent."', flash);
+  // The row reports what the system did with it ("… took it …" or "Not delivered: …"), not just that it was sent.
+  const said = await until(async () => page.evaluate(`document.querySelector('${SECTION} [data-notify-test-result]')?.textContent || ''`), { label: 'test result', timeoutMs: 10_000 }).catch(() => '');
+  ev.check('the window reports whether the system took it', test.delivered ? /took it/.test(said) : /^Not delivered: /.test(said), said);
   ev.check('the test touches nothing in the daemon (no notices on the next poll)', (await pollTimes(c, 2)) === 0);
 
   await page.click('Quiet hours', { within: SECTION });

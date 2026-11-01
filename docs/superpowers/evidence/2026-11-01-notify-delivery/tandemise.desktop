@@ -1,0 +1,11 @@
+[Desktop Entry]
+# Added by Tandemise from Settings → Notifications; remove it there.
+Type=Application
+Name=Tandemise
+Comment=A local-first desktop OS for running a software company with AI workers.
+Exec=/tmp/tdm-notify-gnome-5nShrz/Tandemise-0.11.0-linux-x86_64.AppImage %U
+Icon=/tmp/claude-1000/-home-demogar-projects-tandemise-tandemise/1f1721f4-38e1-4ccb-9333-058332197ed7/scratchpad/notify/r6-nested/data/icons/hicolor/512x512/apps/tandemise.png
+Terminal=false
+Categories=Development;
+StartupWMClass=tandemise
+X-Tandemise-Added-From-Settings=true
