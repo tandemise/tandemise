@@ -178,7 +178,7 @@ export class PlannerService {
       });
       input = { ...input, tiebreak: ran.answer, tiebreakFailed: ran.answer === null ? ran.error : null };
       profile = profileTask(input, config.planner);
-      tiebreak = { reason, model: ran.model, costUsd: ran.costUsd, answer: ran.answer, error: ran.error };
+      tiebreak = { reason, model: ran.model, costUsd: ran.costUsd, answer: ran.answer, error: ran.error, ...(ran.rawReply === null ? {} : { rawReply: ran.rawReply }) };
       if (ran.error !== null) this.deps.recorder.note(scope, `Couldn't tell what kind of task this is, and the quick check ${ran.error}; planning with careful defaults.`, 'warn');
     }
 
