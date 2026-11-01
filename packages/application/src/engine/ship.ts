@@ -2,7 +2,7 @@ import type {
   Approval, ApprovalRepositoryPort, EvaluationRepositoryPort, MergeDecision, MergeDecisionRecord, MergeDecisionRepositoryPort,
   MergeFacts, MergePolicyOrError, Mission, MissionCriteriaRepositoryPort, MissionRepositoryPort, MissionTask, OutcomeRepositoryPort,
   PlanDecisionRepositoryPort, PlannerConfig, PullRequestPort, PullRequestRef, RepoRepositoryPort, Repository, RunScoreRepositoryPort,
-  TaskRepositoryPort, TaskStatus, UnitOfWork,
+  TaskRepositoryPort, TaskStatus, TaskType, UnitOfWork,
 } from '@tandemise/domain';
 import {
   APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
@@ -12,6 +12,7 @@ import type { ApprovalFactory } from '@tandemise/policy';
 import type { CommandExecutor } from '@tandemise/integrations-core';
 import { errorMessage, ids, type Clock, type Logger, type Timestamp } from '@tandemise/shared';
 import { measureMergeFacts } from './ship-measure.js';
+import { SHIPPED_PLANNER } from '../planning/defaults/planner.js';
 import type { FeedbackRounds } from './feedback-rounds.js';
 import type { OutcomeRecorder } from './outcomes.js';
 import type { EventRecorder, EventScope } from '../support/event-recorder.js';
@@ -102,6 +103,8 @@ export interface PrFacts {
   readonly holds: readonly string[];
   /** A QA report exists on the mission: its Done-when results are QA's, not the agent's. */
   readonly qaReported: boolean;
+  /** The tracker item's own type (a YouTrack Bug), when it has one; it can type the pull request (#157). */
+  readonly trackerType?: string | null;
 }
 
 export interface ShipDecideDeps {
@@ -223,7 +226,7 @@ export class ShipService {
         repo,
         head: branch,
         base: mission.baseBranch ?? repository.defaultBranch,
-        title: this.title(mission),
+        title: await this.titleFor(mission, repository, branch),
         body: this.body(mission, repo),
       });
     } catch (e) {
@@ -372,7 +375,8 @@ export class ShipService {
       }
       const card = d.approvalFactory.createOrThrow({
         workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id, kind: 'release', risk: 'release',
-        title: `Review and merge ${this.title(mission)}`,
+        // The pull request as GitHub has it (#152): its own title is what a squash merge commits.
+        title: `Review and merge #${pr.number}: ${pr.title}`,
         rationale: decision.reasons.join(' '),
         effect: 'Merge merges this exact commit with your approval. "I\'ll merge it in GitHub" leaves it to you; Tandemise finishes when GitHub says it merged.',
         evidence: [
@@ -658,10 +662,50 @@ export class ShipService {
     this.deps.recorder.invalidate('ship', mission.id);
   }
 
-  /** `<type>: <title>` from the plan decision's profile. */
+  /** `<type>: <title>` from what is known before any commit is read: the item's prefix, its tracker type, the profile. */
   title(mission: Mission): string {
     const decision = this.deps.planDecisions.latest(mission.id);
-    return prTitle({ type: decision?.profile.type ?? 'chore' }, mission.title);
+    return prTitle({ type: decision?.profile.type ?? 'unknown' }, mission.title, { labelType: this.#trackerType(mission) });
+  }
+
+  /**
+   * The pull request's title (#157): a Conventional Commit whose type is what
+   * is known about the change: the item's own prefix, its tracker type or
+   * labels, the planner's profile, then the agent's commits on `branch`; and
+   * whose subject is the agent's commit subject when it wrote one. A
+   * squash-merged repository makes this the commit on its default branch.
+   */
+  async titleFor(mission: Mission, repository: Repository, branch: string): Promise<string> {
+    const decision = this.deps.planDecisions.latest(mission.id);
+    return prTitle({ type: decision?.profile.type ?? 'unknown' }, mission.title, {
+      labelType: this.#trackerType(mission),
+      commits: await this.#agentCommits(repository, mission.baseBranch ?? repository.defaultBranch, branch),
+    });
+  }
+
+  /** The tracker item's type (a YouTrack Bug), mapped as the shipped planner maps it. */
+  #trackerType(mission: Mission): TaskType | null {
+    const type = this.deps.prFacts?.(mission).trackerType ?? null;
+    if (type === null) return null;
+    const maps: Readonly<Record<string, TaskType>> = { ...SHIPPED_PLANNER.labels, ...SHIPPED_PLANNER.trackerTypes } as Readonly<Record<string, TaskType>>;
+    const key = Object.keys(maps).find((k) => k.toLowerCase() === type.toLowerCase());
+    return key === undefined ? null : maps[key]!;
+  }
+
+  /**
+   * Subjects of the commits the agents made on `branch`, oldest first.
+   * Tandemise's own commits (a step's leftovers, a salvage) carry a
+   * `Tandemise-Run:` trailer and are left out, as are merges. The base is
+   * the remote's copy when there is one, so a stale local default branch does
+   * not add other people's commits.
+   */
+  async #agentCommits(repository: Repository, base: string, branch: string): Promise<string[]> {
+    const remote = await this.#git(repository, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${base}`], false);
+    const from = remote.exitCode === 0 ? `refs/remotes/origin/${base}` : base;
+    const log = await this.#git(repository, [
+      'log', '--no-merges', '--reverse', '--format=%s', '--invert-grep', '--grep=^Tandemise-Run:', `${from}..refs/heads/${branch}`,
+    ], false);
+    return log.exitCode === 0 ? log.stdout.split('\n').map((l) => l.trim()).filter((l) => l.length > 0) : [];
   }
 
   /**
