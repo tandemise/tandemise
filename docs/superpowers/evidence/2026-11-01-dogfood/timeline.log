@@ -1,0 +1,34 @@
+17:49:43 F: Add a repository opens only a native folder picker (portal); no way to paste/type a path. Placeholder project name is 'Beveloce' (another product's name). Minor.
+17:53:46 BUG: daemon spawned by the app inherits the Electron main process's listening fds (the --remote-debugging-port socket, fd 63) — after quitting the app, relaunching on same CDP port fails 'Address already in use'. FD leak into detached daemon.
+17:54:24 DOC: QUICKSTART says 'Claude Code is detected automatically' — a fresh install shows 'No runtimes configured'; you must press Discover then Add. Also 'Fake Runtime — built-in · on PATH — Add' is offered to end users in the release build.
+17:54:46 COPY: Project settings on Linux has 'Reveal tandemise in Finder' (aria). Deprecated 'Turn labelled GitHub issues into missions' section still dominates top of project settings, confusing next to Intake.
+17:55:04 COPY: Settings on Linux says 'System follows macOS' and 'Show in Finder'.
+17:57:17 MINOR: project created over the API is not picked up by an open window still showing 'Create your first project' (no live update; needs reload).
+18:00:21 BLOCKER-ish: after linking a brain (even local-only), Settings -> Intake tracker form is read-only ('Set in this project's brain.') and Save tracker is just disabled. No in-app way to set the tracker; you must unlink, set, relink, or hand-edit factory/tracker.yaml in the brain clone. QUICKSTART order does not warn.
+18:01:18 FRICTION: GitHub Issues tracker defaults are YouTrack's (Open/In Progress/Done); GitHub needs open/closed + labels. Validation names the missing label but offers no 'create label' — had to gh label create by hand.
+18:02:27 START #97
+18:02:44 COPY: mission subtitle is the whole issue body flattened incl. '## Done when -' markdown; Done-when rows render raw **bold** markdown. Quick lane: all 3 Done-when lines 'Nothing in this plan verifies this' though they were given.
+18:02:52 START #96
+18:03:02 START #95
+18:03:21 CONFUSING: Board 'In progress' items with a running mission still show a Start button. Start from board sometimes navigates to mission, sometimes not (it took >5s).
+18:03:21 START #95
+18:03:47 FRICTION: a discovered Claude Code runtime defaults to 1 concurrent run although project says 'Maximum total workers 3'; the 2nd and 3rd started items just sit 'Waiting for a runtime slot. Claude Code: saturated: 1/1'. Board gives no hint.
+18:04:40 MINOR: runtime concurrency input saves only on blur, not with the Configure panel's Save; typing 3 and pressing Save left it at 1.
+18:06:34 HOLD #95 (agent had committed a8a6f7b, waiting on npm run ci)
+18:07:22 FRICTION: Hold opens Claude with TWO blocking dialogs before you can type: folder trust (banner warns) and 'Bypass Permissions mode' warning (not mentioned anywhere). Both default to 'No, exit' — pressing Enter quits the session.
+18:07:42 STEER #95: typed request to fix 'System follows your system.' copy
+18:11:22 FACTORY: size profiling is a keyword lottery. #95 (9 files, new check) got 'tiny' -> quick lane because body says 'copy'; #96 (one-line placeholder) got 'medium' (default) -> standard fix lane with 4 steps (implement, review, verify, ship). 'Why these steps' says 'Fix · tiny' but not WHICH signal set size.
+18:15:15 MINOR: Home 'Active missions' shows the held mission as 'Planned: 2 tasks... Running.' / Executing — nothing says it is held by you.
+18:26:30 CONTINUE #95 after steer (ci done in held session 6:19PM: 65 passed, p3-contributions-check failed as expected)
+18:27:06 SLOW: after the agent's own npm run ci (~15-20 min with 3 in parallel), the gate 'tests pass' re-runs npm test (full offline suite, ~15 min) for every item incl. docs-only #97.
+18:37:56 BLOCKER: gate 'checks.tests' = auto-detected 'npm test' (full offline suite, ~15 min) hit the hard-coded 10-minute check budget -> FAIL 'exceeded its time budget after 600008ms' -> implement step retried from scratch. Not settable in UI; set repo checks.test via PATCH /v1/repositories/:id to build+boundaries+design+typecheck. Also Checks & Gates said 'No gates have been evaluated' while the step said 'Not met: checks.tests is FAIL'.
+18:38:20 HOLD #97 (retry was re-running npm run ci for a docs-only change)
+18:38:47 BUG: retry prompt says only 'Not met: checks.tests is FAIL, needs PASS. Fix exactly that' — not that the check TIMED OUT after 10 min. Agent re-runs full npm run ci trying to fix tests that are not broken.
+18:39:36 CONTINUE #97
+18:43:08 BUG: Share this brain to tandemise/tandemise-brain (exists, empty, private) -> 'Integration failed. An internal error occurred. Quote reference ebf35160... the details are in the daemon log' — the packaged daemon writes no log anywhere (stdout ignored; logs/ has only app.log, daemon-launch.log), reference unfindable. Cause: share always runs 'gh repo create', so an existing empty repo cannot be used.
+18:53:59 SHIP #97: PR #110 opened 23:40:23Z (Start 23:02:28Z = 38 min). Review card 18:53 says 'Waiting for your review: Auto-merge is off' with Merge / I'll merge it in GitHub, but no link to the PR, no diff, no CI result, no 'what would have happened' on the card.
+18:54:56 INBOX review card (expanded) has the PR link + 'Risk score 3 of 2 allowed: Done-when not independently verified, no independent review, a person had to step in' but labels Merge 'Recommended' anyway, and shows raw ids (apr_..., tsk_..., mrg_...). Mission page Needs-you card has no PR link at all.
+19:09:11 #96 BLOCKED 19:09 after 2 attempts, both gate timeouts (npm test >10 min); 66 min after Start, zero PRs.
+19:09:22 SCOPE CREEP: #96 agent, told only 'checks.tests is FAIL', also rewrote p3-contributions-check (same fix as my #109) into the placeholder PR. Chose 'Accept the result and continue' at 19:10 (gate failure was a timeout).
+19:14:13 #95 BLOCKED (2nd gate timeout). Accept the result and continue.
+19:14:25 MAJOR: #95's retry (after gate timeout) REVERTED the change the person asked for during Hold ('your desktop setting' -> back to 'your system', 'to match U2'). What a person says in a held session is not carried into the task: a later attempt re-reads the issue and undoes the steer. Also added p3 fix (scope creep). The resulting copy is the awkward 'System follows your system.'

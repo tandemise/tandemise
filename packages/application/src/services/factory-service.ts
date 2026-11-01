@@ -3,7 +3,7 @@ import type {
   ShipPullRequestView, ShipView,
 } from '@tandemise/api-contract';
 import {
-  AUTO_MERGE_OFF, wouldHaveLine, bucketWords, chooseRung, isTerminalMissionStatus, laneBecauseSentence, laneLine, moduleSentence, profileChips, profileLine, routeReasonWords,
+  AUTO_MERGE_OFF, wouldHaveLine, bucketWords, chooseRung, decidingLines, isTerminalMissionStatus, laneBecauseSentence, laneLine, moduleSentence, profileChips, profileLine, routeReasonWords,
   signalSentence, stepClassWords, stepLine, tiebreakSentence, STEP_CLASSES,
   type BucketModelStats, type EventRepositoryPort, type OutcomeStats, type RoutingConfig, type StepClass, type MissionRepositoryPort, type MissionTask, type PlanDecision, type PlanDecisionRepositoryPort,
   type ProfileSignal, type TaskRepositoryPort, type ApprovalRepositoryPort, type MergeDecisionRepositoryPort,
@@ -88,6 +88,7 @@ export class FactoryService {
       lane: decision.lane,
       profileLine: profileLine(decision.profile),
       chips: chips(decision),
+      decidedBy: decidingLines(decision.profile),
       // A lane raised by the measured change never had a plan approval: say so, not the careful lane's usual line.
       laneLine: laneLine(decision.lane, decision.steps.filter((s) => s.stepClass !== 'ship').length + 1, decision.basis === 'measured' && decision.skipped.includes('No plan approval.') && decision.lane !== 'quick'),
       laneBecause: laneBecauseSentence(decision.laneBecause),

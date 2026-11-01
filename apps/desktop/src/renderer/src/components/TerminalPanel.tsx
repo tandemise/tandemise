@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
 import type { MissionDetail, TaskView } from '@tandemise/api-contract';
+import { claudePromptOnScreen, type ClaudePrompt } from '@tandemise/domain/claude-prompts';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -56,6 +57,9 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
   const [ended, setEnded] = useState<SessionEnd | null>(null);
   // While a session is young, or its screen shows the trust question, the panel says how to answer it.
   const [trustHint, setTrustHint] = useState(false);
+  // A start-up question Claude Code is showing right now, answered "yes" in one click (#102).
+  const [prompt, setPrompt] = useState<ClaudePrompt | null>(null);
+  const answer = useRef<((keys: string) => void) | null>(null);
   const hold = task.hold;
 
   // The hold ended (here, in another window, or by someone else): there is no terminal left to show.
@@ -174,15 +178,34 @@ export function TerminalPanel({ task, detail }: { task: TaskView; detail: Missio
           </div>
         ) : null}
 
-        {trustHint && ended === null ? (
-          <p className="terminal-panel__hint" role="note">
-            <Icon name="info" size={13} />
-            <span>{TRUST_HINT}</span>
-          </p>
-        ) : null}
+        {/* Claude Code's start-up questions default to "No, exit": the panel reads the screen and answers "yes" in one click. */}
+        <div className="terminal-panel__prompt-region" role="status">
+          {prompt !== null && ended === null ? (
+            <div className="terminal-panel__hint terminal-panel__hint--question">
+              <Icon name="info" size={13} />
+              <span>{prompt.question}</span>
+              <Button
+                variant="primary"
+                size="sm"
+                className="terminal-panel__answer"
+                onClick={() => {
+                  answer.current?.(prompt.keys);
+                  panel.current?.querySelector<HTMLElement>('.xterm-helper-textarea')?.focus();
+                }}
+              >
+                Answer: {prompt.answer}
+              </Button>
+            </div>
+          ) : trustHint && ended === null ? (
+            <p className="terminal-panel__hint">
+              <Icon name="info" size={13} />
+              <span>{TRUST_HINT}</span>
+            </p>
+          ) : null}
+        </div>
 
         <div className="terminal-panel__body" data-ended={ended !== null}>
-          <TerminalView key={attachment} taskId={task.id} label={`Terminal for ${task.title}`} screenReader={screenReader} onEnded={setEnded} onTrustHint={setTrustHint} />
+          <TerminalView key={attachment} taskId={task.id} label={`Terminal for ${task.title}`} screenReader={screenReader} onEnded={setEnded} onTrustHint={setTrustHint} onPrompt={setPrompt} answer={answer} />
           {ended !== null ? (
             <div className="terminal-panel__ended" role="status">
               <div className="terminal-panel__ended-words">
@@ -247,7 +270,7 @@ function useScreenReaderMode(): [boolean, (on: boolean) => void] {
  * `onEnded` hears how the session ended; `onTrustHint` whether the folder-trust
  * question may be on screen (the session is young, or its output asks it).
  */
-function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
+function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint, onPrompt, answer }: {
   taskId: string;
   /** The terminal region's name for a screen reader. */
   label: string;
@@ -255,6 +278,10 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
   screenReader: boolean;
   onEnded: (end: SessionEnd) => void;
   onTrustHint: (show: boolean) => void;
+  /** The start-up question on screen now, or null; read from the visible screen after each write. */
+  onPrompt: (prompt: ClaudePrompt | null) => void;
+  /** Set to a function that types keys into the session while the socket is open. */
+  answer: MutableRefObject<((keys: string) => void) | null>;
 }): JSX.Element {
   // Keyed by the address, not the client object: the client is rebuilt on unrelated status changes.
   const url = useDaemon().terminalUrl(taskId);
@@ -263,6 +290,8 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
   ended.current = onEnded;
   const hint = useRef(onTrustHint);
   hint.current = onTrustHint;
+  const asked = useRef(onPrompt);
+  asked.current = onPrompt;
   const terminal = useRef<Terminal | null>(null);
   const reader = useRef(screenReader);
   reader.current = screenReader;
@@ -307,6 +336,22 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
     };
     const trustRecent = (): boolean => trustSeenAt !== null && Date.now() - trustSeenAt < TRUST_RECENT_MS;
     const updateHint = (): void => hint.current(young || trustShowing());
+    // The visible screen as plain text: what a person sees, so a question answered and redrawn away is gone.
+    const screen = (): string => {
+      const buffer = term.buffer.active;
+      const rows: string[] = [];
+      for (let y = buffer.viewportY; y < buffer.viewportY + term.rows; y++) rows.push(buffer.getLine(y)?.translateToString(true) ?? '');
+      return rows.join('\n');
+    };
+    let lastPrompt = '';
+    const updatePrompt = (): void => {
+      if (over) return;
+      const now = claudePromptOnScreen(screen());
+      const key = now === null ? '' : `${now.kind}:${now.keys}`;
+      if (key === lastPrompt) return;
+      lastPrompt = key;
+      asked.current(now);
+    };
     const youth = setTimeout(() => { young = false; updateHint(); }, YOUNG_SESSION_MS);
     updateHint();
     const finish = (message: string): void => {
@@ -316,6 +361,7 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
       // One that never ran here (no terminal, the daemon's words say why) did not.
       ended.current({ message, atTrustPrompt: ran && message === '' && (young || trustShowing() || trustRecent()) });
       hint.current(false);
+      asked.current(null);
     };
     const sendSize = (): void => {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
@@ -335,7 +381,7 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
       if (frame.data instanceof ArrayBuffer) {
         const bytes = new Uint8Array(frame.data);
         ran = true;
-        term.write(bytes);
+        term.write(bytes, updatePrompt);
         // Escape sequences out, so a redraw that moves the cursor between words still reads as the words.
         tail = (tail + decoder.decode(bytes, { stream: true }).replace(ESCAPES, '')).slice(-TAIL_CHARS);
         updateHint();
@@ -351,6 +397,9 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
     const typed = term.onData((data) => {
       if (socket.readyState === WebSocket.OPEN) socket.send(encoder.encode(data));
     });
+    answer.current = (keys) => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(encoder.encode(keys));
+    };
     const resized = term.onResize(sendSize);
     const observer = new ResizeObserver(refit);
     observer.observe(element);
@@ -364,6 +413,7 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
 
     return () => {
       over = true;
+      answer.current = null;
       clearTimeout(youth);
       scheme.removeEventListener('change', retheme);
       stamps.disconnect();
@@ -375,7 +425,7 @@ function TerminalView({ taskId, label, screenReader, onEnded, onTrustHint }: {
       terminal.current = null;
       term.dispose();
     };
-  }, [url]);
+  }, [url, answer]);
 
   return <div ref={host} className="terminal-panel__xterm" role="group" aria-label={label} aria-describedby="terminal-keys" />;
 }

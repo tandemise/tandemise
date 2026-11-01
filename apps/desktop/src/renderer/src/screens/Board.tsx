@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
 import type { BoardItemView, BoardView } from '@tandemise/api-contract';
@@ -143,8 +143,10 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
   const [, navigate] = useLocation();
   // Navigates from the mutation itself: Start moves the row to another group, so this row can unmount
   // before the answer arrives, and a per-call onSuccess would then never run.
+  // The lane, chosen before Start (#103): the factory decides unless the person says quick or careful.
+  const [lane, setLane] = useState<'auto' | 'quick' | 'careful'>('auto');
   const start = useDaemonMutation(async (d, _: void) => {
-    const summary = await d.startItem(workspaceId ?? '', item.key);
+    const summary = await d.startItem(workspaceId ?? '', item.key, lane === 'auto' ? undefined : lane);
     navigate(`/missions/${summary.mission.id}`);
     return summary;
   }, ['intake', 'missions']);
@@ -177,6 +179,19 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
       <div className="list__aside">
         {/* A disabled button takes no focus, so why it cannot start is said beside it, not in a tooltip. */}
         {blocked !== null ? <span className="dim board__blocked">{blocked}</span> : null}
+        {blocked === null ? (
+          <select
+            className="select board__lane"
+            aria-label={`Lane for ${item.key}`}
+            value={lane}
+            disabled={start.isPending}
+            onChange={(event) => setLane(event.target.value as 'auto' | 'quick' | 'careful')}
+          >
+            <option value="auto">Factory decides</option>
+            <option value="quick">Quick</option>
+            <option value="careful">Careful</option>
+          </select>
+        ) : null}
         <Tooltip content={`Start ${item.key} as a mission`}>
           <Button
             variant="primary" className="board__start"
