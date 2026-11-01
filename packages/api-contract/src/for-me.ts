@@ -30,6 +30,32 @@ export function isApprovalWaitingOnMember(approval: { readonly kind: string; rea
   return approval.kind !== 'check' && isApprovalForMember(approval.addresseeIds, memberId);
 }
 
+/** One thing in the Inbox, as far as "does it wait on me" needs to know (#151). */
+export interface InboxItemFacts {
+  /** approval, task, refinement, stalled, quiet or parked. */
+  readonly kind: string;
+  /** The approval's kind (`check`, `release`, …) for an approval; null for anything else. */
+  readonly approvalKind: string | null;
+  readonly forMe: boolean;
+}
+
+/**
+ * Whether an Inbox item waits on me (#151): the one rule behind Home's
+ * "Needs you" tile, its "Needs you now" list, the Inbox's "For me" count and
+ * the nav badge, so none of them can disagree. It is for me, and it is not a
+ * check: a check is a look at finished work that nothing waits on. A stalled
+ * or blocked step that offers me an action (Retry, Re-plan, Open the pull
+ * request) waits on me like a card does, and counts.
+ */
+export function waitsOnMember(item: InboxItemFacts): boolean {
+  return item.forMe && item.approvalKind !== 'check';
+}
+
+/** How many items wait on me: what the tile shows, and how many the list holds. */
+export function needsYouCount(items: readonly InboxItemFacts[]): number {
+  return items.filter(waitsOnMember).length;
+}
+
 /** The people a task parked for a human names, as member ids. */
 export interface HumanTaskPeople {
   readonly assigneeId: string | null;

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ApprovalView, InboxParkedView, InboxRefinementView, InboxSilentRunView, InboxStalledView, InboxTaskView } from '@tandemise/api-contract';
-import { isApprovalForMember, isHumanTaskForMember } from '@tandemise/api-contract/for-me';
+import { isApprovalForMember, isHumanTaskForMember, waitsOnMember } from '@tandemise/api-contract/for-me';
 import { useInboxView, useMyMemberId } from './queries.js';
 
 export type InboxItem =
@@ -36,8 +36,14 @@ export function missionOfItem(item: InboxItem): string | null {
  */
 export function useInbox(): {
   readonly pending: readonly InboxItem[];
+  /** Everything for me, checks included: the Inbox's "For me" list. */
   readonly forMeCount: number;
-  /** For me, minus checks: what actually waits on me. Home's "Needs you now". */
+  /**
+   * What waits on me (#151), by the one rule in `@tandemise/api-contract/for-me`:
+   * for me, minus checks, stalled steps included. Home's "Needs you" tile counts
+   * exactly these, its "Needs you now" list shows them, and the nav badge reads
+   * the same number.
+   */
   readonly needsMe: readonly InboxItem[];
   readonly isPending: boolean;
   readonly error: unknown;
@@ -125,7 +131,7 @@ export function useInbox(): {
     return {
       pending: items,
       forMeCount: items.filter((i) => i.forMe).length,
-      needsMe: items.filter((i) => i.forMe && !(i.kind === 'approval' && i.view.approval.kind === 'check')),
+      needsMe: items.filter((i) => waitsOnMember({ kind: i.kind, approvalKind: i.kind === 'approval' ? i.view.approval.kind : null, forMe: i.forMe })),
       isPending: inbox.isPending,
       error: inbox.error ?? null,
       refetch: () => void inbox.refetch(),
