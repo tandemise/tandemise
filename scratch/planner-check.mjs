@@ -351,6 +351,26 @@ await attempt('factory source', async () => {
   check('the quick lane is implement then ship, tests in the gate', eq(quick.value.tasks.map((t) => t.key), ['implement', 'ship']) && quick.value.tasks[0].completionGate.includes('checks.tests == PASS'), quick.value?.tasks.map((t) => [t.key, t.completionGate]));
 });
 
+await attempt('tiebreak reply reading (#137)', async () => {
+  section('tiebreak reply reading');
+  const ask = async (text) => app.runTiebreak(input({ item: { title: 'Do the thing' } }), { run: async (req) => ({ text, costUsd: 0.15, model: req.model }) }, { model: 'haiku', areaNames: ['payments'], repoNames: [] });
+  const answer = { type: 'fix', size: 's', areas: ['payments'], why: 'a small checkout fix' };
+  const fenced = await ask(`Here is my classification:\n\n\`\`\`json\n${JSON.stringify(answer, null, 2)}\n\`\`\`\n\nLet me know if you need more.`);
+  check('a fenced answer with prose around it is read', fenced.answer?.type === 'fix' && fenced.answer.size === 's' && eq(fenced.answer.areas, ['payments']) && fenced.error === null && fenced.rawReply === null, fenced);
+  const braces = await ask(`Using {areas} from the list, I'd say ${JSON.stringify({ ...answer, why: 'touches {checkout} code' })} — note: {x} is not an area, and {unclosed`);
+  check('prose with braces before and after the answer does not break it', braces.answer?.type === 'fix' && braces.answer.why === 'touches {checkout} code' && braces.error === null, braces);
+  const two = await ask(`First guess: {"type": "refactor", "size": "huge", "why": "?"}\nOn reflection: ${JSON.stringify({ ...answer, type: 'feature' })}`);
+  check('of two objects only the second valid one is picked', two.answer?.type === 'feature' && two.error === null, two);
+  const firstWins = await ask(`${JSON.stringify(answer)} or maybe ${JSON.stringify({ ...answer, type: 'feature' })}`);
+  check('of two valid objects the first wins', firstWins.answer?.type === 'fix', firstWins);
+  const prose = `I am not sure how to classify this task. ${'It could be several things depending on the codebase. '.repeat(15)}`;
+  const none = await ask(prose);
+  check('a reply with no JSON gives no answer and says so', none.answer === null && none.error === 'it did not answer with JSON' && none.costUsd === 0.15, none);
+  check('and keeps the first 500 characters of the raw reply', prose.length > 500 && none.rawReply === prose.slice(0, 500) && none.rawReply.length === 500, none.rawReply?.length);
+  const invalid = await ask('{"type": "refactor", "size": "huge", "why": "?"}');
+  check('an object that fails the schema says it was not valid and keeps the reply', invalid.answer === null && invalid.error.startsWith('its answer was not valid') && invalid.rawReply === '{"type": "refactor", "size": "huge", "why": "?"}', invalid);
+});
+
 await attempt('ceremony, speed and tiebreak', async () => {
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -442,6 +462,8 @@ await attempt('ceremony, speed and tiebreak', async () => {
   const g = h.repo.planDecisions.latest(migrate2.id);
   check('garbage gives the conservative default and planning goes on', g.profile.type === 'unknown' && g.profile.size === 'm' && g.profile.risk === 'high' && g.profile.signals.some((s) => s.effect.includes('conservative default')) && h.repo.missions.get(migrate2.id).status !== 'PLANNING', g.profile);
   check('an unreported cost stays null', g.tiebreak?.costUsd === null && g.tiebreak?.error !== null, g.tiebreak);
+  check('the failed reply is kept on the stored plan decision', g.tiebreak?.rawReply === 'not json', g.tiebreak);
+  check('a read answer keeps no raw reply', mDecision.tiebreak?.rawReply === undefined, mDecision.tiebreak);
   check('it never ran for the typo', h.repo.planDecisions.latest(typo.id).tiebreak === null);
   clearInterval(keepAlive);
 });
