@@ -307,6 +307,9 @@ function describe(record: RunEventRecord, roleNames: ReadonlyMap<string, string>
       return { ...base, icon: 'check', tone: 'succeeded', title: 'Merged', detail: null, link: null };
     case 'merge.asked':
       return { ...base, icon: 'approvals', tone: 'blocked', title: 'Asked for your review', detail: body.reasons.join(' ') || null, link: null };
+    case 'merge.approval_kept':
+      // #173: only the base branch came in, so the person's Merge carries over to the new head once CI passes there.
+      return { ...base, icon: 'check', tone: 'pending', title: 'Your approval stands: only the base branch came in', detail: `Its own changes are the same as when you approved them. It merges ${body.toHead.slice(0, 7)} once CI passes there.`, link: null };
     case 'merge.reverted':
       return { ...base, icon: 'refresh', tone: 'blocked', title: 'Reverted', detail: body.revertPr, link: null };
     case 'note':

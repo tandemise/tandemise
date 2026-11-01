@@ -25,7 +25,9 @@ const check = (label, cond, detail) => {
 };
 const section = (t) => console.log(`\n== ${t}`);
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// MERGE_ONLY=<text> runs only the sections whose label holds it.
 const attempt = async (label, fn) => {
+  if (process.env.MERGE_ONLY !== undefined && !label.includes(process.env.MERGE_ONLY)) return;
   try { await fn(); } catch (e) { failures.push(label); console.log(`  FAIL ${label} threw: ${e?.stack ?? e}`); }
 };
 const keepAlive = setInterval(() => {}, 1000);
@@ -790,6 +792,63 @@ await attempt('review: holds are measured, or unmeasured', async () => {
   const policy = D.parseMergePolicy({ ...app.SHIPPED_MERGE, autoMerge: 'on', never: [{ when: 'process.holds > 0' }] });
   const d = D.decideMerge({ ...facts, process: { ...facts.process, holds: null } }, policy);
   check('unmeasured holds (null) make a rule on them ask, never pass', d.verdict === 'ask', d.reasons);
+});
+
+await attempt('#173: a base-only update keeps your approval', async () => {
+  section('#173: a base-only update keeps your approval');
+  const fake = await import('./fake-gh.mjs');
+  const w = await world();
+  // Main must be up to date to merge, and CI is green on every commit.
+  fake.setRepo(w.ghDir, REPO, { defaultChecks: [{ name: 'unit', conclusion: 'success' }], protection: { required_status_checks: { strict: true, contexts: ['unit'] } } });
+  const other = join(w.h.paths.root, '..', 'other');
+  execFileSync('git', ['clone', '-q', w.origin, other]);
+  /** Someone else's change lands on main. */
+  const land = (file) => { writeFileSync(join(other, file), `${file}\n`); git(other, 'pull', '-q', '--no-rebase', 'origin', 'main'); git(other, 'add', file); git(other, 'commit', '-q', '-m', `add ${file}`); git(other, 'push', '-q', 'origin', 'HEAD:main'); };
+  const prOf = (m) => fake.pullRequests(w.ghDir, REPO).find((p) => w.h.repo.mergeDecisions.listByMission(m.id).some((d) => d.prNumber === p.number));
+  const reviewCards = (m) => w.h.repo.approvals.list({ missionId: m.id }).filter((a) => a.title.startsWith('Review and merge'));
+  const notes = (m) => w.h.repo.events.listByMission(m.id).filter((e) => e.body.type === 'note').map((e) => e.body.text);
+  const merges = () => fake.calls(w.ghDir).filter((c) => c.args[0] === 'pr' && c.args[1] === 'merge');
+
+  const m = await w.mission('fix: typo in the settings title');
+  const ship = () => w.h.repo.tasks.listByMission(m.id).find((t) => t.key === 'ship');
+  await w.h.until(() => ship()?.status === 'AWAITING_APPROVAL', 60000);
+  const first = w.h.repo.mergeDecisions.listByMission(m.id)[0];
+  land('OTHER.md');
+  const landed = git(other, 'rev-parse', 'HEAD');
+  const isAncestor = (cwd, a, b) => { try { git(cwd, 'fetch', '-q', 'origin'); git(cwd, 'merge-base', '--is-ancestor', a, b); return true; } catch { return false; } };
+  await w.h.services.approvals.decide(w.caller, reviewCards(m)[0].id, { optionId: 'approve' });
+  await w.h.until(() => w.h.repo.missions.get(m.id).status === 'COMPLETE', 30000).catch(() => {});
+  const rows = w.h.repo.mergeDecisions.listByMission(m.id);
+  const last = rows.at(-1);
+  check('main moved after Merge: it merges with no second card', w.h.repo.missions.get(m.id).status === 'COMPLETE' && reviewCards(m).length === 1, { status: w.h.repo.missions.get(m.id).status, ship: ship().statusReason, cards: reviewCards(m).map((c) => c.status) });
+  check('…on the updated head, which holds the approved one and the new main', last.headSha !== first.headSha && last.mergeSha !== null && isAncestor(other, first.headSha, last.headSha) && isAncestor(other, landed, last.headSha), rows.map((r) => [r.headSha.slice(0, 7), r.voidedAt !== null, r.mergeSha?.slice(0, 7)]));
+  const call = merges().at(-1)?.args ?? [];
+  check('…bound to the commit CI checked', call[call.indexOf('--match-head-commit') + 1] === last.headSha && fake.calls(w.ghDir).some((c) => c.args.some((a) => a.startsWith(`repos/${REPO}/commits/${last.headSha}/check-runs`))), call);
+  check('…the first decision is void, never merged', rows[0].voidedAt !== null && rows[0].mergedAt === null);
+  const kept = w.h.repo.events.listByMission(m.id).find((e) => e.body.type === 'merge.approval_kept')?.body;
+  check('the feed says the approval stands because only the base came in', kept?.fromHead === first.headSha && kept?.toHead === last.headSha && kept?.approvalId === reviewCards(m)[0].id, kept);
+  check('…and never that it asks again', !notes(m).includes(app.APPROVAL_VOIDED), notes(m));
+
+  // The pull request's own diff changes after Merge (a hand edit on its branch): the approval is void and it asks again.
+  const m2 = await w.mission('fix: typo in the footer');
+  const ship2 = () => w.h.repo.tasks.listByMission(m2.id).find((t) => t.key === 'ship');
+  await w.h.until(() => ship2()?.status === 'AWAITING_APPROVAL', 60000);
+  const pr2 = prOf(m2);
+  git(other, 'fetch', '-q', 'origin', pr2.headRefName);
+  git(other, 'checkout', '-q', '-B', 'edit', `origin/${pr2.headRefName}`);
+  writeFileSync(join(other, 'HAND.md'), 'a hand edit\n');
+  git(other, 'add', 'HAND.md');
+  git(other, 'commit', '-q', '-m', 'a hand edit');
+  git(other, 'push', '-q', 'origin', `HEAD:${pr2.headRefName}`);
+  const edited = git(other, 'rev-parse', 'HEAD');
+  git(other, 'checkout', '-q', 'main');
+  fake.putPullRequest(w.ghDir, REPO, { ...pr2, headRefOid: edited });
+  const before = merges().length;
+  await w.h.services.approvals.decide(w.caller, reviewCards(m2).find((c) => c.status === 'PENDING').id, { optionId: 'approve' });
+  await w.h.until(() => reviewCards(m2).some((c) => c.status === 'PENDING'), 30000).catch(() => {});
+  const rows2 = w.h.repo.mergeDecisions.listByMission(m2.id);
+  check('a hand edit after Merge voids the approval: nothing merged, a new card asks', merges().length === before && rows2[0].voidedAt !== null && rows2.at(-1).headSha === edited && reviewCards(m2).filter((c) => c.status === 'PENDING').length === 1, { merges: merges().length - before, rows: rows2.map((r) => [r.headSha.slice(0, 7), r.voidedAt !== null]), cards: reviewCards(m2).map((c) => c.status) });
+  check('…and the feed says its own changes moved, so it asks again', notes(m2).includes(app.APPROVAL_VOIDED) && !w.h.repo.events.listByMission(m2.id).some((e) => e.body.type === 'merge.approval_kept'), notes(m2));
 });
 
 // @sections

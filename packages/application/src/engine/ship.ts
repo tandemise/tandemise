@@ -57,6 +57,8 @@ export const SHIP_LOG_TAIL_LINES = 40;
 export const PR_CHANGED = 'The pull request changed after it was checked; checking again.';
 export const PR_CLOSED = 'The pull request was closed without merging.';
 export const WAITING_FOR_GITHUB_MERGE = 'Waiting for you to merge it in GitHub.';
+/** The pull request's own changes moved after a person said Merge (#173): the approval no longer covers them. */
+export const APPROVAL_VOIDED = 'The pull request\'s own changes moved after you approved the merge, so Tandemise checks it again and asks again.';
 const DECISION_LABEL = 'Decision';
 export const WAITING_FOR_CHECKS_TO_START = 'Waiting for checks to start';
 export const WAITING_FOR_RERUN = 'Waiting for the checks to run again on the retitled pull request.';
@@ -86,6 +88,8 @@ export interface ShipDeps {
   readonly pushedSha?: (mission: Mission, pr: PullRequestRef) => string | null;
   /** The mission's `ship.pr_opened` events, oldest first: the pull requests it opened, or its CI wait found (#143). */
   readonly opened?: (mission: Mission) => readonly OpenedPullRequest[];
+  /** The mission's `merge.approval_kept` events, oldest first: approvals carried across a base-only update (#173). */
+  readonly kept?: (mission: Mission) => readonly KeptApproval[];
   /** Reverts a merge (#53 §8.7). */
   readonly revert?: (decisionId: string, by: string) => Promise<unknown>;
   /** The decision (#53 §8). Optional so the open-only harnesses still compose. */
@@ -105,6 +109,13 @@ export interface OpenedPullRequest {
   readonly number: number;
   readonly headSha: string;
   readonly foundBy: 'wait' | null;
+}
+
+/** One `merge.approval_kept` event: a person's Merge that still stands on a head that only brought the base in (#173). */
+export interface KeptApproval {
+  readonly approvalId: string;
+  readonly by: string;
+  readonly toHead: string;
 }
 
 export const MERGED_BEFORE_DECISION = 'Merged in GitHub by a person before Tandemise decided.';
@@ -315,13 +326,7 @@ export class ShipService {
     const protection = await this.deps.pullRequests.protection(repository.path, pr.repo, pr.baseBranch);
     const fetched = await this.#git(repository, ['fetch', '--quiet', 'origin', pr.baseBranch], true);
     const baseRef = fetched.exitCode === 0 ? `origin/${pr.baseBranch}` : pr.baseBranch;
-    // The head being decided must be here: its branch, else GitHub's pull/<n>/head ref.
-    if ((await this.#git(repository, ['cat-file', '-e', `${pr.headSha}^{commit}`], false)).exitCode !== 0) {
-      await this.#git(repository, ['fetch', '--quiet', 'origin', pr.headBranch], true);
-      if ((await this.#git(repository, ['cat-file', '-e', `${pr.headSha}^{commit}`], false)).exitCode !== 0) {
-        await this.#git(repository, ['fetch', '--quiet', 'origin', `pull/${pr.number}/head:refs/tandemise/pr/${pr.number}`], true);
-      }
-    }
+    await this.#ensureHead(repository, pr);
     const recent = d.outcomeRows.listByWorkspace(mission.workspaceId, new Date(this.deps.clock.epochMs() - 90 * 86_400_000).toISOString());
     let measured: MergeFacts;
     try {
@@ -389,9 +394,10 @@ export class ShipService {
     const d = this.deps.decide!;
     const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
     const forDecision = d.approvals.list({ missionId: mission.id }).filter((a) => a.taskId === task.id && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
-    // You already said Merge for this exact decision and it didn't go through: try again.
-    const approved = forDecision.find((a) => a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION);
-    if (approved !== undefined && decision.mergedAt === null) return this.mergeDecided(mission, task, repository, decision, 'person', approved.decidedBy ?? 'a person');
+    // You already said Merge for this exact decision, or for the same changes before the base came in (#173),
+    // and it didn't go through yet: merge it, with no new card.
+    const approved = this.#approvalFor(mission, task, decision);
+    if (approved !== null && decision.mergedAt === null) return this.mergeDecided(mission, task, repository, decision, 'person', approved.by);
     // You chose to merge it in GitHub yourself: watch for that, ask nothing more.
     if (forDecision.some((a) => a.status === 'REJECTED')) return { kind: 'waiting' };
     const cards = forDecision.filter((a) => a.status === 'PENDING');
@@ -434,7 +440,7 @@ export class ShipService {
     const pr = await this.deps.pullRequests.view(repository.path, decision.repo, decision.prNumber);
     if (pr.state !== 'OPEN') return this.#closedOrMerged(mission, task, pr, decision);
     if (decision.voidedAt === null && pr.headSha !== decision.headSha) {
-      this.#void(mission, task, decision);
+      await this.#headMoved(mission, task, repository, pr, decision);
       return this.#afterOpen(mission, task, repository, pr, signal);
     }
     if (decision.voidedAt !== null) return this.#afterOpen(mission, task, repository, pr, signal);
@@ -449,15 +455,78 @@ export class ShipService {
     return this.#settle(mission, task, repository, pr, decision);
   }
 
-  #void(mission: Mission, task: MissionTask, decision: MergeDecisionRecord): void {
+  #void(mission: Mission, task: MissionTask, decision: MergeDecisionRecord, note: string | null = PR_CHANGED): void {
     const d = this.deps.decide!;
     d.mergeDecisions.update(decision.id, { voidedAt: this.deps.clock.now() as Timestamp });
     void this.cancelQueued(decision);
     for (const card of d.approvals.list({ missionId: mission.id, statuses: ['PENDING'] }).filter((a) => a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id))) {
       d.approvals.update(card.id, { status: 'CANCELLED', decidedAt: this.deps.clock.now() });
     }
-    this.deps.recorder.note({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, PR_CHANGED);
+    if (note !== null) this.deps.recorder.note({ workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id }, note);
     this.deps.recorder.invalidate('approvals', mission.id);
+  }
+
+  /**
+   * The pull request's head is no longer the decided one (#173). The decision
+   * is void either way: a merge is bound to the commit CI checked. A person's
+   * Merge carries over to the new head only when the move brought the base
+   * branch in and left the pull request's own changes exactly as they were;
+   * then it merges once CI passes there, with no new card. New commits on the
+   * branch, or a hand edit, change its own diff, and the person is asked again.
+   */
+  async #headMoved(mission: Mission, task: MissionTask, repository: Repository, pr: PullRequestRef, decision: MergeDecisionRecord): Promise<void> {
+    const approved = decision.mergedAt === null ? this.#approvalFor(mission, task, decision) : null;
+    if (approved === null) { this.#void(mission, task, decision); return; }
+    if (!(await this.#baseOnly(repository, pr, decision.headSha))) { this.#void(mission, task, decision, APPROVAL_VOIDED); return; }
+    const scope: EventScope = { workspaceId: mission.workspaceId, missionId: mission.id, taskId: task.id };
+    this.#void(mission, task, decision, null);
+    this.deps.recorder.record(scope, { type: 'merge.approval_kept', decisionId: decision.id, approvalId: approved.approvalId, by: approved.by, fromHead: decision.headSha, toHead: pr.headSha });
+    this.deps.recorder.invalidate('ship', mission.id);
+  }
+
+  /** The person's Merge for this decision: on its own card, or kept from an earlier head with the same changes (#173). */
+  #approvalFor(mission: Mission, task: MissionTask, decision: MergeDecisionRecord): { approvalId: string; by: string } | null {
+    const d = this.deps.decide!;
+    const own = d.approvals.list({ missionId: mission.id })
+      .find((a) => a.taskId === task.id && a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION
+        && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
+    if (own !== undefined) return { approvalId: own.id, by: own.decidedBy ?? 'a person' };
+    const kept = (this.deps.kept?.(mission) ?? []).filter((k) => k.toHead === decision.headSha).at(-1);
+    return kept === undefined ? null : { approvalId: kept.approvalId, by: kept.by };
+  }
+
+  /**
+   * Whether `pr`'s new head only brought its base branch in (#173): it still
+   * holds the decided head, and its own diff against the base, with hunk
+   * positions and blob ids left out, is what it was there. Anything that
+   * can't be read counts as changed.
+   */
+  async #baseOnly(repository: Repository, pr: PullRequestRef, oldHead: string): Promise<boolean> {
+    const fetched = await this.#git(repository, ['fetch', '--quiet', 'origin', pr.baseBranch], true);
+    if (fetched.exitCode !== 0) return false;
+    await this.#ensureHead(repository, pr);
+    // A rewritten branch is not "the same changes with the base brought in".
+    if ((await this.#git(repository, ['merge-base', '--is-ancestor', oldHead, pr.headSha], false)).exitCode !== 0) return false;
+    const base = `refs/remotes/origin/${pr.baseBranch}`;
+    const before = await this.#ownDiff(repository, base, oldHead);
+    const after = await this.#ownDiff(repository, base, pr.headSha);
+    return before !== null && after !== null && before.length > 0 && before === after;
+  }
+
+  /** The pull request's own change, `base...head`, with no context and no hunk positions or blob ids. */
+  async #ownDiff(repository: Repository, base: string, head: string): Promise<string | null> {
+    const diff = await this.#git(repository, ['diff', '--no-color', '--no-ext-diff', '--unified=0', `${base}...${head}`], false);
+    if (diff.exitCode !== 0) return null;
+    return diff.stdout.split('\n').filter((l) => !l.startsWith('index ')).map((l) => (l.startsWith('@@') ? '@@' : l)).join('\n').trim();
+  }
+
+  /** The head being decided must be here: its branch, else GitHub's pull/<n>/head ref. */
+  async #ensureHead(repository: Repository, pr: PullRequestRef): Promise<void> {
+    if ((await this.#git(repository, ['cat-file', '-e', `${pr.headSha}^{commit}`], false)).exitCode === 0) return;
+    await this.#git(repository, ['fetch', '--quiet', 'origin', pr.headBranch], true);
+    if ((await this.#git(repository, ['cat-file', '-e', `${pr.headSha}^{commit}`], false)).exitCode !== 0) {
+      await this.#git(repository, ['fetch', '--quiet', 'origin', `pull/${pr.number}/head:refs/tandemise/pr/${pr.number}`], true);
+    }
   }
 
   /** A merge queued on GitHub (`--auto`) for a decision that no longer stands is cancelled there too. */
@@ -693,7 +762,9 @@ export class ShipService {
    * Merges exactly the decided head (§8.5): `--match-head-commit`, so GitHub
    * refuses anything pushed after the decision. A refusal voids the decision
    * and the step checks again; a base that must be up to date is updated
-   * first, which moves the head and so means a new decision.
+   * first, which moves the head and so means a new decision on the commit CI
+   * checks next. A person's Merge carries over to it when only the base came
+   * in (#173).
    */
   protected async mergeDecided(mission: Mission, task: MissionTask, repository: Repository, decision: MergeDecisionRecord, by: 'auto' | 'person', member?: string): Promise<ShipOutcome> {
     const d = this.deps.decide!;
@@ -703,7 +774,7 @@ export class ShipService {
     if (pr.state !== 'OPEN') return this.#closedOrMerged(mission, task, pr, decision);
     if (pr.headSha !== decision.headSha) {
       // Changed since it was decided: void it and let the scheduler's next look check again.
-      this.#void(mission, task, decision);
+      await this.#headMoved(mission, task, repository, pr, decision);
       this.#status(mission, task, 'AWAITING_EXTERNAL', 'Waiting for CI on the new commit.');
       return { kind: 'waiting' };
     }
@@ -713,7 +784,9 @@ export class ShipService {
       const behind = await this.#git(repository, ['merge-base', '--is-ancestor', `origin/${pr.baseBranch}`, pr.headSha], false);
       if (behind.exitCode !== 0) {
         await this.deps.pullRequests.updateBranch(repository.path, pr.repo, pr.number);
-        this.deps.recorder.note(scope, 'The base branch moved on, so the pull request was brought up to date; checking it again.');
+        this.deps.recorder.note(scope, by === 'person'
+          ? 'The base branch moved on, so the pull request was brought up to date. If its own changes are the same, your approval stands and it merges once CI passes.'
+          : 'The base branch moved on, so the pull request was brought up to date; checking it again.');
         this.#status(mission, task, 'AWAITING_EXTERNAL', 'Waiting for CI after bringing the pull request up to date.');
         return { kind: 'waiting' };
       }
@@ -729,7 +802,9 @@ export class ShipService {
     });
     if (result.refused !== null) {
       if (/head branch was modified|head commit/i.test(result.refused)) {
-        this.#void(mission, task, decision);
+        const now = await this.deps.pullRequests.view(repository.path, pr.repo, pr.number);
+        if (now.headSha !== decision.headSha) await this.#headMoved(mission, task, repository, now, decision);
+        else this.#void(mission, task, decision);
         this.#status(mission, task, 'AWAITING_EXTERNAL', 'Waiting for CI on the new commit.');
         return { kind: 'waiting' };
       }
