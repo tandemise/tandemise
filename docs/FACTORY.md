@@ -201,3 +201,39 @@ real app, set **Display for agents** on the Claude Code runtime profile:
   `XDG_RUNTIME_DIR` pass through, so agents can open windows on your screen.
 
 The run's log line `agent environment` names its `TANDEMISE_HOME` and display.
+
+### What a worker's shell can and cannot reach on GitHub
+
+A worker's shell never holds your GitHub credentials. Every external write a
+worker makes on GitHub goes through the tool broker (`github.pr.create`,
+`github.pr.comment`, `github.issue.create`), so the policy engine decides it,
+an approval card asks when the autonomy setting says so, and it is recorded.
+The daemon runs those tools, and the ship step's own pushes and pull
+requests, with its own environment, so they keep working.
+
+In every worker (Claude Code, Codex, a generic CLI):
+
+- `GH_TOKEN`, `GITHUB_TOKEN` and the enterprise token variables are removed.
+- `gh` gets an empty config directory of the run's own (`GH_CONFIG_DIR`), so
+  `gh pr create`, `gh api` and anything else that needs a sign-in fail with
+  "gh auth login". With no token in the environment, `curl` has nothing to
+  send either.
+- git cannot authenticate: its credential helpers are cleared, its prompts and
+  askpass programs are off, and ssh runs without your agent or any key. It can
+  still commit, and fetch from a public remote.
+
+The exception is a step granted `git.push` (the development and release
+roles): it pushes its branch so the broker can open the pull request. Such a
+step keeps git's credentials, meaning your ssh agent and a git credential
+helper that reads your `gh` sign-in, while `gh` itself stays signed out. A
+process in that shell could still read that git credential (`git credential
+fill`). Grant `git.push` only to roles you would trust with it.
+
+This is defence in depth, not a sandbox. A worker runs as you, so a process
+set on reading your files can still read them. The boundary for an untrusted
+agent is the execution target's isolation. The Claude Code tool rules from
+#146 (no `Bash(gh pr create:*)` and similar where the broker has the tool)
+stay as a second layer.
+
+The run's log line `agent environment` says which of the two cases a run had
+(`codeHost`).
