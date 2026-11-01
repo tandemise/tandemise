@@ -460,49 +460,134 @@ function stateRank(m: TrackerConfig['states'], state: string): number {
   return -1;
 }
 
-// ------------------------------------------------------------------ refine a draft (#135)
+// ------------------------------------------------------------------ refine a draft (#135, #185)
 
 const DONE_WHEN_HEADING = '## Done when';
 const DECISIONS_HEADING = '## Decisions';
-/** The sections a refined description replaces: any Done-when or acceptance section, and its own Decisions. */
-const REPLACED_SECTION = /^(done when|acceptance criteria|decisions)$/i;
+/** A criteria section the item already has: its additions go there, in its own style. */
+const CRITERIA_SECTION = /^(done when|acceptance criteria)$/i;
+const DECISIONS_SECTION = /^decisions$/i;
 const SECTION_HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+const FENCE_LINE = /^\s*(```|~~~)/;
+/** A list item: its marker (bullet or number, and a checkbox) and its text. */
+const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?(.*)$/;
+/** An id leading an item's text (`AC01: `, `**AC-3** — `), so an addition continues the scheme. */
+const ITEM_ID = /^(\*\*|__)?([A-Za-z]+[-_]?)(\d+)(\*\*|__)?(\s*[:.)—–-]\s+|\s+)/;
+const NOT_NOW = 'Not now:';
+
+/** What a refinement decided, for `refinedDescription`. */
+export interface RefinedDecisions {
+  /** Accepted Done-when lines that the item does not state yet. */
+  readonly additions: readonly string[];
+  readonly answered: readonly { readonly question: string; readonly answer: string }[];
+  /** Proposals the person rejected: listed under Decisions → Not now. */
+  readonly rejected: readonly string[];
+}
 
 /**
  * The description a refined draft is written back with (spec
- * 2026-11-01-board-refine-draft-design.md): the item's own text, with a
- * `## Done when` checklist of the accepted lines and a `## Decisions` section
- * of each answered question. A Done-when, acceptance or Decisions section
- * already there is replaced, so writing twice writes the same text; anything
- * else the person wrote is kept as it was.
+ * 2026-11-01-board-refine-draft-design.md, #185). It only ever adds: every
+ * line the item already has is kept exactly as written.
+ *
+ * - The accepted additions go at the end of the item's own criteria section
+ *   (`Done when` or `Acceptance criteria`) in its style, continuing its id
+ *   scheme (`AC05`, `AC06`) where it has one; with no such section, a
+ *   `## Done when` section holds only the additions.
+ * - `## Decisions` lists each answered question, and the rejected proposals
+ *   under "Not now:"; an existing Decisions section gains only what it lacks.
+ * - A line the item already states is not added again, so writing twice
+ *   writes the same text.
  */
-export function refinedDescription(
-  description: string,
-  criteria: readonly string[],
-  answered: readonly { readonly question: string; readonly answer: string }[],
-): string {
-  const kept: string[] = [];
-  let skipping: number | null = null;
+export function refinedDescription(description: string, decided: RefinedDecisions): string {
+  const lines = description.split('\n');
+  const said = normalText(description);
+  const additions = uniq(decided.additions.map(oneLine).filter((a) => a !== '' && !said.includes(normalText(a))));
+  const present = new Set(lines.map((l) => l.trim()));
+  const decisionLines: string[] = [];
+  for (const a of decided.answered) {
+    const line = `- ${oneLine(a.question)} — ${oneLine(a.answer)}`;
+    if (!present.has(line)) decisionLines.push(line);
+  }
+  const notNow = uniq(decided.rejected.map(oneLine).filter((r) => r !== '' && !present.has(`- ${r}`)));
+  if (notNow.length > 0) {
+    if (!present.has(`- ${NOT_NOW}`)) decisionLines.push(`- ${NOT_NOW}`);
+    decisionLines.push(...notNow.map((r) => `  - ${r}`));
+  }
+
+  // Appended at the end, in order: a new Done when section, then a new Decisions section.
+  const tail: string[] = [];
+  if (additions.length > 0) {
+    const criteria = findSection(lines, CRITERIA_SECTION);
+    if (criteria === null) tail.push([DONE_WHEN_HEADING, ...additions.map((a) => `- [ ] ${a}`)].join('\n'));
+    else lines.splice(insertionPoint(lines, criteria), 0, ...continueList(lines, criteria, additions));
+  }
+  if (decisionLines.length > 0) {
+    const decisions = findSection(lines, DECISIONS_SECTION);
+    if (decisions === null) tail.push([DECISIONS_HEADING, ...decisionLines].join('\n'));
+    else lines.splice(insertionPoint(lines, decisions), 0, ...decisionLines);
+  }
+  let text = lines.join('\n');
+  if (tail.length > 0) {
+    const sep = text.trim() === '' ? '' : text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
+    text = `${text}${sep}${tail.join('\n\n')}`;
+  }
+  return text;
+}
+
+/** The first section whose heading matches: its heading line and the line after its last one. */
+function findSection(lines: readonly string[], name: RegExp): { readonly start: number; readonly end: number } | null {
   let fenced = false;
-  for (const line of description.replace(/\r\n?/g, '\n').split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    const heading = fenced ? null : SECTION_HEADING.exec(line);
-    if (heading !== null) {
-      const level = heading[1]!.length;
-      if (skipping !== null && level <= skipping) skipping = null;
-      if (skipping === null && REPLACED_SECTION.test(heading[2]!.replace(/[:*_]+/g, '').trim())) {
-        skipping = level;
-        continue;
-      }
-    }
-    if (skipping === null) kept.push(line);
+  let found: { start: number; level: number } | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (FENCE_LINE.test(lines[i]!)) { fenced = !fenced; continue; }
+    if (fenced) continue;
+    const h = SECTION_HEADING.exec(lines[i]!);
+    if (h === null) continue;
+    const level = h[1]!.length;
+    if (found !== null && level <= found.level) return { start: found.start, end: i };
+    if (found === null && name.test(h[2]!.replace(/[:*_]+/g, '').trim())) found = { start: i, level };
   }
-  const parts = [kept.join('\n').trim()];
-  parts.push([DONE_WHEN_HEADING, ...criteria.map((c) => `- [ ] ${oneLine(c)}`)].join('\n'));
-  if (answered.length > 0) {
-    parts.push([DECISIONS_HEADING, ...answered.map((a) => `- ${oneLine(a.question)} — ${oneLine(a.answer)}`)].join('\n'));
+  return found === null ? null : { start: found.start, end: lines.length };
+}
+
+/** After the section's last list item and its continuation lines; else after its last non-blank line. */
+function insertionPoint(lines: readonly string[], s: { readonly start: number; readonly end: number }): number {
+  let last = s.start;
+  for (let i = s.start + 1; i < s.end; i++) if (lines[i]!.trim() !== '') last = i;
+  return last + 1;
+}
+
+/** The additions as list items in the style of the section's last item, its ids continued. */
+function continueList(lines: readonly string[], s: { readonly start: number; readonly end: number }, additions: readonly string[]): string[] {
+  let model: RegExpExecArray | null = null;
+  let maxId = 0;
+  for (let i = s.start + 1; i < s.end; i++) {
+    const item = LIST_ITEM.exec(lines[i]!);
+    if (item === null || item[1]!.length > 0) continue;
+    model = item;
+    const id = ITEM_ID.exec(item[5]!);
+    if (id !== null) maxId = Math.max(maxId, Number(id[3]));
   }
-  return parts.filter((p) => p.length > 0).join('\n\n');
+  if (model === null) return additions.map((a) => `- [ ] ${a}`);
+  const [, , marker, space, box] = model;
+  const id = ITEM_ID.exec(model[5]!);
+  const numbered = /^\d+/.exec(marker!);
+  return additions.map((a, n) => {
+    const bullet = numbered === null ? marker! : marker!.replace(/^\d+/, String(Number(numbered[0]) + n + 1));
+    const head = `${bullet}${space}${box ?? ''}`;
+    if (id === null) return `${head}${a}`;
+    const [, open, letters, digits, close, sep] = id;
+    const next = String(maxId + n + 1).padStart(digits!.length, '0');
+    return `${head}${open ?? ''}${letters}${next}${close ?? ''}${sep}${a}`;
+  });
+}
+
+function normalText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ');
+}
+
+function uniq(items: readonly string[]): string[] {
+  return [...new Set(items)];
 }
 
 /** Only Tandemise starts an activity comment line with these words. */

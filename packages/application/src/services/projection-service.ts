@@ -11,7 +11,7 @@ import type {
   ActorRef, FeedCard, HomeView, InboxView, MissionDetail, MissionFeedView, MissionLimitsView, MissionSummary, RuntimeView, TaskView,
 } from '@tandemise/api-contract';
 import { humanActionForMember, isApprovalForMember, planStanding } from '@tandemise/api-contract';
-import type { InboxIntakeDecisionView } from '@tandemise/api-contract';
+import type { InboxIntakeDecisionView, InboxStalledView } from '@tandemise/api-contract';
 import type { MissionId, TaskId, WorkspaceId } from '@tandemise/shared';
 import { TandemiseError, asId } from '@tandemise/shared';
 import type { HoldService, HoldStanding, ProjectionService, RuntimeService } from '../services.js';
@@ -80,6 +80,8 @@ export interface ProjectionDeps {
   readonly limits?: Pick<LimitService, 'missionView' | 'alerts'>;
   /** Stalled missions and quiet runs (P9); optional for harnesses built before it. */
   readonly liveness?: Pick<LivenessService, 'stalled' | 'silentRuns' | 'watchOf'>;
+  /** Start moves the tracker refused (#187), as Stalled rows; resolved per call, optional for harnesses. */
+  readonly trackerStalled?: (workspaceId: WorkspaceId) => readonly InboxStalledView[];
   /** The desk's numbers and banners (P10); optional for harnesses built before it. */
   readonly desk?: Pick<DeskService, 'metrics' | 'banners'>;
   /** Intake signals waiting on a person (intake plan Task 7); optional for harnesses built before it. */
@@ -217,7 +219,7 @@ export class ProjectionServiceImpl implements ProjectionService {
       parked,
       // Derived here, on the read the nav badge makes: a mission that can move
       // again drops out with no state to clear (P9).
-      stalled: this.deps.liveness?.stalled(workspaceId) ?? [],
+      stalled: [...(this.deps.liveness?.stalled(workspaceId) ?? []), ...(this.deps.trackerStalled?.(workspaceId) ?? [])],
       silentRuns: this.deps.liveness?.silentRuns(workspaceId) ?? [],
       ...(this.deps.intakeDecisions === undefined ? {} : { intakeDecisions: this.deps.intakeDecisions(workspaceId) }),
       unclaimed: this.deps.coordination?.inboxUnclaimed(workspaceId) ?? [],

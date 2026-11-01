@@ -37,7 +37,7 @@ const D = await import('@tandemise/domain');
 const I = await import('@tandemise/integrations-core');
 const K = await import('@tandemise/kernel');
 
-const STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete'];
+const STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'To Verify', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete'];
 
 // ------------------------------------------------------------------ pure
 section('pure: refs, markers and the Sources section');
@@ -123,7 +123,7 @@ try {
   });
   const bad = D.stateMappingProblem(mapping({ in_progress: 'In Review!' }), described);
   check("a mapping naming a missing state: YouTrack has no state 'In Review!' in GAR. Its states are: …",
-    bad === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
+    bad === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
   const noReview = mapping({});
   const { in_review: _dropped, ...withoutReview } = noReview.states;
   const missing = D.stateMappingProblem({ ...noReview, states: withoutReview }, described);
@@ -135,7 +135,7 @@ try {
   const created = await yt.create({ title: 'T', description: 'D\n\n## Sources\n- Sentry · acme/web · https://s.test/1', type: 'Bug' });
   check("create() returns key 'GAR-1' and ref youtrack:GAR-1", created.key === 'GAR-1' && created.ref === 'youtrack:GAR-1' && created.title === 'T', created);
   check('create() reads the item back: type Bug, state Open, a url on the tracker', created.type === 'Bug' && created.state === 'Open' && created.url === `${fake.url}/issue/GAR-1`, created);
-  check('the fake recorded one command, Type Bug', eq(fake.commands.map((c) => c.query), ['Type Bug']) && fake.commands[0].issues[0].idReadable === 'GAR-1', fake.commands);
+  check('the type is set as data, not by command (#187): Type=Bug on GAR-1, no command', eq(fake.fieldSets, [{ issue: 'GAR-1', fields: ['Type=Bug'] }]) && fake.commands.length === 0, { sets: fake.fieldSets, commands: fake.commands });
   check('every request carried the token and asked for JSON', fake.calls.length > 0 && fake.calls.every((c) => c.authorization === 'Bearer perm:test' && c.accept === 'application/json'));
 
   const found = await yt.search({ url: 'https://s.test/1', limit: 5 });
@@ -145,7 +145,7 @@ try {
   check('search({ url }) of an unknown URL finds nothing', (await yt.search({ url: 'https://s.test/2', limit: 5 })).length === 0);
 
   const second = await yt.create({ title: "TypeError: cannot read 'id' of undefined", description: 'x', fields: { Subsystem: 'Web' } });
-  check('fields are set by one command', fake.commands.at(-1)?.query === 'Subsystem Web', fake.commands.at(-1));
+  check('fields are set in one request', eq(fake.fieldSets.at(-1), { issue: 'GAR-2', fields: ['Subsystem=Web'] }), fake.fieldSets.at(-1));
   await yt.search({ text: "TypeError: cannot read 'id' of undefined in checkout", unresolvedOnly: true, limit: 20 });
   const textCall = fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET');
   check('search({ text }) asks for the unresolved items with the title words', textCall?.query.get('query') === 'project: GAR #Unresolved typeerror read id undefined checkout' && textCall?.query.get('$top') === '20', textCall?.query.get('query'));
@@ -185,7 +185,12 @@ try {
   check('search({ url }) finds an item by a URL in its sources comment', eq((await yt.search({ url: 'https://slack.test/a', limit: 5 })).map((i) => i.key), ['GAR-1']));
 
   await yt.transition(ref, 'In Progress');
-  check('transition() sends the command State {In Progress} (a value with a space is braced)', fake.commands.at(-1)?.query === 'State {In Progress}' && fake.commands.at(-1)?.issues[0].idReadable === 'GAR-1', fake.commands.at(-1));
+  check('transition() sets State as data, so a state with a space is sent as written (#187): State=In Progress', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['State=In Progress'] }), fake.fieldSets.at(-1));
+  const viaCommand = await fetch(`${fake.url}/api/commands`, {
+    method: 'POST', headers: { authorization: 'Bearer perm:test', accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify({ query: 'State {In Progress}', issues: [{ idReadable: 'GAR-1' }] }),
+  });
+  check('…the fake refuses that value as a command, as a real YouTrack did: 400 State expected: {In Progress}', viaCommand.status === 400 && (await viaCommand.json()).error_description === 'State expected: {In Progress}');
   const got = await yt.get(ref);
   check("get() then shows state 'In Progress'", got.state === 'In Progress' && got.key === 'GAR-1', got);
 
@@ -198,7 +203,7 @@ try {
     fake.issues.get('GAR-2')?.links.filter((l) => l.type === 'duplicates').length === 1 && (fake.comments.get('GAR-2') ?? []).length === gar2Comments,
     { links: fake.issues.get('GAR-2')?.links, comments: (fake.comments.get('GAR-2') ?? []).length });
   await yt.assign(ref, 'ana');
-  check('assign() sends the command Assignee <login>', fake.commands.at(-1)?.query === 'Assignee ana' && (await yt.get(ref)).assignee === 'ana');
+  check('assign() sets Assignee as data, by login', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['Assignee=ana'] }) && (await yt.get(ref)).assignee === 'ana');
   check('viewer() is the signed-in login', (await yt.viewer()) === 'tandemise-bot');
 
   // GAR-2 is a duplicate now, so resolved; GAR-1 is fixed by a person; GAR-3 is new.
@@ -222,13 +227,15 @@ try {
     refused?.code === 'INTEGRATION_FAILED' && refused?.message === "YouTrack refused the token. Make a new permanent token and save it in the project's tracker settings.", { code: refused?.code, message: refused?.message });
 
   const braced = await yt.create({ title: 'Braced values', description: 'x', fields: { Subsystem: 'Web App', Priority: 'Major' } });
-  check('a multi-word field value is braced, a single word is not: Subsystem {Web App} Priority Major',
-    fake.commands.at(-1)?.query === 'Subsystem {Web App} Priority Major' && fake.issues.get(braced.key)?.fields?.Subsystem === 'Web App', fake.commands.at(-1));
+  check('multi-word field values are sent as written: Subsystem=Web App, Priority=Major',
+    eq(fake.fieldSets.at(-1), { issue: braced.key, fields: ['Subsystem=Web App', 'Priority=Major'] }) && fake.issues.get(braced.key)?.fields?.Subsystem === 'Web App', fake.fieldSets.at(-1));
+  await yt.transition(braced.ref, 'To Verify');
+  check('a state with a space, To Verify, moves the item', fake.issues.get(braced.key)?.state === 'To Verify', fake.issues.get(braced.key)?.state);
   const unbraced = await refusal(() => fetch(`${fake.url}/api/commands`, {
     method: 'POST', headers: { authorization: 'Bearer perm:test', accept: 'application/json', 'content-type': 'application/json' },
     body: JSON.stringify({ query: 'State In Progress', issues: [{ idReadable: braced.key }] }),
   }).then((r) => { if (!r.ok) throw new Error(String(r.status)); }));
-  check('the fake, like YouTrack, refuses an unbraced multi-word value', unbraced !== null && fake.issues.get(braced.key)?.state === 'Open', unbraced?.message);
+  check('the fake, like YouTrack, refuses an unbraced multi-word value', unbraced !== null && fake.issues.get(braced.key)?.state === 'To Verify', unbraced?.message);
   const withFile = await yt.create({ title: 'With a file', description: 'x', attachments: [{ name: 'trace.txt', mediaType: 'text/plain', content: new TextEncoder().encode('stack') }] });
   check('an attachment with content is uploaded to the item', eq((fake.attachments.get(withFile.key) ?? []).map((a) => a.name), ['trace.txt']), fake.attachments.get(withFile.key));
 
@@ -442,15 +449,48 @@ try {
 }
 
 // ------------------------------------------------------------------ refine a draft (#135)
-section('refine a draft (#135): the refined description, the activity line, and both adapters');
+section('refine a draft (#135, #185): the description only gains lines, the activity line, and both adapters');
 {
-  const original = 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Something vague\n\n## Notes\nKeep the old flow.';
-  const refined = D.refinedDescription(original, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]);
-  check('refinedDescription keeps the text, replaces the Done-when section and adds Decisions',
-    refined === 'Customers on Safari cannot pay.\n\n## Notes\nKeep the old flow.\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later', refined);
-  check('…parseCriteria reads exactly the accepted lines back', eq(D.parseCriteria(refined), ['Checkout completes on Safari 17', 'A failed payment says why']), D.parseCriteria(refined));
-  check('…and writing it twice writes the same text', D.refinedDescription(refined, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]) === refined);
-  check('an empty description gets only the sections', D.refinedDescription('', ['A'], []) === '## Done when\n- [ ] A');
+  // #185: the write-back only ever adds. Every line the item has stays as written.
+  const decided = { additions: ['Checkout completes on Safari 17', 'A failed payment says why'], answered: [{ question: 'Which Safari versions?', answer: '17 and later' }], rejected: ['Apple Pay works'] };
+  // The lines a write added: the item's own lines must all be there, in order and unchanged.
+  const addedLines = (text, item) => {
+    const mine = item.split('\n');
+    const extra = [];
+    let i = 0;
+    for (const line of text.split('\n')) {
+      if (i < mine.length && line === mine[i]) i++;
+      else extra.push(line);
+    }
+    return i === mine.length ? extra : null;
+  };
+
+  const acItem = 'Customers on Safari cannot pay.\n\n## Acceptance criteria\n- AC01: The card form shows on Safari\n- AC02: A declined card says why\n\n## Notes\nKeep the old flow.\n';
+  const ac = D.refinedDescription(acItem, decided);
+  check('an item with an Acceptance criteria section: the additions continue its ids (AC03, AC04) inside it',
+    ac === 'Customers on Safari cannot pay.\n\n## Acceptance criteria\n- AC01: The card form shows on Safari\n- AC02: A declined card says why\n- AC03: Checkout completes on Safari 17\n- AC04: A failed payment says why\n\n## Notes\nKeep the old flow.\n\n## Decisions\n- Which Safari versions? — 17 and later\n- Not now:\n  - Apple Pay works', ac);
+  const acAdded = ['- AC03: Checkout completes on Safari 17', '- AC04: A failed payment says why', '## Decisions', '- Which Safari versions? — 17 and later', '- Not now:', '  - Apple Pay works'];
+  check('…every line of the item is kept byte for byte; only these lines were added', eq(addedLines(ac, acItem), acAdded), addedLines(ac, acItem));
+  check('…written twice, the same text', D.refinedDescription(ac, decided) === ac);
+
+  const dwItem = 'Customers on Safari cannot pay.\n\n### Done when\n- [ ] The card form shows on Safari\n\n## Notes\nKeep the old flow.';
+  const dw = D.refinedDescription(dwItem, { ...decided, rejected: [] });
+  check('an item with a Done when section: the additions join its checklist, in its style',
+    dw === 'Customers on Safari cannot pay.\n\n### Done when\n- [ ] The card form shows on Safari\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Notes\nKeep the old flow.\n\n## Decisions\n- Which Safari versions? — 17 and later', dw);
+  check('…every line of the item is kept byte for byte; only these lines were added',
+    eq(addedLines(dw, dwItem), ['- [ ] Checkout completes on Safari 17', '- [ ] A failed payment says why', '', '## Decisions', '- Which Safari versions? — 17 and later']), addedLines(dw, dwItem));
+
+  const plainItem = 'Customers on Safari cannot pay.\n\nKeep the old flow.';
+  const plain = D.refinedDescription(plainItem, decided);
+  check('an item with neither: a Done when section with only the additions, then Decisions, after the text',
+    plain === `${plainItem}\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later\n- Not now:\n  - Apple Pay works`, plain);
+  check('…it starts with the item byte for byte', plain.startsWith(plainItem));
+  check('…parseCriteria reads the added lines back', eq(D.parseCriteria(plain), decided.additions), D.parseCriteria(plain));
+  check('a line the item already states is not added again', D.refinedDescription('## Done when\n- [ ] Checkout completes on Safari 17', { additions: ['Checkout completes on Safari 17'], answered: [], rejected: [] }) === '## Done when\n- [ ] Checkout completes on Safari 17');
+  check('nothing decided: the item unchanged', D.refinedDescription(acItem, { additions: [], answered: [], rejected: [] }) === acItem);
+  check('an empty description gets only the sections', D.refinedDescription('', { additions: ['A'], answered: [], rejected: [] }) === '## Done when\n- [ ] A');
+  const bold = D.refinedDescription('## Acceptance criteria\n1. **AC-7** — First\n', { additions: ['Second'], answered: [], rejected: [] });
+  check('a numbered, bold, dashed id scheme is continued as written', bold === '## Acceptance criteria\n1. **AC-7** — First\n2. **AC-8** — Second\n', bold);
   const line = D.refinedActivityLine({ by: 'Ana', criteria: 2, answered: 1, from: 'Draft', to: 'Open' });
   check('refinedActivityLine: Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.',
     line === 'Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.', line);
@@ -465,11 +505,11 @@ section('refine a draft (#135): the refined description, the activity line, and 
   const Y = await import('@tandemise/integration-youtrack');
   const ytFake = await startFakeYouTrack({ project: 'GAR', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
   try {
-    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: original, state: 'Draft' });
+    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: acItem, state: 'Draft' });
     const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'GAR', token: 'perm:test' });
     const ref = D.trackerRef('youtrack', 'GAR-7');
-    await yt.updateDescription(ref, refined);
-    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === refined
+    await yt.updateDescription(ref, plain);
+    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === plain
       && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/GAR-7'), ytFake.issues.get('GAR-7')?.description);
     check('…and leaves the summary and state alone', ytFake.issues.get('GAR-7')?.summary === 'Pay on Safari' && ytFake.issues.get('GAR-7')?.state === 'Draft');
   } catch (e) {
@@ -484,16 +524,16 @@ section('refine a draft (#135): the refined description, the activity line, and 
   try {
     const gt = new G.GhPrimaryTracker(exec, { repo: 'acme/refine', stateLabels: G.githubStateLabels(draftStates) });
     putLabels(GH, 'acme/refine', ['draft', 'status: in progress']);
-    const made = await gt.create({ title: 'Pay on Safari', description: original });
+    const made = await gt.create({ title: 'Pay on Safari', description: acItem });
     await gt.transition(made.ref, 'draft');
     check('github: an open issue carrying the draft label reads as draft', (await gt.get(made.ref)).state === 'draft');
-    await gt.updateDescription(made.ref, refined);
+    await gt.updateDescription(made.ref, plain);
     const editCall = calls(GH).findLast((c) => c.args[0] === 'issue' && c.args[1] === 'edit' && c.args.includes('--body'));
-    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === refined
+    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === plain
       && editCall.args[editCall.args.indexOf('--repo') + 1] === 'acme/refine', editCall?.args);
     await gt.transition(made.ref, 'open');
     const after = await gt.get(made.ref);
-    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === refined, after);
+    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === plain, after);
   } catch (e) {
     check('the github refine section ran', false, String(e?.stack ?? e));
   }
@@ -538,7 +578,7 @@ try {
   check('validate() of a valid mapping is null', (await resolver.validate('ws_yt')) === null);
   configs.set('ws_yt', ytConfig({ in_progress: 'In Review!' }));
   const v = await resolver.validate('ws_yt');
-  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
+  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
   check('a changed config builds a new tracker', (await resolver.for('ws_yt')).tracker !== tracker);
   await resolver.saveCredential('ws_yt', 'perm:wrong');
   check('a new credential replaces the old one in the store', (await secrets.list()).filter((r) => r.includes(':intake:ws_yt:tracker:')).length === 1);

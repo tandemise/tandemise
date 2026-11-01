@@ -1,0 +1,53 @@
+# #137 (mission msn_01m6b4e43rzfw65agk4v), local time UTC-5
+03:43:21 START pressed on Board for #137
+03:43:51 mission PLANNING :: Planning the mission.
+03:44:01 mission AWAITING_PLAN_APPROVAL :: Waiting for plan approval: 4 tasks: development → review → qa → ship.
+03:44:01 task implement READY 
+03:44:01 task review PENDING 
+03:44:01 task verify PENDING 
+03:44:01 task ship PENDING 
+03:44:01 approval apr_01m6b4f3bnqtrkn67t5j plan PENDING Approve the plan for Planner tiebreak fails on a valid answer and falls back to the conservative default?
+03:44:41 person approved plan (careful lane, tiebreak JSON unreadable)
+03:44:51 mission EXECUTING :: Plan approved; executing.
+03:44:51 task implement RUNNING 
+03:44:51 approval apr_01m6b4f3bnqtrkn67t5j plan APPROVED Approve the plan for Planner tiebreak fails on a valid answer and falls back to the conservative default?
+03:47:01 task implement READY Not met: artifact.ChangeSet.exists is false Missing expected artifacts: ChangeSet. `.tandemise/out/tsk_01m6b4f3b6nwt28m9vbe/ChangeSet.md` does not satisfy the ChangeSet contract — handoff.headline: ha
+03:47:11 task implement RUNNING 
+03:47:41 task implement SUCCEEDED 
+03:47:41 task review RUNNING 
+03:48:51 task review SUCCEEDED 
+03:48:51 task verify RUNNING 
+03:51:11 task verify SUCCEEDED 
+03:51:11 task ship RUNNING Opening the pull request.
+03:51:21 task ship AWAITING_EXTERNAL Waiting for CI (0 of 0 checks done)
+03:52:01 task ship AWAITING_EXTERNAL Waiting for CI (1 of 7 checks done)
+03:52:31 task ship AWAITING_EXTERNAL Waiting for CI (3 of 7 checks done)
+03:55:41 task ship AWAITING_EXTERNAL Waiting for CI (5 of 8 checks done)
+03:59:01 task ship AWAITING_EXTERNAL Waiting for CI (6 of 8 checks done)
+04:05:32 task ship AWAITING_APPROVAL Waiting for your review: Auto-merge is off for this project.
+04:05:32 approval apr_01m6b5pktz8z9d7qqymh release PENDING Review and merge chore: planner tiebreak fails on a valid answer and falls back to the conservative default
+
+# #132 (mission msn_01m6b5qqmerzy5bz9cx9)
+04:06:04 START pressed on Board for #132
+04:06:16 mission EXECUTING :: Planned: 4 tasks: development → review → qa → ship. Running.
+04:06:16 task implement RUNNING 
+04:06:16 task review PENDING 
+04:06:16 task verify PENDING 
+04:06:16 task ship PENDING 
+04:27:17 task implement SUCCEEDED 
+04:27:17 task review RUNNING 
+04:31:07 task implement RUNNING 
+04:31:07 task review PENDING Redone after implement round 2
+04:34:27 task implement SUCCEEDED 
+04:34:27 task review RUNNING 
+04:36:47 task review SUCCEEDED 
+04:36:47 task verify RUNNING 
+05:01:39 task verify SUCCEEDED 
+05:01:39 task ship RUNNING Opening the pull request.
+05:01:49 task ship AWAITING_EXTERNAL Waiting for CI (0 of 0 checks done)
+05:02:29 task ship AWAITING_EXTERNAL Waiting for CI (1 of 7 checks done)
+05:02:59 task ship AWAITING_EXTERNAL Waiting for CI (3 of 7 checks done)
+05:07:19 task ship AWAITING_EXTERNAL Waiting for CI (5 of 8 checks done)
+05:09:59 task ship AWAITING_EXTERNAL Waiting for CI (6 of 8 checks done)
+05:15:30 task ship AWAITING_APPROVAL Waiting for your review: Auto-merge is off for this project.
+05:15:30 approval apr_01m6b9ppprdsgfrrzsng release PENDING Review and merge chore: mission header actions float mid-header and step card meta is squeezed at 1100px

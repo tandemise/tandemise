@@ -30,6 +30,9 @@
 //   gh api repos/o/r/commits/SHA/check-runs
 //   gh api repos/o/r/branches/B/protection
 //   gh api repos/o/r/commits?sha=B&since=…
+//   gh api repos/o/r/commits/SHA                      (its parent: `parents` in the state, else git's)
+//   gh api repos/o/r/actions/runs?head_sha=SHA        (`workflowRuns` in the state, by sha)
+//   gh api repos/o/r/actions/runs/ID/jobs
 //
 // and, for intake's GitHub Issues tracker (intake plan Task 5):
 //
@@ -145,11 +148,25 @@ export function pullRequests(dir, repo) {
   return readState(dir).repos[repo]?.prs ?? [];
 }
 
-/** The check runs GitHub reports on a commit: `[{ name, status, conclusion, logTail }]`. */
+/**
+ * The check runs GitHub reports on a commit: `[{ name, status, conclusion, logTail, id?, startedAt?, app? }]`.
+ * A re-run is another entry with the same name and a later `startedAt` (or higher `id`), as GitHub lists it.
+ */
 export function setChecks(dir, repo, sha, checks) {
   const state = readState(dir);
   const r = (state.repos[repo] ??= { issues: [], comments: {} });
   (r.checks ??= {})[sha] = checks;
+  writeState(dir, state);
+}
+
+/**
+ * The GitHub Actions workflow runs on a commit:
+ * `[{ id, name, path, event, head_branch, status, conclusion, html_url, jobs: [{ name, status, conclusion, html_url }] }]`.
+ */
+export function setRuns(dir, repo, sha, runs) {
+  const state = readState(dir);
+  const r = (state.repos[repo] ??= { issues: [], comments: {} });
+  (r.workflowRuns ??= {})[sha] = runs;
   writeState(dir, state);
 }
 
@@ -365,7 +382,33 @@ function main(argv) {
       const per = Number(query.get('per_page') ?? 30);
       const page = Number(query.get('page') ?? 1);
       const slice = runs.slice((page - 1) * per, page * per);
-      out({ total_count: runs.length, check_runs: slice.map((k) => ({ name: k.name, status: k.status ?? 'completed', conclusion: k.conclusion ?? null, details_url: k.link ?? null, output: { summary: null, text: k.logTail ?? null } })) });
+      out({ total_count: runs.length, check_runs: slice.map((k, i) => ({ id: k.id ?? (page - 1) * per + i + 1, started_at: k.startedAt ?? null, app: { id: k.appId ?? 15368, slug: k.app ?? 'github-actions' }, name: k.name, status: k.status ?? 'completed', conclusion: k.conclusion ?? null, details_url: k.link ?? null, output: { summary: null, text: k.logTail ?? null } })) });
+      return;
+    }
+    // GitHub Actions: a commit's workflow runs (`workflowRuns` per sha), their jobs, and a commit's parent.
+    c = /^repos\/([^/]+\/[^/]+)\/actions\/runs$/.exec(path);
+    if (c) {
+      const sha = new URLSearchParams((endpoint ?? '').split('?')[1] ?? '').get('head_sha');
+      const runs = (repoOf(c[1]).workflowRuns ?? {})[sha] ?? [];
+      out({ total_count: runs.length, workflow_runs: runs.map(({ jobs, ...run }) => run) });
+      return;
+    }
+    c = /^repos\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)\/jobs$/.exec(path);
+    if (c) {
+      const run = Object.values(repoOf(c[1]).workflowRuns ?? {}).flat().find((x) => String(x.id) === c[2]);
+      out({ total_count: run?.jobs?.length ?? 0, jobs: run?.jobs ?? [] });
+      return;
+    }
+    c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]{7,40})$/.exec(path);
+    if (c) {
+      let parent = (repoOf(c[1]).parents ?? {})[c[2]];
+      if (parent === undefined) {
+        try {
+          execFileSync('git', ['fetch', '-q', 'origin'], { stdio: 'ignore' });
+          parent = execFileSync('git', ['rev-parse', `${c[2]}^`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        } catch { parent = null; }
+      }
+      out({ sha: c[2], parents: parent === null ? [] : [{ sha: parent }] });
       return;
     }
     c = /^repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]+)\/check-suites$/.exec(path);
@@ -538,7 +581,15 @@ function prChecks(state, args) {
   if (args.includes('--required') && r.protection?.required_status_checks == null) {
     fail(`no required checks reported on the '${pr.headRefName}' branch`);
   }
-  const runs = (r.checks ?? {})[pr.headRefOid] ?? r.defaultChecks ?? [];
+  const all = (r.checks ?? {})[pr.headRefOid] ?? r.defaultChecks ?? [];
+  // gh shows the latest run of each check, as GitHub does.
+  const latest = new Map();
+  all.forEach((k, i) => {
+    const at = [k.startedAt ?? '', k.id ?? i];
+    const known = latest.get(k.name);
+    if (known === undefined || at[0] > known.at[0] || (at[0] === known.at[0] && at[1] > known.at[1])) latest.set(k.name, { k, at });
+  });
+  const runs = [...latest.values()].map((x) => x.k);
   if (runs.length === 0) fail(`no checks reported on the '${pr.headRefName}' branch`);
   for (const k of runs) process.stdout.write(`${k.name}\t${k.status === 'completed' || k.status === undefined ? (k.conclusion ?? 'pass') : 'pending'}\n`);
   if (runs.some((k) => (k.status ?? 'completed') === 'completed' && !['success', 'neutral', 'skipped'].includes(k.conclusion ?? ''))) process.exit(1);

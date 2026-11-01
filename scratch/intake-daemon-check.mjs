@@ -422,6 +422,30 @@ section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
     const missions = (await call('GET', `/v1/missions?workspaceId=${ws}`)).body;
     const list = Array.isArray(missions) ? missions : missions?.missions ?? [];
     check('one mission for GAR-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
+
+    // #185: the write-back only adds. An item with its own Acceptance criteria, and one with its own Done when.
+    const own = {
+      'GAR-20': { body: 'Receipts are hard to read.\n\n## Acceptance criteria\n- AC01: The total is bold\n- AC02: The date is shown\n\n## Notes\nLeave the logo alone.\n', added: ['- AC03: The receipt prints on A4'] },
+      'GAR-21': { body: 'Search is slow.\n\n## Done when\n- [ ] Results show within a second\n', added: ['- [ ] The receipt prints on A4'] },
+    };
+    for (const [key, item] of Object.entries(own)) {
+      fake.putIssue({ idReadable: key, summary: `Own criteria ${key}`, description: item.body, state: 'Draft' });
+      await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+      const m = (await call('POST', `/v1/workspaces/${ws}/board/refine`, { key })).body?.mission?.id;
+      const view = (await call('GET', `/v1/missions/${m}/refinement`)).body;
+      const fromItem = view?.criteria?.filter((c) => c.status === 'accepted') ?? [];
+      check(`${key}: the item's own lines read "From ${key}", not "Added by you"`, fromItem.length > 0 && fromItem.every((c) => c.origin === 'tracker' && c.originLabel === `From ${key}`), fromItem.map((c) => [c.statement, c.origin, c.originLabel]));
+      await call('POST', `/v1/missions/${m}/criteria`, { statement: 'The receipt prints on A4' });
+      const done = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key });
+      const body = fake.issues.get(key)?.description ?? '';
+      const lines = body.split('\n');
+      const mine = item.body.split('\n');
+      let at = 0;
+      const extra = [];
+      for (const l of lines) { if (at < mine.length && l === mine[at]) at++; else extra.push(l); }
+      check(`${key}: every line of the item is kept byte for byte, and only the decided line was added`, done.status === 200 && at === mine.length
+        && JSON.stringify(extra) === JSON.stringify(item.added), { status: done.status, extra, body });
+    }
   } catch (e) {
     check('the refine section ran', false, String(e?.stack ?? e));
   } finally {
@@ -488,6 +512,78 @@ section("daemon: saving the tracker token clears the board's cached problem (#13
     check('…and a token YouTrack refuses sets the problem again, in its own words', wrong, (await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem);
   } catch (e) {
     check('the token section ran', false, String(e?.stack ?? e));
+  } finally {
+    await daemon?.stop();
+    await fake?.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+section('daemon: Start assigns before it moves, and a refused move is on the Board (#187)');
+{
+  const root = mkdtempSync(join(tmpdir(), 'tdi-move-'));
+  const home = join(root, 'h');
+  const { startDaemon } = await import('../apps/daemon/dist/main.js');
+  let daemon;
+  let fake;
+  try {
+    // A team workflow: In Progress needs an assignee.
+    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'To Verify', 'Done', "Won't fix"], requireAssignee: ['In Progress'] });
+    fake.putIssue({ idReadable: 'GAR-30', summary: 'Unassigned start', description: '## Done when\n- [ ] It works', state: 'Open' });
+    fake.putIssue({ idReadable: 'GAR-31', summary: 'Refined start', description: 'Make the export faster.', state: 'Draft' });
+    daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
+    const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
+    const call = async (method, path, body) => {
+      const res = await fetch(`${daemon.url}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'x-tandemise-api-version': 'v1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text ? JSON.parse(text) : undefined };
+    };
+    const ws = (await call('POST', '/v1/workspaces', { name: 'Move' })).body?.workspace?.id;
+    await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
+    await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: {
+      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'To Verify', done: ['Done'], wont_do: ["Won't fix"], draft: ['Draft'] }, onComplete: 'in_review',
+    } });
+    await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+
+    // No login for this person: the tracker refuses the move, and the Board says so.
+    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-30' });
+    const row = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.ready?.find((i) => i.key === 'GAR-30');
+    check('with no assignee the tracker refuses In Progress, and the card says so in its words', started.status === 200 && fake.issues.get('GAR-30')?.state === 'Open'
+      && /^Couldn't move GAR-30 to In Progress in YouTrack: .*Assignee is required for In Progress\.$/.test(row?.moveProblem ?? ''), { state: fake.issues.get('GAR-30')?.state, moveProblem: row?.moveProblem });
+
+    const inbox = (await call('GET', `/v1/inbox?workspaceId=${ws}`)).body;
+    const stalledRow = inbox?.stalled?.find((s) => s.action?.kind === 'tracker-move');
+    check("…and it is a Stalled row in the Inbox, offering to try the move again", stalledRow?.action?.itemKey === 'GAR-30' && stalledRow.action.label === 'Try the move again'
+      && /Couldn't move GAR-30 to In Progress/.test(stalledRow.reason), stalledRow ?? inbox?.stalled);
+    const homeView = (await call("GET", `/v1/home?workspaceId=${ws}`)).body;
+    check('…counted in Home\'s Stalled', (homeView?.metrics?.stalled ?? 0) >= 1, homeView?.metrics);
+
+    // With the person's tracker login, a refined item: Draft → Open → In Progress, assigned first.
+    await call('PATCH', '/v1/settings', { trackerLogins: { [ws]: 'kim' } });
+    const retried = await call('POST', `/v1/workspaces/${ws}/board/retry-move`, { key: 'GAR-30' });
+    const cleared = (await call('GET', `/v1/inbox?workspaceId=${ws}`)).body?.stalled?.some((s) => s.action?.kind === 'tracker-move');
+    check('"Try the move again", now with a login: GAR-30 is assigned and moves, and the Stalled row is gone', retried.status === 200 && fake.issues.get('GAR-30')?.state === 'In Progress'
+      && fake.issues.get('GAR-30')?.assignee === 'kim' && cleared === false, { status: retried.status, state: fake.issues.get('GAR-30')?.state, cleared });
+    const m = (await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-31' })).body?.mission?.id;
+    await call('POST', `/v1/missions/${m}/criteria`, { statement: 'An export of 10,000 rows takes under a second' });
+    await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-31' });
+    const afterReady = fake.issues.get('GAR-31')?.state;
+    const go = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-31' });
+    check('a refined item goes Draft → Open → In Progress, assigned first', afterReady === 'Open' && go.status === 200 && go.body?.mission?.id === m
+      && fake.issues.get('GAR-31')?.state === 'In Progress' && fake.issues.get('GAR-31')?.assignee === 'kim', { afterReady, now: fake.issues.get('GAR-31')?.state, assignee: fake.issues.get('GAR-31')?.assignee });
+    const order = fake.fieldSets.filter((c) => c.issue === 'GAR-31').flatMap((c) => c.fields);
+    check('…set as data: State=Open, then Assignee=kim before State=In Progress, and no command', JSON.stringify(order) === JSON.stringify(['State=Open', 'Assignee=kim', 'State=In Progress'])
+      && !fake.commands.some((c) => c.issues.some((i) => i.idReadable === 'GAR-31')), { order, commands: fake.commands });
+    await new Promise((r) => setTimeout(r, 6_000));
+    const later = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.inProgress?.find((i) => i.key === 'GAR-31');
+    check('…and it stays In Progress across write-back passes, with no problem on its card', fake.issues.get('GAR-31')?.state === 'In Progress' && later?.moveProblem === null, { state: fake.issues.get('GAR-31')?.state, card: later });
+  } catch (e) {
+    check('the move section ran', false, String(e?.stack ?? e));
   } finally {
     await daemon?.stop();
     await fake?.close();
