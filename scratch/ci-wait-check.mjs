@@ -181,6 +181,54 @@ await attempt('ci failed on the pull request', async () => {
   check('a new green commit ends the wait', task('ci').status === 'SUCCEEDED', [task('ci').status, task('ci').statusReason]);
 });
 
+await attempt('a check run again on the same commit', async () => {
+  section('a check run again on the same commit: only its latest run counts (#197)');
+  const { realExecutor } = await import('./planner-harness.mjs');
+  const GH = await import('@tandemise/integration-github');
+  const flow = new GH.GhPullRequestFlow(realExecutor(join(ghDir, 'bin')));
+  const at = (min) => `2026-01-01T00:${String(min).padStart(2, '0')}:00Z`;
+  const fixed = [
+    { id: 11, name: 'PR title', conclusion: 'failure', startedAt: at(1), logTail: 'title is not a conventional commit' },
+    { id: 12, name: 'build', conclusion: 'success', startedAt: at(1) },
+    { id: 13, name: 'PR title', conclusion: 'success', startedAt: at(5) },
+  ];
+  const broke = [
+    { id: 21, name: 'PR title', conclusion: 'success', startedAt: at(1) },
+    { id: 22, name: 'build', conclusion: 'success', startedAt: at(1) },
+    { id: 23, name: 'PR title', conclusion: 'failure', startedAt: at(5), logTail: 'title is not a conventional commit' },
+  ];
+  fake.setChecks(ghDir, REPO, 'd'.repeat(40), fixed);
+  fake.setChecks(ghDir, REPO, 'e'.repeat(40), broke);
+  const a = await flow.checks(checkout, REPO, 'd'.repeat(40));
+  check('failed, then passed on the same commit: PASS, two checks', a.state === 'PASS' && a.total === 2 && a.failing.length === 0, a);
+  const b = await flow.checks(checkout, REPO, 'e'.repeat(40));
+  check('passed, then failed on the same commit: FAIL on that check', b.state === 'FAIL' && b.total === 2 && b.failing.map((f) => f.name).join() === 'PR title', b);
+
+  const pr = openPr('feat/retitled', fixed);
+  const { task } = await legacyMission('fix: retitled pull request', 'gh pr checks feat/retitled');
+  await h.until(() => task('ci')?.status === 'SUCCEEDED' || (task('implement')?.round ?? 1) >= 2, 60000);
+  check('a CI wait on a check that failed and then passed: it passes, and the code step is not sent back', task('ci').status === 'SUCCEEDED' && (task('implement').round ?? 1) === 1, [task('ci').status, task('ci').statusReason, task('implement').round]);
+  void pr;
+});
+
+await attempt('the same ci failure twice', async () => {
+  section('the same CI failure on the same commit does not start another round (#197)');
+  const { m, task } = await legacyMission('fix: same red ci', 'true');
+  await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
+  const ship = h.container.resolve(h.app.SHIP_SERVICE);
+  const failing = { name: 'test', link: `https://github.com/${REPO}/actions/runs/7`, logTail: 'expected 2, got 3' };
+  const first = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  check('a CI failure sends the code step back once', first.kind === 'reopened' && (task('implement').round ?? 1) === 2, [first, task('implement').round]);
+  const again = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'a'.repeat(40));
+  check('the same check failing on the same commit: no new round', again.kind === 'blocked' && (task('implement').round ?? 1) === 2, [again, task('implement').round]);
+  const cards = h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] }).filter((x) => x.title.endsWith('CI fails the same way again'));
+  check('…a card says so, with Retry and Leave blocked', cards.length === 1 && cards[0].options.map((o) => o.label).join() === 'Retry,Leave blocked', h.repo.approvals.list({ missionId: m.id }).map((x) => x.title));
+  // The round runs; then CI fails again, on the commit it pushed.
+  await h.until(() => task('implement')?.status === 'SUCCEEDED', 60000);
+  const moved = ship.ciFailed(h.repo.missions.get(m.id), task('ship'), failing, 'b'.repeat(40));
+  check('a failure on a new commit starts a round as before', moved.kind === 'reopened' && (task('implement').round ?? 1) === 3, [moved, task('implement').round]);
+});
+
 await attempt('waits that are not about a pull request', async () => {
   section('a wait that is not about a pull request keeps its command');
   const ok = await legacyMission('chore: wait on a command', 'git rev-parse --is-inside-work-tree');

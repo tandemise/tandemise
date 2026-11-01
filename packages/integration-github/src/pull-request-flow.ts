@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { PullRequestChecks, PullRequestPort, PullRequestRef } from '@tandemise/domain';
+import type { PullRequestChecks, PullRequestPort, PullRequestRef, WorkflowRunSummary } from '@tandemise/domain';
 import type { CommandExecutor } from '@tandemise/integrations-core';
 import { TandemiseError } from '@tandemise/shared';
 import { gh, ghJson, type GhContext } from './gh.js';
@@ -90,7 +90,10 @@ export class GhPullRequestFlow implements PullRequestPort {
    */
   async checks(cwd: string, repo: string, sha: string): Promise<PullRequestChecks> {
     const runSchema = z.object({
+      id: z.number().optional(),
       name: z.string(),
+      started_at: z.string().nullable().optional(),
+      app: z.object({ id: z.number().optional(), slug: z.string().optional() }).nullable().optional(),
       status: z.string(),
       conclusion: z.string().nullable().optional(),
       details_url: z.string().nullable().optional(),
@@ -116,12 +119,14 @@ export class GhPullRequestFlow implements PullRequestPort {
     const status = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/commits/${sha}/status`], z.object({
       statuses: z.array(z.object({ context: z.string(), state: z.string(), target_url: z.string().nullable().optional(), description: z.string().nullable().optional() }).passthrough()).optional(),
     })).catch(() => ({ statuses: [] }));
+    // The combined status already holds only the latest status per context.
     const statuses = status.statuses ?? [];
-    const done = all.filter((r) => r.status.toLowerCase() === 'completed');
+    const latest = latestPerCheck(all);
+    const done = latest.filter((r) => r.status.toLowerCase() === 'completed');
     const failingRuns = done.filter((r) => !['success', 'neutral', 'skipped'].includes((r.conclusion ?? '').toLowerCase()));
     const failingStatuses = statuses.filter((s) => s.state === 'failure' || s.state === 'error');
     const pendingStatuses = statuses.filter((s) => s.state === 'pending');
-    const total = all.length + statuses.length;
+    const total = latest.length + statuses.length;
     const finished = done.length + statuses.length - pendingStatuses.length;
     const failing = [
       ...failingRuns.map((r) => {
@@ -133,7 +138,42 @@ export class GhPullRequestFlow implements PullRequestPort {
     const state: PullRequestChecks['state'] = total === 0 && waitingSuites === 0 ? 'NONE'
       : failing.length > 0 ? 'FAIL'
         : finished < total || waitingSuites > 0 ? 'PENDING' : 'PASS';
-    return { state, done: finished, total: total + waitingSuites, failing };
+    const runs = all.map((r) => ({
+      name: r.name,
+      passed: r.status.toLowerCase() !== 'completed' ? null : ['success', 'neutral', 'skipped'].includes((r.conclusion ?? '').toLowerCase()),
+      link: r.details_url ?? null,
+    }));
+    return { state, done: finished, total: total + waitingSuites, failing, runs };
+  }
+
+  /** The Actions workflow runs on one commit, each with its jobs (#186). A run whose jobs can't be read keeps none. */
+  async workflowRuns(cwd: string, repo: string, sha: string): Promise<readonly WorkflowRunSummary[]> {
+    const res = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/actions/runs?head_sha=${sha}&per_page=100`], z.object({
+      workflow_runs: z.array(z.object({
+        id: z.number(), name: z.string().nullable().optional(), path: z.string().nullable().optional(), event: z.string(),
+        head_branch: z.string().nullable().optional(), status: z.string().nullable().optional(), conclusion: z.string().nullable().optional(),
+        html_url: z.string().nullable().optional(),
+      }).passthrough()).optional(),
+    }));
+    const passedOf = (status: string | null | undefined, conclusion: string | null | undefined): boolean | null =>
+      (status ?? '').toLowerCase() !== 'completed' ? null : ['success', 'neutral', 'skipped'].includes((conclusion ?? '').toLowerCase());
+    const out: WorkflowRunSummary[] = [];
+    for (const run of res.workflow_runs ?? []) {
+      const jobs = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/actions/runs/${run.id}/jobs?per_page=100`], z.object({
+        jobs: z.array(z.object({ name: z.string(), status: z.string().nullable().optional(), conclusion: z.string().nullable().optional(), html_url: z.string().nullable().optional() }).passthrough()).optional(),
+      })).catch(() => ({ jobs: [] }));
+      out.push({
+        id: run.id, workflow: run.name ?? run.path ?? `run ${run.id}`, path: run.path ?? '', event: run.event, headBranch: run.head_branch ?? null,
+        passed: passedOf(run.status, run.conclusion), link: run.html_url ?? null,
+        jobs: (jobs.jobs ?? []).map((j) => ({ name: j.name, passed: passedOf(j.status, j.conclusion), link: j.html_url ?? null })),
+      });
+    }
+    return out;
+  }
+
+  async parentOf(cwd: string, repo: string, sha: string): Promise<string | null> {
+    const res = await ghJson(this.#ctx(cwd), ['api', `repos/${repo}/commits/${sha}`], z.object({ parents: z.array(z.object({ sha: z.string() }).passthrough()).optional() }).passthrough());
+    return res.parents?.[0]?.sha ?? null;
   }
 
   /**
@@ -234,4 +274,25 @@ export class GhPullRequestFlow implements PullRequestPort {
     }).passthrough()));
     return rows.map((r) => ({ sha: r.sha, subject: r.commit.message.split('\n')[0] ?? '' }));
   }
+}
+
+/**
+ * One run per check: the latest. A check run again on the same commit (a
+ * re-run, or a workflow re-triggered by an `edited` event) leaves its earlier
+ * runs in GitHub's list; counting them kept a check that failed and then
+ * passed failing for ever (#197). Runs are keyed by app and name, and the
+ * latest is the one started last, else the higher id.
+ */
+export function latestPerCheck<T extends { readonly name: string; readonly id?: number | undefined; readonly started_at?: string | null | undefined; readonly app?: { readonly id?: number | undefined; readonly slug?: string | undefined } | null | undefined }>(runs: readonly T[]): T[] {
+  const byKey = new Map<string, T>();
+  const order = (r: T): [number, number] => [r.started_at == null ? 0 : Date.parse(r.started_at) || 0, r.id ?? 0];
+  for (const run of runs) {
+    const key = `${run.app?.id ?? run.app?.slug ?? ''}\u0000${run.name}`;
+    const known = byKey.get(key);
+    if (known === undefined) { byKey.set(key, run); continue; }
+    const [a1, a2] = order(run);
+    const [b1, b2] = order(known);
+    if (a1 > b1 || (a1 === b1 && a2 > b2)) byKey.set(key, run);
+  }
+  return [...byKey.values()];
 }
