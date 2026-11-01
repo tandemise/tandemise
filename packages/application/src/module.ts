@@ -330,6 +330,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       limits: r.resolve(t.LIMIT_SERVICE),
       skills: r.resolve(t.SKILL_SERVICE),
       skillInstaller: new SkillInstaller(r.resolve(t.EVENT_RECORDER)),
+      trackerItems: { get: (id) => r.tryResolve(it.TRACKER_ITEM_REPOSITORY)?.get(id as import('@tandemise/shared').TrackerItemId) },
       runScores: r.resolve(t.RUN_SCORE_REPOSITORY),
       // Resolved per call: the eval runner is composed from this executor.
       trialContext: (mission) => r.resolve(t.EVAL_RUNNER).contextFor(mission),

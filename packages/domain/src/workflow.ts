@@ -5,7 +5,7 @@ import type { IsolationMode } from './entities/task.js';
 import { Err, Ok, type Result } from '@tandemise/shared';
 import type { MissionPlan, PlannedTask } from './plan.js';
 import { MAX_LADDER, MAX_MODEL_NAME, normalizeModelPolicy } from './entities/models.js';
-import { parseSkillRef } from './entities/skill.js';
+import { parseSkillRef, stepSkillProblem } from './entities/skill.js';
 import { lintGate } from './gate-lint.js';
 import { STEP_CLASSES } from './planner/types.js';
 
@@ -100,7 +100,21 @@ const workflowStep = z.object({
   skills: z.array(z.string().trim().min(1).refine((ref) => parseSkillRef(ref) !== null, {
     message: 'a skill is written as name, name@<version> or name@latest',
   })).max(20).optional(),
+  /**
+   * One of the team's own Claude Code skills this step runs instead of its
+   * role's prompt (#131): `{ name: team:build-feature, args: '{{item.key}}' }`.
+   * The step keeps its outputs and gate.
+   */
+  runSkill: stepSkillSchema().optional(),
 });
+
+/** `runSkill:` in a workflow step and an entry of `planner.yaml`'s `stepSkills` (#131). */
+export function stepSkillSchema() {
+  return z.object({
+    name: z.string().trim().min(1).refine((n) => stepSkillProblem(n) === null, { message: 'a skill is written as name or plugin:name' }),
+    args: z.string().max(2000).default(''),
+  });
+}
 
 const workflowInput = z.object({
   name: z.string().trim().regex(/^[a-z][a-z0-9_]*$/i, 'must be a simple identifier'),
@@ -385,5 +399,6 @@ function toPlannedTask(
     ...(step.skills === undefined || step.skills.length === 0
       ? {}
       : { skillRefs: step.skills.map((ref) => parseSkillRef(ref)!) }),
+    ...(step.runSkill === undefined || step.executor !== 'agent' ? {} : { runSkill: { name: step.runSkill.name, args: step.runSkill.args } }),
   };
 }
