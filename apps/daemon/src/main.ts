@@ -12,6 +12,7 @@ import {
   InstanceLock, loadOrCreateToken, removeConnectionFile, writeConnectionFile,
 } from './http/identity.js';
 import { installShutdownHandlers } from './lifecycle.js';
+import { closeInheritedListeners } from './inherited-fds.js';
 import { adoptGitName, gitUserName } from './local-person.js';
 import { TERMINAL_HOST } from '@tandemise/terminal';
 import { EVAL_RUNNER, EVENT_RECORDER, MISSION_REPOSITORY, RECOVERY_SERVICE } from '@tandemise/application';
@@ -189,6 +190,8 @@ if (isEntryPoint()) {
   // A packaged app runs this file on Electron's binary in Node mode; nothing
   // the daemon starts should inherit that mode (see ownNodeEnv).
   forgetElectronRunAsNode();
+  // Before anything listens: a listening socket held now was inherited from the window (#104).
+  closeInheritedListeners();
   startDaemon().catch((e) => {
     process.stderr.write(`tandemd failed to start: ${errorMessage(e)}\n`);
     process.exit(1);

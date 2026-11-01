@@ -8,6 +8,7 @@ import { useDaemonMutation } from '../lib/queries.js';
 import { useWorkspace } from '../lib/workspace.js';
 import { shortenPath } from '../lib/format.js';
 import { Limits } from './project/Limits.js';
+import { PathInput } from './FirstProject.js';
 import { Factory } from './project/Factory.js';
 import { Merge } from './project/Merge.js';
 import { Issues } from './project/Issues.js';
@@ -87,10 +88,13 @@ export function Project(): JSX.Element {
                               <SectionHead
                                 title="Repositories"
                                 action={
-                                  <Button onClick={() => void pickRepository()} disabled={addRepository.isPending}>
-                                    <Icon name="folder" size={13} />
-                                    {addRepository.isPending ? 'Adding…' : 'Add repository'}
-                                  </Button>
+                                  <div className="path-input">
+                                    <PathInput disabled={addRepository.isPending} onAdd={(path) => addRepository.mutate(path)} />
+                                    <Button onClick={() => void pickRepository()} disabled={addRepository.isPending}>
+                                      <Icon name="folder" size={13} />
+                                      {addRepository.isPending ? 'Adding…' : 'Add repository'}
+                                    </Button>
+                                  </div>
                                 }
                               />
                               {(workspaceView.repositories.length ?? 0) === 0 ? (
