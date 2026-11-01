@@ -103,6 +103,40 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
   }
 
   /**
+   * Moves a task's branch onto its base's current head (#138). A worktree and
+   * its branch outlive a run, so a step redone by a round would otherwise run
+   * again on the commit it saw first: a review that reviews, and a QA that
+   * verifies, code without the fix the round was for.
+   */
+  async #syncToBase(directory: string, branch: string, base: string): Promise<void> {
+    const { git, log } = this.deps;
+    const ancestor = async (a: string, b: string): Promise<boolean> =>
+      (await git.run(directory, ['merge-base', '--is-ancestor', a, b])).exitCode === 0;
+    if (await ancestor(base, 'HEAD')) return;
+    if (await ancestor('HEAD', base)) {
+      const ff = await git.run(directory, ['merge', '--ff-only', '--quiet', base]);
+      if (ff.exitCode !== 0) {
+        throw new TandemiseError('CONFLICT', `Could not move '${branch}' to the new work on '${base}': ${ff.stderr.trim() || ff.stdout.trim()}`, {
+          details: { directory, branch, base },
+        });
+      }
+      log.info('worktree.synced', { directory, branch, base, how: 'fast-forward' });
+      return;
+    }
+    const merged = await git.run(directory, [
+      '-c', 'user.name=Tandemise', '-c', 'user.email=factory@tandemise.local', '-c', 'commit.gpgsign=false',
+      'merge', '--no-edit', '--quiet', base,
+    ]);
+    if (merged.exitCode !== 0) {
+      await git.run(directory, ['merge', '--abort']);
+      throw new TandemiseError('CONFLICT', `'${branch}' has its own commits that conflict with the new work on '${base}'; it cannot run on the old work.`, {
+        details: { directory, branch, base },
+      });
+    }
+    log.info('worktree.synced', { directory, branch, base, how: 'merge' });
+  }
+
+  /**
    * Short, stable suffix from a task id. The full branded id is long and its
    * prefix is constant, so the tail carries the entropy.
    */
@@ -157,6 +191,8 @@ export class WorktreeTargetFactory implements ExecutionTargetFactory {
       log.info('worktree.created', { directory, branch, base, createBranch });
       await this.#seedDependencies(repositoryPath, directory);
     }
+
+    if (request.syncToBase === true) await this.#syncToBase(directory, branch, base);
 
     const baseCommit = await git.revParse(repositoryPath, base);
     const record: ExecutionTargetRecord = {

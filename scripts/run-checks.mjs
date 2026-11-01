@@ -78,6 +78,7 @@ export const OFFLINE_CHECKS = [
   'resume-check',
   'review-sees-diff-check',
   'routing-overcommit-check',
+  'round-redo-head-check',
   'rounds-check',
   'schema-constraint-check',
   'secrets-check',
