@@ -1339,11 +1339,7 @@ export class TaskExecutor {
     scope: EventScope,
     runId: RunId,
   ): Assessment {
-    const measured = {
-      ...(harvest.filesChanged === undefined ? {} : { filesChanged: harvest.filesChanged }),
-      // #191: the step's own outputs are judged on what this attempt delivered.
-      producedArtifactIds: harvest.manifests.map((m) => m.id),
-    };
+    const measured = harvest.filesChanged === undefined ? {} : { filesChanged: harvest.filesChanged };
     // A task with no completion gate has nothing to score, so its facts are
     // never assembled - GateService.assess() is only called when there is a
     // gate to read them against.

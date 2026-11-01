@@ -85,7 +85,7 @@ keepPainting([PORT]);
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
 // --real-claude adds PM1 on the real Claude Code runtime (claude at ~/.local/bin/claude, logged in).
-const scenarios = ['pm01.mjs', 'pm02.mjs', 'pm05.mjs', 'pm06.mjs', 'pm07.mjs', 'pm10.mjs', 'pm03.mjs', 'pm04.mjs', 'pm08.mjs', 'pm09.mjs', 'pm11.mjs', 'pm12.mjs', ...(process.argv.includes('--real-claude') ? ['pm01-real-claude.mjs'] : [])]
+const scenarios = ['pm01.mjs', 'pm02.mjs', 'pm05.mjs', 'pm06.mjs', 'pm07.mjs', 'pm10.mjs', 'pm03.mjs', 'pm04.mjs', 'pm08.mjs', 'pm09.mjs', 'pm11.mjs', 'pm12.mjs', 'pm13.mjs', ...(process.argv.includes('--real-claude') ? ['pm01-real-claude.mjs'] : [])]
   .filter((file) => !only || only.some((o) => file.replace('.mjs', '') === o || (o === 'pm01' && file === 'pm01.mjs') || (o !== 'pm01' && file.includes(o))));
 
 let failed = null;

@@ -61,11 +61,11 @@ export class GateService {
     // #191: a step's own output types count only what this step produced. In
     // the careful lane two review steps both write a ReviewReport; scoped to
     // the mission, the second step's gate passed on the first one's report
-    // after its own write was refused, and its verdict was lost.
+    // after its own write was refused, and its verdict was lost. Its own
+    // earlier output still counts: a code step sent back by a round keeps the
+    // ChangeSet it wrote, and its new commit is the work.
     const own = new Set<string>(task.expectedOutputs);
-    const produced = measured.producedArtifactIds;
-    builder.withArtifacts(this.artifacts.listByMission(task.missionId).filter((a) => !own.has(a.type)
-      || (produced !== undefined ? produced.includes(a.id) : a.taskId === task.id)));
+    builder.withArtifacts(this.artifacts.listByMission(task.missionId).filter((a) => !own.has(a.type) || a.taskId === task.id));
     builder.expectingArtifactTypes(task.expectedOutputs);
 
     const review = this.#evaluationFor(task, 'review');
@@ -208,12 +208,6 @@ export class GateService {
 
 export interface TaskMeasurements {
   readonly filesChanged?: number;
-  /**
-   * The artifacts this attempt delivered (its harvest), when the gate is
-   * judged for an attempt. A step's own output types are then counted from
-   * these alone (#191); without it, from this step's artifacts.
-   */
-  readonly producedArtifactIds?: readonly string[];
 }
 
 /** The evaluator role whose facts a step that writes this report must produce itself (#191). */

@@ -99,13 +99,18 @@ function narrowToRole(role: RoleTemplate, task: MissionTask): readonly Capabilit
   // careful lane's review step listed read-only capabilities, so its own
   // ReviewReport write was refused and its verdict lost. `artifact.write`
   // reaches only the step's out folder, never the tree.
-  const delivers = task.expectedOutputs.length > 0 ? [ARTIFACT_WRITE] : [];
-  if (asked.length === 0) return unique([...role.defaultCapabilities, ...delivers]);
+  const withOutputWrite = (granted: readonly Capability[]): Capability[] =>
+    task.expectedOutputs.length > 0 && !anyCapabilityMatches(granted, ARTIFACT_WRITE) && !anyCapabilityMatches(granted, FILESYSTEM_WRITE)
+      ? unique([...granted, ARTIFACT_WRITE])
+      : unique(granted);
+  if (asked.length === 0) return withOutputWrite(role.defaultCapabilities);
   // Keeping the *task's* string rather than the role's keeps the grant as
   // narrow as possible: role `github` + task `github.pr.create` yields the
   // latter.
-  return unique([...asked.filter((c) => anyCapabilityMatches(role.defaultCapabilities, c)), ...delivers]);
+  return withOutputWrite(asked.filter((c) => anyCapabilityMatches(role.defaultCapabilities, c)));
 }
+
+const FILESYSTEM_WRITE: Capability = CORE_CAPABILITIES.filesystemWrite;
 
 const ARTIFACT_WRITE: Capability = CORE_CAPABILITIES.artifactWrite;
 

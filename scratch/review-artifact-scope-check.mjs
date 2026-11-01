@@ -58,6 +58,7 @@ const front = (type, extra, body = 'Body.') => ['---', `type: ${type}`, 'schemaV
 const out = (taskId, type) => `.tandemise/out/${taskId}/${type}.md`;
 const savePrompt = { kind: 'write-file', path: '.tandemise/out/prompt-{{runId}}.txt', content: '{{prompt}}' };
 const MARKER = 'outbox-pattern-for-every-consumer';
+const APPENDIX_MARKER = 'spec-appendix-replay-window';
 const REVIEW = (verdict, findings) => front('ReviewReport', [`verdict: ${verdict}`, 'reviewedRef: HEAD', ...findings]);
 const MAJOR = ['findings:', '  - severity: major', '    title: Retries are not idempotent', '    detail: A retried consumer applies the event twice.', '    location: src/a.js', '    suggestedFix: Key the write by event id.'];
 
@@ -76,8 +77,9 @@ const READ_ONLY = ['repository.read', 'filesystem.read', 'artifact.write', 'shel
 // A careful-lane mission: architecture → implement → security review → review the change.
 const careful = async (title, second) => {
   const mission = await h.services.missions.create(caller, { workspaceId: ws, goal: title, title, repositoryId: repository.id });
-  const T = { architecture: ids.task(), implement: ids.task(), security_review: ids.task(), review: ids.task() };
+  const T = { spec: ids.task(), architecture: ids.task(), implement: ids.task(), security_review: ids.task(), review: ids.task() };
   const staff = {
+    spec: agentOn(`${title} product`, 'product', [{ kind: 'write-file', path: out(T.spec, 'ProductSpec'), content: front('ProductSpec', ['acceptanceCriteria:', '  - id: AC1', '    statement: The consumer applies each event once.', 'nonGoals: []'], `The consumer applies each event once.\n\n## Appendix\n\n${APPENDIX_MARKER}: replay the last 100 events on start.`) }, { kind: 'complete' }]),
     architecture: agentOn(`${title} architect`, 'architecture', [{ kind: 'write-file', path: out(T.architecture, 'ArchitecturePlan'), content: front('ArchitecturePlan', ['components:', '  - outbox', 'risks: []', 'migration: none'], `Use the ${MARKER}.`) }, { kind: 'complete' }]),
     implement: agentOn(`${title} developer`, 'development', [{ kind: 'write-file', path: 'src/a.js', content: 'export const a = 1;\n' }, { kind: 'write-file', path: out(T.implement, 'ChangeSet'), content: front('ChangeSet', ['branch: x', 'commits: []', 'filesChanged: 1', 'testsRun: []', 'knownLimitations: []']) }, { kind: 'complete' }]),
     security_review: agentOn(`${title} security reviewer`, 'review', [{ kind: 'write-file', path: out(T.security_review, 'ReviewReport'), content: REVIEW('pass', ['findings: []']) }, { kind: 'complete' }]),
@@ -94,7 +96,8 @@ const careful = async (title, second) => {
     createdAt: now(), updatedAt: now(), startedAt: null, finishedAt: null,
   });
   const rows = [
-    row('architecture', 'architecture', ['ArchitecturePlan'], [], [], []),
+    row('spec', 'product', ['ProductSpec'], [], [], []),
+    row('architecture', 'architecture', ['ArchitecturePlan'], ['spec'], [], []),
     row('implement', 'development', ['ChangeSet'], ['architecture'], [], []),
     row('security_review', 'review', ['ReviewReport'], ['implement'], ['ChangeSet'], READ_ONLY),
     row('review', 'review', ['ReviewReport'], ['security_review'], ['ChangeSet'], READ_ONLY),
@@ -115,8 +118,12 @@ const promptOf = (missionId, id) => {
 
 section('the second review\'s write is refused');
 {
+  // First attempt: the write is refused. The attempt a person retries writes it (the retry carries the gate's words).
+  const RETRY = 'Your previous attempt';
   const { mission, T } = await careful('Refused', (id) => [
     savePrompt,
+    { kind: 'write-file', path: out(id, 'ReviewReport'), content: REVIEW('needs_changes', MAJOR), when: { promptIncludes: RETRY } },
+    { kind: 'complete', when: { promptIncludes: RETRY } },
     { kind: 'tool', tool: 'Write', input: `{"file_path":"${out(id, 'ReviewReport')}"}`, outcome: 'error' },
     { kind: 'message', text: 'Verdict: needs_changes. Major: retries are not idempotent.' },
     { kind: 'complete' },
@@ -131,6 +138,15 @@ section('the second review\'s write is refused');
   check('QA-like work after it does not start: the mission waits', task(T.review).status !== 'SUCCEEDED');
   const prompt = promptOf(mission.id, T.review);
   check('the reviewer is handed the ArchitecturePlan it checks against, though the step listed only the ChangeSet', prompt.includes(MARKER), prompt.length);
+  check('...and the ProductSpec, appendix included', prompt.includes('The consumer applies each event once.') && prompt.includes(APPENDIX_MARKER), prompt.length);
+
+  // The person retries from the card: the second attempt writes its report, and the step succeeds on it.
+  await h.services.approvals.decide(caller, card.id, { optionId: 'approve' });
+  await h.until(() => ['SUCCEEDED', 'BLOCKED', 'FAILED'].includes(task(T.review).status) && task(T.review).attempts >= 2, 30000);
+  check('the retried attempt writes its report and succeeds', task(T.review).status === 'SUCCEEDED' && task(T.review).attempts === 2, `${task(T.review).status}: ${task(T.review).statusReason}`);
+  const after = gates.factsFor(task(T.review));
+  check('...on its own report: needs_changes with the major finding, not the security review\'s pass',
+    after['artifact.ReviewReport.count'] === 1 && after['review.verdict'] === 'needs_changes' && after['review.major_findings'] === 1, after);
 }
 
 section('both reviews write: each verdict is its own');
