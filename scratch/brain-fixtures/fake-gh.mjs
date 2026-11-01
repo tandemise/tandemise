@@ -6,6 +6,8 @@
  *   - `auth status` succeeds;
  *   - `repo create <owner>/<name>` runs `git init --bare -b main` at
  *     $FAKE_GH_REMOTES/<owner>/<name>.git and prints its GitHub URL;
+ *     it fails, as gh does, when that repository already exists;
+ *   - `repo view <owner>/<name> --json isEmpty` says whether it has any ref;
  *   - `pr create` prints https://github.com/garipass/brain/pull/<n> and
  *     remembers the head branch;
  *   - `pr list --head <b>` prints that PR (or []);
@@ -44,9 +46,24 @@ if (a === 'repo' && b === 'create') {
   const [owner, name] = argv[2].split('/');
   const remotes = process.env.FAKE_GH_REMOTES;
   const dir = join(remotes, owner, `${name}.git`);
+  if (existsSync(dir)) {
+    console.error('GraphQL: Name already exists on this account (createRepository)');
+    process.exit(1);
+  }
   mkdirSync(dir, { recursive: true });
   execFileSync('git', ['init', '--bare', '-q', '-b', 'main', dir]);
   console.log(`https://github.com/${owner}/${name}`);
+  process.exit(0);
+}
+if (a === 'repo' && b === 'view') {
+  const [owner, name] = argv[2].split('/');
+  const dir = join(process.env.FAKE_GH_REMOTES, owner, `${name}.git`);
+  if (!existsSync(dir)) {
+    console.error(`GraphQL: Could not resolve to a Repository with the name '${owner}/${name}'.`);
+    process.exit(1);
+  }
+  const refs = execFileSync('git', ['-C', dir, 'for-each-ref'], { encoding: 'utf8' }).trim();
+  console.log(JSON.stringify({ isEmpty: refs === '' }));
   process.exit(0);
 }
 if (a === 'pr' && b === 'create') {
