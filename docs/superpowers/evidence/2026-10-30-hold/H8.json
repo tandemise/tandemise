@@ -76,8 +76,8 @@
     "setup: the Design agent runs on a fake runtime that resumes and opens an interactive session on a PTY"
   ],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H8-plan-card-now.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H8-feed-card-now.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H8-drawer-now.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H8-plan-card-now.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H8-feed-card-now.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H8-drawer-now.png"
   ]
 }

@@ -20,8 +20,14 @@ import { Badge, Banner } from '@tandemise/design/react';
  * I choose*. The six questions are literally the layout below, so an approval
  * that is missing one is visibly incomplete rather than quietly ambiguous.
  */
-export function ApprovalCard({ view, compact = false }: { view: ApprovalView; compact?: boolean }): JSX.Element {
+export function ApprovalCard({ view, compact = false, headingLevel = 3 }: {
+  view: ApprovalView;
+  compact?: boolean;
+  /** The card's title level: 3 under a section heading (the Inbox), 2 straight under the page's h1 (1.3.1). */
+  headingLevel?: 2 | 3;
+}): JSX.Element {
   const { approval } = view;
+  const Title = headingLevel === 2 ? 'h2' : 'h3';
   const decision = useApprovalDecision(view);
   const { actors, copy } = decision;
   // The full question is kept as evidence because titles are cut at one line;
@@ -43,7 +49,7 @@ export function ApprovalCard({ view, compact = false }: { view: ApprovalView; co
           </span>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h3 className="approval__title">{approval.title}</h3>
+          <Title className="approval__title">{approval.title}</Title>
           <div className="approval__context">
             <span className={copy.question ? 'chip chip--you' : 'chip chip--muted'}>{copy.kindLabel}</span>
             {position ? <Badge tone="accent">{position}</Badge> : null}

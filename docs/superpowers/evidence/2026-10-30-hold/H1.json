@@ -16,7 +16,7 @@
       "observed": {
         "text": "Hold",
         "disabled": false,
-        "title": "Stop the agent and work with it in its own terminal"
+        "title": ""
       }
     },
     {
@@ -27,12 +27,12 @@
     {
       "label": "the panel says who holds it: \"Held by You\"",
       "ok": true,
-      "observed": "designHeld by YouContinueReleaseClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task."
+      "observed": "designHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F6 moves between the terminal and the buttons above it; the terminal keeps Tab and Esc for itself."
     },
     {
       "label": "it offers Continue, Release and Close terminal",
       "ok": true,
-      "observed": "designHeld by YouContinueReleaseClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task."
+      "observed": "designHeld by YouContinueReleaseScreen reader modeClose terminalClaude Code may ask whether to trust this folder — choose “Yes, I trust this folder”. Tandemise created it for this task.F6 moves between the terminal and the buttons above it; the terminal keeps Tab and Esc for itself."
     },
     {
       "label": "proof (API): the step is HELD, its terminal open",
@@ -40,10 +40,10 @@
       "observed": {
         "status": "HELD",
         "hold": {
-          "holdId": "hld_01m683mn8m0anj0dx3cm",
-          "heldBy": "mem_01m683jx1kvrs3wj5c7r",
+          "holdId": "hld_01m69vtzknn4ye6exget",
+          "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
           "heldByName": "Demostenes Garcia",
-          "startedAt": "2026-10-31T04:31:44.404Z",
+          "startedAt": "2026-10-31T20:53:51.861Z",
           "terminalOpen": true
         }
       }
@@ -52,14 +52,14 @@
       "label": "proof (DB): the run it stopped ended RESUMABLE",
       "ok": true,
       "observed": {
-        "id": "run_01m683k4hn2g22fmd5mc",
+        "id": "run_01m69vsfhyz3376hty9d",
         "attempt": 1,
         "status": "RESUMABLE",
         "round": 1,
         "purpose": "round",
-        "sessionId": "sess-hold-run_01m683k4hn2g22fmd5mc",
-        "profileId": "rt_01m683jzc9cvj4yeb3jw",
-        "startedAt": "2026-10-31T04:30:54.535Z",
+        "sessionId": "sess-hold-run_01m69vsfhyz3376hty9d",
+        "profileId": "rt_01m69vsabxag6tat6keh",
+        "startedAt": "2026-10-31T20:53:02.675Z",
         "errorCode": "CANCELLED",
         "errorMessage": "Run cancelled"
       }
@@ -69,30 +69,30 @@
       "ok": true,
       "observed": {
         "hold": {
-          "id": "hld_01m683mn8m0anj0dx3cm",
-          "heldBy": "mem_01m683jx1kvrs3wj5c7r",
+          "id": "hld_01m69vtzknn4ye6exget",
+          "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
           "fromStatus": "RUNNING",
-          "profileId": "rt_01m683jzc9cvj4yeb3jw",
-          "sessionBefore": "sess-hold-run_01m683k4hn2g22fmd5mc",
+          "profileId": "rt_01m69vsabxag6tat6keh",
+          "sessionBefore": "sess-hold-run_01m69vsfhyz3376hty9d",
           "sessionAfter": null,
           "endedAt": null,
           "ending": null,
           "consumedAt": null,
           "diffStat": null,
-          "dir": "/tmp/tdm-hold/home/workspaces/ws_01m683jx1kvrs3wj5c7q/missions/msn_01m683k1ervfvq7vaxj6/holds/hld_01m683mn8m0anj0dx3cm"
+          "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69vscemfxdwwt5xs5/holds/hld_01m69vtzknn4ye6exget"
         },
-        "session": "sess-hold-run_01m683k4hn2g22fmd5mc"
+        "session": "sess-hold-run_01m69vsfhyz3376hty9d"
       }
     },
     {
       "label": "the terminal shows the session it resumed",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m683k4hn2g22fmd5mc\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69vsfhyz3376hty9d\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     },
     {
       "label": "what you type reaches the session (it echoes it back)",
       "ok": true,
-      "observed": "Fake session sess-hold-run_01m683k4hn2g22fmd5mc\nhello from the panel\n> hello from the panel\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "observed": "Fake session sess-hold-run_01m69vsfhyz3376hty9d\nhello from the panel\n> hello from the panel\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
     }
   ],
   "notes": [
@@ -100,8 +100,8 @@
     "light: terminal background rgb(255, 255, 255), text rgb(32, 30, 80)"
   ],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H1-card-hold.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H1-panel-dark.png",
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H1-panel-light.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H1-card-hold.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H1-panel-dark.png",
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H1-panel-light.png"
   ]
 }

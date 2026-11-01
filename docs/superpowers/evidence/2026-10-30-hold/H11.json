@@ -7,26 +7,26 @@
       "label": "proof (API): it runs on one of the two",
       "ok": true,
       "observed": {
-        "on": "rt_01m683zcchat16txxdka",
-        "a": "rt_01m683zcchat16txxdka",
-        "b": "rt_01m683zccq79asxdggwp"
+        "on": "rt_01m69w6nr721wvw8rbhp",
+        "a": "rt_01m69w6nr721wvw8rbhp",
+        "b": "rt_01m69w6nrdhfx4y4qq7m"
       }
     },
     {
       "label": "proof (DB): the hold is pinned to that profile",
       "ok": true,
       "observed": {
-        "id": "hld_01m683zkcdn00mcmph8a",
-        "heldBy": "mem_01m683jx1kvrs3wj5c7r",
+        "id": "hld_01m69w6wr8gejzjt1q1c",
+        "heldBy": "mem_01m69vs7k6ct6m0hb0ss",
         "fromStatus": "RUNNING",
-        "profileId": "rt_01m683zcchat16txxdka",
-        "sessionBefore": "sess-hold-run_01m683zhhte6eqd1w4ed",
+        "profileId": "rt_01m69w6nr721wvw8rbhp",
+        "sessionBefore": "sess-hold-run_01m69w6txt8tadmzy6hq",
         "sessionAfter": null,
         "endedAt": null,
         "ending": null,
         "consumedAt": null,
         "diffStat": null,
-        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m683jx1kvrs3wj5c7q/missions/msn_01m683zef1mh7y6m7tnm/holds/hld_01m683zkcdn00mcmph8a"
+        "dir": "/tmp/tdm-hold/home/workspaces/ws_01m69vs7k5fvjyvd9x2r/missions/msn_01m69w6qtvtk006mn45q/holds/hld_01m69w6wr8gejzjt1q1c"
       }
     },
     {
@@ -45,9 +45,9 @@
       "label": "proof (DB): Continue resumed on the hold's profile, not the one routing would pick now",
       "ok": true,
       "observed": {
-        "pass": "rt_01m683zcchat16txxdka",
-        "pinned": "rt_01m683zcchat16txxdka",
-        "other": "rt_01m683zccq79asxdggwp"
+        "pass": "rt_01m69w6nr721wvw8rbhp",
+        "pinned": "rt_01m69w6nr721wvw8rbhp",
+        "other": "rt_01m69w6nrdhfx4y4qq7m"
       }
     }
   ],
@@ -55,6 +55,6 @@
     "setup: the Design agent runs on two runtime profiles, A then B"
   ],
   "shots": [
-    "/home/demogar/projects/tandemise/tandemise/docs/superpowers/evidence/2026-10-30-hold/H11-continued.png"
+    "/home/demogar/projects/tandemise/tandemise/.claude/worktrees/agent-a322453df8fa3772c/docs/superpowers/evidence/2026-10-30-hold/H11-continued.png"
   ]
 }

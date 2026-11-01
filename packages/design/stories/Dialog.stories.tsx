@@ -175,6 +175,35 @@ export const FocusTrap: Story = {
   },
 };
 
+/**
+ * A closed disclosure inside a dialog: what it hides cannot take focus, so focus starts on its summary and the
+ * trap counts the summary, not the hidden button (Chromium keeps boxes for a closed `<details>`).
+ */
+export const ClosedDisclosure: Story = {
+  args: {
+    title: 'Step details',
+    description: undefined,
+    children: (
+      <details>
+        <summary>Retry with more access</summary>
+        <button type="button" className="btn">Retry with write access</button>
+      </details>
+    ),
+    footer: undefined,
+  },
+  render: (args) => <Harness {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('dialog', { name: 'Step details' });
+    const summary = canvasElement.querySelector('summary') as HTMLElement;
+    await waitFor(() => expect(summary).toHaveFocus());
+    await userEvent.tab({ shift: true });
+    await expect(canvas.getByRole('button', { name: 'Cancel mission' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(summary).toHaveFocus();
+  },
+};
+
 /** A confirm opened from a dialog: Escape closes only the topmost layer. */
 export const Stacked: Story = {
   render: function Stacked() {

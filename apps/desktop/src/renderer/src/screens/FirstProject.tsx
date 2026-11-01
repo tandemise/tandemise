@@ -22,7 +22,7 @@ import { Button, Tooltip } from '@tandemise/design/react';
  */
 export function FirstProject(): JSX.Element {
   return (
-    <div className="onboard">
+    <main className="onboard">
       <div className="onboard__inner">
         <div className="onboard__mark">
           <Logo size={34} />
@@ -34,7 +34,7 @@ export function FirstProject(): JSX.Element {
         </p>
         <ProjectForm />
       </div>
-    </div>
+    </main>
   );
 }
 

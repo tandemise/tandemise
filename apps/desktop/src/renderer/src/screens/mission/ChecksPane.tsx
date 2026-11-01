@@ -16,7 +16,8 @@ export function ChecksPane({ detail }: { detail: MissionDetail }): JSX.Element {
   const gated = detail.tasks.filter((task) => task.gate !== null);
 
   return (
-    <div className="page">
+    // Focusable, so a keyboard can scroll it when nothing inside takes focus (2.1.1).
+    <div className="page" tabIndex={0} role="region" aria-label="Checks and gates">
       <div className="page__inner">
         <section className="section">
           <SectionHead title="Quality gates" meta={`${gated.filter((t) => t.gate?.passed).length} of ${gated.length} passing`} />

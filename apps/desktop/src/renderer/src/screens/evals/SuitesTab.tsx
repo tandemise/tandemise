@@ -78,7 +78,7 @@ function SuiteDetail({ suite, onDeleted }: { suite: EvalSuiteView; onDeleted: ()
       <header className="reader__head">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0 }}>
-            <h1 className="reader__title">{suite.name}</h1>
+            <h2 className="reader__title">{suite.name}</h2>
             <div className="reader__meta">
               <span>{pluralize(suite.cases, 'case')}</span>
               <span>· created {relativeTime(suite.createdAt)}</span>

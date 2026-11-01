@@ -182,6 +182,7 @@ function RuntimeCard({
                 type="number"
                 min={1}
                 max={8}
+                aria-label={`Concurrency of ${profile.name}`}
                 style={{ width: 72 }}
                 defaultValue={profile.maxConcurrent}
                 onBlur={(event) => {

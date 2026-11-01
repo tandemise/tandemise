@@ -133,7 +133,7 @@ function SkillDetail({ skill, onDeleted }: { skill: SkillView; onDeleted: () => 
   return (
     <div className="stack" aria-label="Skill detail" style={{ gap: 'var(--s5)' }}>
       <header className="reader__head">
-        <h1 className="reader__title">{skill.name}</h1>
+        <h2 className="reader__title">{skill.name}</h2>
         <div className="reader__meta">
           <Chip>v{skill.latest.version}</Chip>
           <Chip muted className="mono">{skill.latest.shortHash}</Chip>

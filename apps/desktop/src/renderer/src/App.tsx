@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Redirect, Route, Router, Switch, useLocation } from 'wouter';
 import { useHashLocation } from 'wouter/use-hash-location';
 import { Sidebar } from './components/Sidebar.js';
@@ -32,6 +32,7 @@ import { useThemePreference } from './lib/theme.js';
 import { useFlash } from './lib/notices.js';
 import { ImpactHost } from './components/ImpactDialog.js';
 import { ComposerHost } from './components/RequestChanges.js';
+import { SkipLink } from '@tandemise/design/react';
 
 export function App(): JSX.Element {
   // Hash routing: the production build is loaded from `file://`, where a path
@@ -47,8 +48,32 @@ function Shell(): JSX.Element {
   const { status } = useConnection();
   useThemePreference();
 
-  if (status.phase !== 'connected') return <DaemonDown />;
-  return <ConnectedShell />;
+  return (
+    <>
+      <ConnectionAnnouncer connected={status.phase === 'connected'} />
+      {status.phase !== 'connected' ? <DaemonDown /> : <ConnectedShell />}
+    </>
+  );
+}
+
+/**
+ * Says when the daemon connects or goes away (WCAG 4.1.3). It sits above both
+ * the shell and the daemon-down screen, so it survives the switch between them
+ * and the change is announced; the first state is not (a live region only
+ * speaks when its words change).
+ */
+function ConnectionAnnouncer({ connected }: { connected: boolean }): JSX.Element {
+  // Empty until the state first changes: the starting state is on screen already and is not news.
+  const first = useRef(connected);
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    if (connected !== first.current) setChanged(true);
+  }, [connected]);
+  return (
+    <div className="visually-hidden" role="status">
+      {changed ? (connected ? 'Connected to the daemon.' : 'Not connected to the daemon.') : ''}
+    </div>
+  );
 }
 
 /**
@@ -80,9 +105,11 @@ function ConnectedShell(): JSX.Element {
 /** The one-line result of an action whose effect lands somewhere else on screen; announced, never focused. */
 function Flash(): JSX.Element | null {
   const text = useFlash();
-  return text === null ? null : (
-    <div className="flash" role="status">
-      {text}
+  // The live region is always there and only its words change: a region that
+  // appears together with its text is often not read at all (4.1.3).
+  return (
+    <div role="status" className={text === null ? 'visually-hidden' : 'flash'}>
+      {text ?? ''}
     </div>
   );
 }
@@ -102,8 +129,10 @@ function ProjectShell(): JSX.Element {
 
   return (
     <div className="app">
+      <SkipLink target="main" />
       <Sidebar pendingApprovals={pending} stream={stream} />
-      <main className="main">
+      {/* SkipLink gives it tabindex=-1 when it first lands there. */}
+      <main className="main" id="main">
         {/* Per-route, and keyed by location: a screen that fails should not
             follow you to the next one, and navigating away is the most natural
             way to ask for a retry. */}
