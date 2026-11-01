@@ -1,4 +1,6 @@
-export { ClaudeCodeAdapter, CLAUDE_ADAPTER_ID, CLAUDE_CAPABILITIES } from './adapter.js';
+export { ClaudeCodeAdapter, CLAUDE_ADAPTER_ID, CLAUDE_CAPABILITIES, missingSkill } from './adapter.js';
+export { installedPlugins, profileConfigDir, resolveClaudeSkill } from './skills.js';
+export type { InstalledPlugin } from './skills.js';
 export type { ClaudeCodeAdapterOptions } from './adapter.js';
 
 export { ClaudeEventMapper } from './event-mapper.js';
@@ -6,7 +8,7 @@ export type { ClaudeEventMapperOptions } from './event-mapper.js';
 
 export {
   CAPABILITY_TOOL_GUARDS, MAX_PROMPT_ARG_CHARS, PERMISSION_MODES,
-  buildInteractiveInvocation, buildInvocation, disallowedTools, interactivePermissionMode, permissionMode,
+  buildInteractiveInvocation, buildInvocation, skillPrompt, disallowedTools, interactivePermissionMode, permissionMode,
   allowedToolRules, ARTIFACT_WRITE_RULE,
 } from './cli-args.js';
 export type { ClaudeInvocation, PermissionMode } from './cli-args.js';

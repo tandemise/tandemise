@@ -24,6 +24,7 @@ operate it from a script.
 
 ```bash
 scripts/factory.sh start      # the newest AppImage in app/; its daemon starts with it
+scripts/factory.sh start --cdp  # the same, with the window's DevTools port open (see "Over CDP")
 scripts/factory.sh status     # window, daemon, release, API address, CDP port
 scripts/factory.sh stop       # quits the window; the daemon and any held session keep running
 scripts/factory.sh stop --daemon
@@ -151,8 +152,23 @@ binary frames are the PTY, and what you send is typed into it.
 
 ### Over CDP
 
-`scripts/factory.sh start` gives the window `--remote-debugging-port` (9371,
-or the next free port, written to `~/.tandemise-factory/cdp-port`).
+`scripts/factory.sh start --cdp` (or `FACTORY_CDP=1`) opens the window's
+DevTools port. It is a random free port (`--remote-debugging-port=0`),
+written to `~/.tandemise-factory/cdp-port` with mode 0600. A plain `start`
+opens none.
+
+The DevTools protocol has no authentication. While the port is open, any
+process on this computer that finds it can read the window and act in it:
+approve a plan, press Merge. That includes the factory's own agents, which
+run as you (#162). Agents are not told the port: the daemon removes the
+window's launch variables, any `*CDP*`/`*DEVTOOLS*`/`*REMOTE_DEBUGGING*`
+variable, `TANDEMISE_PORT` and inspector flags in `NODE_OPTIONS` from every
+worker's environment. A random port keeps it off the well-known ones an agent
+proving its own UI change would try. But an agent can still list this
+computer's listening ports, so this is not a block. Only a sandbox that keeps
+the agent off loopback would be one. Open the port when you mean to drive the
+window, and stop the window (`scripts/factory.sh stop`) when you are done.
+
 [`scripts/factory-cdp.mjs`](../scripts/factory-cdp.mjs) drives it:
 
 ```bash

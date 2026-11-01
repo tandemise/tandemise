@@ -1,0 +1,10 @@
+name: P13 missing team skill
+description: One step that runs a team skill the installed plugin does not have (#131).
+steps:
+  - key: implement
+    title: Implement
+    role: development
+    objective: Build the hello page.
+    outputs: [ChangeSet]
+    gate: artifact.ChangeSet.exists
+    runSkill: { name: 'team:fix-bug', args: '{{mission.title}}' }

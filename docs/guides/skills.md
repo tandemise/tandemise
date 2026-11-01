@@ -129,6 +129,15 @@ files brings back the same version.
 
 You can't delete a skill a role still pins; detach it in Team → Roles first.
 
+## Can a step run my team's skill instead of its role's prompt?
+
+Yes, with Claude Code. `planner.yaml`'s `stepSkills` (or a workflow step's
+`runSkill`) names the skill as Claude Code invokes it, `team:build-feature`,
+and the step's run starts with that slash command, the step's context as its
+input. A plugin's skill doesn't need importing: it runs from where the plugin
+is installed. See "Your team's own skills as steps" in
+[the factory guide](../FACTORY.md).
+
 ## Checking skills in a gate
 
 Two facts are measured for every step, so a gate can require its skills:

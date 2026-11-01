@@ -10,6 +10,7 @@ import { useDaemon } from '../lib/connection.js';
 import { keys, useBoard, useDaemonMutation, useIntakeConfig, useIntakeSignals } from '../lib/queries.js';
 import { useWorkspaceId } from '../lib/workspace.js';
 import { humanizeStatus, missionTone, relativeTime } from '../lib/format.js';
+import { showFlash } from '../lib/notices.js';
 import { IntakeList } from './board/IntakeList.js';
 import './Board.css';
 import { Banner, Button, Card, Chip, Tab, Tabs, Tooltip } from '@tandemise/design/react';
@@ -17,8 +18,13 @@ import { Banner, Button, Card, Chip, Tab, Tabs, Tooltip } from '@tandemise/desig
 export type BoardTab = 'board' | 'intake';
 export const BOARD_TABS: readonly BoardTab[] = ['board', 'intake'];
 
-/** The three groups, in the order work moves through them (intake spec §7). */
+/**
+ * The groups, in the order work moves through them (intake spec §7). Draft
+ * (#135) shows only when the project maps a draft state: the daemon then
+ * sends the group, even empty.
+ */
 const GROUPS: readonly { readonly key: keyof BoardView['groups']; readonly label: string }[] = [
+  { key: 'draft', label: 'Draft' },
   { key: 'ready', label: 'Ready' },
   { key: 'inProgress', label: 'In progress' },
   { key: 'inReview', label: 'In review' },
@@ -58,7 +64,7 @@ export function Board({ tab }: { tab: BoardTab }): JSX.Element {
   const noTracker = config.data?.tracker === null || board.data?.problem === NO_TRACKER;
   const label = board.data?.trackerLabel ?? '';
   const counts = {
-    board: board.data ? GROUPS.reduce((n, g) => n + board.data.groups[g.key].length, 0) : 0,
+    board: board.data ? GROUPS.reduce((n, g) => n + (board.data.groups[g.key]?.length ?? 0), 0) : 0,
     intake: signals.data?.length ?? 0,
   };
 
@@ -111,7 +117,10 @@ export function Board({ tab }: { tab: BoardTab }): JSX.Element {
                   <Empty icon="flag" title={`Nothing on your board yet. Check sources, or add work in ${label || 'your tracker'}.`} body="Items in a ready, in progress or in review state show here." />
                 </Card>
               ) : board.data ? (
-                GROUPS.map((group) => <Group key={group.key} id={group.key} label={group.label} items={board.data.groups[group.key]} />)
+                GROUPS.map((group) => {
+                  const items = board.data.groups[group.key];
+                  return items === undefined ? null : <Group key={group.key} id={group.key} label={group.label} items={items} tracker={label || 'your tracker'} />;
+                })
               ) : null}
             </section>
           )}
@@ -121,7 +130,7 @@ export function Board({ tab }: { tab: BoardTab }): JSX.Element {
   );
 }
 
-function Group({ id, label, items }: { id: string; label: string; items: readonly BoardItemView[] }): JSX.Element {
+function Group({ id, label, items, tracker }: { id: string; label: string; items: readonly BoardItemView[]; tracker: string }): JSX.Element {
   return (
     <section className="board__group" data-board-group={id} aria-label={label}>
       <h2 className="section__title board__group-title">
@@ -131,14 +140,14 @@ function Group({ id, label, items }: { id: string; label: string; items: readonl
         <p className="muted board__none">Nothing here.</p>
       ) : (
         <Card flush>
-          {items.map((item) => <Row key={item.id} item={item} />)}
+          {items.map((item) => <Row key={item.id} item={item} tracker={tracker} />)}
         </Card>
       )}
     </section>
   );
 }
 
-function Row({ item }: { item: BoardItemView }): JSX.Element {
+function Row({ item, tracker }: { item: BoardItemView; tracker: string }): JSX.Element {
   const workspaceId = useWorkspaceId();
   const [, navigate] = useLocation();
   // Navigates from the mutation itself: Start moves the row to another group, so this row can unmount
@@ -187,7 +196,9 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
       </div>
       <div className="list__aside">
         {/* A disabled button takes no focus, so why it cannot start is said beside it, not in a tooltip. */}
-        {item.mission ? (
+        {item.refine ? (
+          <DraftActions item={item} refine={item.refine} tracker={tracker} />
+        ) : item.mission && !item.startable.ok ? (
           // Already a mission (#108): open it, rather than a Start that can only be refused.
           <Link href={`/missions/${item.mission.id}`} className="btn board__open">
             Open mission<span className="visually-hidden"> for {item.key}</span>
@@ -195,7 +206,8 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
         ) : (
           <>
             {blocked !== null ? <span className="dim board__blocked">{blocked}</span> : null}
-            {blocked === null ? (
+            {/* A refined draft's Start plans its own mission: the factory decides its lane. */}
+            {blocked === null && !item.mission ? (
               <select
                 className="select board__lane"
                 aria-label={`Lane for ${item.key}`}
@@ -220,6 +232,57 @@ function Row({ item }: { item: BoardItemView }): JSX.Element {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A draft item's actions (#135): Refine, then, once its mission is ready,
+ * the one click that writes the refined item back to the tracker. Neither
+ * Refine nor deciding on the mission writes to the tracker.
+ */
+function DraftActions({ item, refine, tracker }: { item: BoardItemView; refine: NonNullable<BoardItemView['refine']>; tracker: string }): JSX.Element {
+  const workspaceId = useWorkspaceId();
+  const [, navigate] = useLocation();
+  const begin = useDaemonMutation(async (d, _: void) => {
+    const summary = await d.refineItem(workspaceId ?? '', item.key);
+    navigate(`/missions/${summary.mission.id}`);
+    return summary;
+  }, ['intake', 'missions']);
+  const write = useDaemonMutation(async (d, _: void) => {
+    const fresh = await d.markItemReady(workspaceId ?? '', item.key);
+    showFlash(`Wrote ${item.key} to ${tracker} and marked it ready. Start it when you are.`);
+    return fresh;
+  }, ['intake', 'missions']);
+  const state = refine.refinement;
+  return (
+    <div className="board__draft">
+      {!refine.ok ? <span className="dim board__blocked">{refine.reason}</span> : null}
+      {state !== null ? (
+        <>
+          <span className="dim board__blocked" data-board-refinement="" aria-live="polite">{state.failure ?? state.sentence}</span>
+          <Link href={`/missions/${item.mission?.id ?? ''}`} className="btn board__open">
+            Open refinement<span className="visually-hidden"> for {item.key}</span>
+          </Link>
+          <Button
+            variant="primary" className="board__write"
+            disabled={!state.ready || write.isPending}
+            onClick={() => write.mutate()}
+          >
+            {write.isPending ? 'Writing…' : `Write to ${tracker} and mark ready`}
+            <span className="visually-hidden"> {item.key}</span>
+          </Button>
+        </>
+      ) : refine.ok ? (
+        <Tooltip content={`Refine ${item.key} with the product agent; nothing is written to ${tracker} yet`}>
+          <Button variant="primary" className="board__refine" disabled={begin.isPending} onClick={() => begin.mutate()}>
+            {begin.isPending ? 'Refining…' : 'Refine'}
+            <span className="visually-hidden"> {item.key}</span>
+          </Button>
+        </Tooltip>
+      ) : null}
+      {begin.isError ? <ErrorState error={begin.error} /> : null}
+      {write.isError ? <ErrorState error={write.error} /> : null}
     </div>
   );
 }

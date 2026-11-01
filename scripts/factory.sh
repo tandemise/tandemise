@@ -1,7 +1,8 @@
 #!/bin/sh
 # The local factory that builds Tandemise with Tandemise (docs/FACTORY-DOGFOOD.md).
 #
-#   scripts/factory.sh start      start the newest AppImage in $FACTORY_HOME/app (its daemon starts with it)
+#   scripts/factory.sh start [--cdp]   start the newest AppImage in $FACTORY_HOME/app (its daemon starts with it);
+#                                 --cdp (or FACTORY_CDP=1) opens the window's DevTools port, see below
 #   scripts/factory.sh stop       quit the window; the daemon keeps running (add --daemon to stop it too)
 #   scripts/factory.sh status     what is running, which release, where the API and CDP are
 #   scripts/factory.sh upgrade    download the latest release into app/, stop everything, start the new one
@@ -9,6 +10,13 @@
 #
 # Everything lives in FACTORY_HOME (default ~/.tandemise-factory), which is the
 # instance's TANDEMISE_HOME. It never reads or writes ~/.tandemise.
+#
+# The window's DevTools port (#162) is off unless asked for. The DevTools
+# protocol has no authentication: anything on this computer that finds the
+# port can drive the window, including the factory's own agents. When asked,
+# the port is a random one, written to $FACTORY_HOME/cdp-port readable only by
+# you. That keeps it off well-known ports; it is not a sandbox (an agent runs
+# as you and could still look for it). Stop the window when you are done.
 set -eu
 
 FACTORY_HOME="${FACTORY_HOME:-$HOME/.tandemise-factory}"
@@ -30,31 +38,42 @@ daemon_field() {
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 
-port_free() {
-  ! (ss -ltn 2>/dev/null | grep -q "127.0.0.1:$1 ")
-}
-
 app_pid() {
   [ -f "$PID_FILE" ] || return 1
   pid=$(cat "$PID_FILE")
   alive "$pid" && echo "$pid"
 }
 
+cdp_line() {
+  if [ -s "$CDP_FILE" ]; then echo "CDP on 127.0.0.1:$(cat "$CDP_FILE")"; else echo "no DevTools port (start --cdp to open one)"; fi
+}
+
 start() {
-  if pid=$(app_pid); then echo "already running (pid $pid, CDP $(cat "$CDP_FILE"))"; return 0; fi
+  if pid=$(app_pid); then echo "already running (pid $pid, $(cdp_line))"; return 0; fi
   image=$(newest_appimage)
   [ -n "$image" ] || { echo "no AppImage in $APP_DIR; run: $0 upgrade" >&2; exit 1; }
   mkdir -p "$LOG_DIR"
-  # The daemon the app starts inherits the window's DevTools socket, so after a
-  # restart the old port can still be taken: use the first free one.
-  port=${FACTORY_CDP_PORT:-9371}
-  while ! port_free "$port"; do port=$((port + 1)); done
-  echo "$port" > "$CDP_FILE"
+  rm -f "$CDP_FILE" "$FACTORY_HOME/electron/DevToolsActivePort"
+  cdp=""
+  if [ "${1:-}" = "--cdp" ] || [ "${FACTORY_CDP:-0}" = "1" ]; then
+    # Port 0: Chromium picks a free port and writes it to DevToolsActivePort.
+    cdp="--remote-debugging-port=0"
+  fi
+  # shellcheck disable=SC2086 # $cdp is one flag or nothing
   TANDEMISE_HOME="$FACTORY_HOME" NO_CLEANUP=1 nohup "$image" \
-    --remote-debugging-port="$port" --user-data-dir="$FACTORY_HOME/electron" \
+    $cdp --user-data-dir="$FACTORY_HOME/electron" \
     >> "$LOG_DIR/app.log" 2>&1 &
   echo $! > "$PID_FILE"
-  echo "started $(basename "$image") (pid $!), CDP on 127.0.0.1:$port, TANDEMISE_HOME=$FACTORY_HOME"
+  if [ -n "$cdp" ]; then
+    tries=0
+    while [ ! -s "$FACTORY_HOME/electron/DevToolsActivePort" ] && [ $tries -lt 60 ]; do sleep 0.5; tries=$((tries + 1)); done
+    if [ -s "$FACTORY_HOME/electron/DevToolsActivePort" ]; then
+      (umask 077; head -n 1 "$FACTORY_HOME/electron/DevToolsActivePort" > "$CDP_FILE")
+    else
+      echo "the window did not report a DevTools port; see $LOG_DIR/app.log" >&2
+    fi
+  fi
+  echo "started $(basename "$image") (pid $!), $(cdp_line), TANDEMISE_HOME=$FACTORY_HOME"
 }
 
 stop() {
@@ -66,7 +85,7 @@ stop() {
   else
     echo "window not running"
   fi
-  rm -f "$PID_FILE"
+  rm -f "$PID_FILE" "$CDP_FILE"
   if [ "${1:-}" = "--daemon" ]; then
     dpid=$(daemon_field pid || true)
     if alive "$dpid"; then kill "$dpid"; echo "daemon stopped (pid $dpid)"; else echo "daemon not running"; fi
@@ -76,7 +95,7 @@ stop() {
 status() {
   echo "home:    $FACTORY_HOME"
   echo "app:     $(newest_appimage || echo none)"
-  if pid=$(app_pid); then echo "window:  running (pid $pid), CDP 127.0.0.1:$(cat "$CDP_FILE")"; else echo "window:  not running"; fi
+  if pid=$(app_pid); then echo "window:  running (pid $pid), $(cdp_line)"; else echo "window:  not running"; fi
   dpid=$(daemon_field pid || true)
   if alive "$dpid"; then
     echo "daemon:  running (pid $dpid), version $(daemon_field version), $(daemon_field url)"
@@ -109,10 +128,10 @@ api() {
 cmd="${1:-status}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
-  start) start ;;
+  start) start "$@" ;;
   stop) stop "$@" ;;
   status) status ;;
   upgrade) upgrade ;;
   api) api "$@" ;;
-  *) echo "usage: $0 start|stop [--daemon]|status|upgrade|api METHOD PATH [JSON]" >&2; exit 2 ;;
+  *) echo "usage: $0 start [--cdp]|stop [--daemon]|status|upgrade|api METHOD PATH [JSON]" >&2; exit 2 ;;
 esac

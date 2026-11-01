@@ -1,0 +1,139 @@
+{
+  "when": "2026-11-01T10:40:01.711Z",
+  "build": "f2903b0",
+  "results": [
+    {
+      "label": "the project has a tracker of its own first",
+      "ok": true,
+      "observed": {
+        "status": 200,
+        "body": {
+          "origin": "local",
+          "editable": true,
+          "tracker": {
+            "kind": "github-issues",
+            "repo": "acme/app",
+            "board": "is:open",
+            "states": {
+              "ready": [
+                "open"
+              ],
+              "in_progress": "in progress",
+              "done": [
+                "closed"
+              ],
+              "wont_do": []
+            },
+            "onComplete": "done"
+          },
+          "sources": [],
+          "dailyCap": 20,
+          "similarity": {
+            "link": 0.85,
+            "ask": 0.55
+          },
+          "enabled": {},
+          "originMismatch": {
+            "tracker": null,
+            "sources": {}
+          }
+        }
+      }
+    },
+    {
+      "label": "the project is linked to a brain on this machine",
+      "ok": true,
+      "observed": "local_only"
+    },
+    {
+      "label": "before the restart, intake reads the tracker from the brain",
+      "ok": true,
+      "observed": {
+        "origin": "brain",
+        "editable": false,
+        "tracker": {
+          "kind": "github-issues",
+          "repo": "acme/app",
+          "board": "is:open",
+          "states": {
+            "ready": [
+              "open"
+            ],
+            "in_progress": "in progress",
+            "done": [
+              "closed"
+            ],
+            "wont_do": []
+          },
+          "onComplete": "done"
+        },
+        "sources": [],
+        "dailyCap": 20,
+        "similarity": {
+          "link": 0.85,
+          "ask": 0.55
+        },
+        "enabled": {},
+        "originMismatch": {
+          "tracker": null,
+          "sources": {}
+        }
+      }
+    },
+    {
+      "label": "the daemon restarted",
+      "ok": true,
+      "observed": "http://127.0.0.1:44835"
+    },
+    {
+      "label": "…with the brain where it was",
+      "ok": true,
+      "observed": "e6d02e512b576a4540ceb8d8b7dec1118d0388ce"
+    },
+    {
+      "label": "after the restart the Board does not ask for a tracker",
+      "ok": true,
+      "observed": "Connected to the daemon.\nSkip to main content\nTandemise\nBrain tracker\n1 repository\nHome\nBoard\nMissions\nInbox\nArtifacts\nBRAIN TRACKER\nRepositories\nBrain\nTeam\nSkills\nEvals\nRuntimes\nIntegrations\nAPP\nSettings\nDaemon connected · 44835\nBoard\nThe work in your tracker. Start an item to make it a mission.\nBoard\n1\nIntake\n0\nGitHub\nRead just now\nCheck sources now\nReady\n1\n#41\nThe settings page title reads Setings\nFactory decides\nQuick\nCareful\nStart\nIn progress\n0\n\nNothing here.\n\nIn review\n0\n\nNothing here."
+    },
+    {
+      "label": "…and lists the item from the brain's tracker",
+      "ok": true,
+      "observed": "Connected to the daemon.\nSkip to main content\nTandemise\nBrain tracker\n1 repository\nHome\nBoard\nMissions\nInbox\nArtifacts\nBRAIN TRACKER\nRepositories\nBrain\nTeam\nSkills\nEvals\nRuntimes\nIntegrations\nAPP\nSettings\nDaemon connected · 44835\nBoard\nThe work in your tracker. Start an item to make it a mission.\nBoard\n1\nIntake\n0\nGitHub\nRead just now\nCheck sources now\nReady\n1\n#41\nThe settings page title reads Setings\nFactory decides\nQuick\nCareful\nStart\nIn progress\n0\n\nNothing here.\n\nIn review\n0\n\nNothing here."
+    },
+    {
+      "label": "intake config after the restart has the tracker",
+      "ok": true,
+      "observed": {
+        "origin": "brain",
+        "editable": false,
+        "tracker": {
+          "kind": "github-issues",
+          "repo": "acme/app",
+          "board": "is:open",
+          "states": {
+            "ready": [
+              "open"
+            ],
+            "in_progress": "in progress",
+            "done": [
+              "closed"
+            ],
+            "wont_do": []
+          },
+          "onComplete": "done"
+        },
+        "sources": [],
+        "dailyCap": 20,
+        "similarity": {
+          "link": 0.85,
+          "ask": 0.55
+        },
+        "enabled": {},
+        "originMismatch": {
+          "tracker": null,
+          "sources": {}
+        }
+      }
+    }
+  ]
+}
