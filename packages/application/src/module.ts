@@ -612,6 +612,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       factoryEdits: brainEdits(r),
       skills: r.resolve(t.SKILL_REPOSITORY),
       roles: r.resolve(t.ROLE_REPOSITORY),
+      repositories: r.resolve(t.REPO_REPOSITORY),
       files: r.resolve(t.SKILL_FILES),
       clock: clock(r),
       log: log(r).child({ component: 'skills' }),
@@ -1179,6 +1180,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       members: r.resolve(t.MEMBER_REPOSITORY),
       clock: clock(r),
       log: log(r).child({ component: 'intake' }),
+      // Resolved per call: the tracker service is composed after this one (#134).
+      trackerChanged: (workspaceId) => r.resolve(it.TRACKER_SERVICE).trackerChanged(workspaceId),
     }), { source: SOURCE });
     // The board and Start (plan Task 8): missions are made only through the
     // mission service, resolved per call since it is composed with the API services.

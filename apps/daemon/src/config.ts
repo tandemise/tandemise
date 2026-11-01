@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createPaths, defaultRoot, expandPath, type LogLevel, type TandemisePaths } from '@tandemise/shared';
 
 /**
@@ -35,11 +35,18 @@ export interface DaemonConfig {
    */
   readonly clockOffsetMs: number | null;
   /**
-   * Where "Your Claude skills" looks (P13): ~/.claude/skills, unless
+   * Where "Your Claude skills" looks (P13): `<claude config>/skills`, unless
    * TANDEMISE_SKILLS_DISCOVER_DIR says otherwise - tests point it at a
    * fixture folder so they never read the real home.
    */
   readonly skillsDiscoverRoot: string;
+  /**
+   * The Claude config folder whose installed plugins discovery lists (#129):
+   * CLAUDE_CONFIG_DIR, else ~/.claude. When TANDEMISE_SKILLS_DISCOVER_DIR is
+   * set it is that folder's parent, so a test that moves the skills root
+   * never reads the real home's plugins either.
+   */
+  readonly claudeConfigDir: string;
 }
 
 export function loadConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfig {
@@ -55,9 +62,18 @@ export function loadConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfig 
     tickIntervalMs: overrides.tickIntervalMs ?? Number(process.env.TANDEMISE_TICK_MS ?? 1500),
     quietMs: overrides.quietMs ?? Number(process.env.TANDEMISE_QUIET_MS ?? 600_000),
     clockOffsetMs: overrides.clockOffsetMs !== undefined ? overrides.clockOffsetMs : clockOffsetFromEnv(),
-    skillsDiscoverRoot: overrides.skillsDiscoverRoot
-      ?? (process.env.TANDEMISE_SKILLS_DISCOVER_DIR?.trim() ? expandPath(process.env.TANDEMISE_SKILLS_DISCOVER_DIR.trim()) : join(homedir(), '.claude', 'skills')),
+    ...claudeFolders(overrides),
   };
+}
+
+function claudeFolders(overrides: Partial<DaemonConfig>): Pick<DaemonConfig, 'skillsDiscoverRoot' | 'claudeConfigDir'> {
+  const fromEnv = process.env.TANDEMISE_SKILLS_DISCOVER_DIR?.trim();
+  const skillsRoot = overrides.skillsDiscoverRoot ?? (fromEnv ? expandPath(fromEnv) : undefined);
+  const configDir = overrides.claudeConfigDir
+    ?? (skillsRoot !== undefined ? dirname(skillsRoot)
+      : process.env.CLAUDE_CONFIG_DIR?.trim() ? expandPath(process.env.CLAUDE_CONFIG_DIR.trim())
+        : join(homedir(), '.claude'));
+  return { skillsDiscoverRoot: skillsRoot ?? join(configDir, 'skills'), claudeConfigDir: configDir };
 }
 
 function clockOffsetFromEnv(): number | null {

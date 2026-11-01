@@ -221,7 +221,7 @@ const sortPins = <T extends SkillPinSetup>(pins: readonly T[]): T[] =>
   [...pins].sort((a, b) => a.name.localeCompare(b.name) || a.version - b.version || a.hash.localeCompare(b.hash));
 
 function sourceEntry(source: SkillSource): Record<string, unknown> {
-  if (source.kind !== 'git') return { kind: source.kind, path: source.path };
+  if (source.kind !== 'git') return { kind: source.kind, path: source.path, ...(source.kind === 'claude' && source.plugin !== undefined ? { plugin: source.plugin } : {}) };
   return { kind: 'git', url: source.url, ...(source.subpath === undefined ? {} : { subpath: source.subpath }), ...(source.ref === undefined ? {} : { ref: source.ref }) };
 }
 

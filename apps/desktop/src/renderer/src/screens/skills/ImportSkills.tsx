@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SkillImportView, SkillPreviewView, SkillSourceRequest } from '@tandemise/api-contract';
+import type { DiscoveredSkillView, SkillImportView, SkillPreviewView, SkillSourceRequest } from '@tandemise/api-contract';
 import { Modal } from '../../components/Modal.js';
 import { Empty, ErrorState, Field, Segmented, SkeletonList } from '../../components/primitives.js';
 import { useDaemon } from '../../lib/connection.js';
@@ -17,8 +17,9 @@ const FROM: readonly { value: From; label: string }[] = [
 ];
 
 /**
- * Import skills (P13): from the person's ~/.claude/skills (ticked from a
- * list), a folder, or a git repository. Every source is previewed first - the
+ * Import skills (P13): from what Claude Code keeps (ticked from a list: your
+ * ~/.claude/skills, each installed plugin's skills, each repository's
+ * .claude/skills - #129), a folder, or a git repository. Every source is previewed first - the
  * files and the SKILL.md - and an import stores exactly what was previewed.
  */
 export function ImportSkills({ onClose, onImported }: { onClose: () => void; onImported: (messages: readonly string[]) => void }): JSX.Element {
@@ -67,51 +68,68 @@ function FromClaude({ onImported }: { onImported: (messages: readonly string[]) 
 
   if (found.isError) return <ErrorState error={found.error} onRetry={() => void found.refetch()} />;
   if (found.isPending || found.data === undefined) return <SkeletonList rows={3} />;
-  const { root, exists, skills } = found.data;
+  const { root, exists, origins, skills } = found.data;
+
+  const row = (skill: DiscoveredSkillView): JSX.Element => {
+    const on = ticked.includes(skill.path);
+    const label = skill.invocation ?? skill.folder;
+    return (
+      <div key={skill.path} className="list__row" aria-label={`Found: ${label}`} style={{ alignItems: 'flex-start' }}>
+        <input
+          type="checkbox"
+          aria-label={`Import ${label}`}
+          checked={on}
+          disabled={!skill.importable}
+          onChange={(e) => setTicked(e.target.checked ? [...ticked, skill.path] : ticked.filter((p) => p !== skill.path))}
+        />
+        <div className="list__main">
+          <div className="list__title mono">{label}</div>
+          {skill.description ? <div className="list__subtitle">{skill.description}</div> : null}
+          {skill.problem !== null ? (
+            <div className="list__subtitle"><Badge tone="failed" style={{ whiteSpace: 'normal' }}>{skill.problem}</Badge></div>
+          ) : (
+            <div className="list__subtitle dim" style={{ fontSize: 'var(--fs-xs)' }}>
+              {skill.fileCount} {skill.fileCount === 1 ? 'file' : 'files'} · {skill.sizeLabel}
+              {skill.name !== null && skill.name !== label ? ` · Imports as ${skill.name}` : ''}
+              {skill.invocation === null ? ' · Claude Code doesn\u2019t load a skill inside a folder; import it to give it to workers' : ''}
+              {skill.libraryLabel ? ` · ${skill.libraryLabel}` : ''}
+            </div>
+          )}
+        </div>
+        <div className="list__aside">
+          <Button variant="ghost" onClick={() => void open(skill.path)}>Preview</Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="stack" style={{ gap: 'var(--s3)' }}>
-      <p className="dim" style={{ margin: 0, fontSize: 'var(--fs-xs)' }}>Looking in <span className="mono">{root}</span></p>
-      {!exists || skills.length === 0 ? (
+      <p className="dim" style={{ margin: 0, fontSize: 'var(--fs-xs)' }}>
+        Your skills, your installed Claude Code plugins&apos; skills and this project&apos;s <span className="mono">.claude/skills</span>.
+      </p>
+      {skills.length === 0 ? (
         <Card>
           <Empty
             icon="book"
             title={exists ? 'No skill folders here' : 'This folder does not exist'}
-            body="Import a skill from a folder or a git repository instead."
+            body={`Looked in ${root}, your installed plugins and this project’s repositories. Import a skill from a folder or a git repository instead.`}
           />
         </Card>
       ) : (
-        <div className="list" aria-label="Found skills">
-          {skills.map((skill) => {
-            const on = ticked.includes(skill.path);
-            return (
-              <div key={skill.path} className="list__row" aria-label={`Found: ${skill.folder}`} style={{ alignItems: 'flex-start' }}>
-                <input
-                  type="checkbox"
-                  aria-label={`Import ${skill.folder}`}
-                  checked={on}
-                  disabled={!skill.importable}
-                  onChange={(e) => setTicked(e.target.checked ? [...ticked, skill.path] : ticked.filter((p) => p !== skill.path))}
-                />
-                <div className="list__main">
-                  <div className="list__title">{skill.name ?? skill.folder}</div>
-                  {skill.description ? <div className="list__subtitle">{skill.description}</div> : null}
-                  {skill.problem !== null ? (
-                    <div className="list__subtitle"><Badge tone="failed" style={{ whiteSpace: 'normal' }}>{skill.problem}</Badge></div>
-                  ) : (
-                    <div className="list__subtitle dim" style={{ fontSize: 'var(--fs-xs)' }}>
-                      {skill.fileCount} {skill.fileCount === 1 ? 'file' : 'files'} · {skill.sizeLabel}
-                      {skill.libraryLabel ? ` · ${skill.libraryLabel}` : ''}
-                    </div>
-                  )}
-                </div>
-                <div className="list__aside">
-                  <Button variant="ghost" onClick={() => void open(skill.path)}>Preview</Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        origins.map((origin) => (
+          <section key={origin.id} className="stack" style={{ gap: 'var(--s2)' }} aria-label={`Found in ${origin.label}`}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>
+                {origin.label}{origin.detail !== null ? <span className="dim" style={{ fontWeight: 'normal' }}> · {origin.detail}</span> : null}
+              </h3>
+              <p className="dim" style={{ margin: 0, fontSize: 'var(--fs-xs)' }}>Looking in <span className="mono">{origin.root}</span></p>
+            </div>
+            <div className="list" aria-label={`Found skills: ${origin.label}`}>
+              {skills.filter((s) => s.originId === origin.id).map(row)}
+            </div>
+          </section>
+        ))
       )}
 
       {previewError !== null ? <ErrorState error={previewError} /> : null}

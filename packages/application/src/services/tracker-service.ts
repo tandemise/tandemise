@@ -167,6 +167,22 @@ export class TrackerService {
   }
 
   /**
+   * The project's tracker token, address or mapping was just saved (#134):
+   * the board's last problem was about the tracker as it was, so it is
+   * dropped at once and the board is read again in the background, rather
+   * than on the next 2-minute tick. A read that still fails sets its own
+   * problem again.
+   */
+  trackerChanged(workspaceId: WorkspaceId): void {
+    const last = this.#refreshes.get(workspaceId);
+    if (last !== undefined) this.#refreshes.set(workspaceId, { at: last.at, problem: null });
+    this.#invalidate();
+    if (this.deps.config.read(workspaceId).tracker === null) return;
+    this.#lastRefreshMs.set(workspaceId, this.deps.clock.epochMs());
+    this.#background(workspaceId, () => this.#refresh(workspaceId));
+  }
+
+  /**
    * Scheduler hook: each configured project's board every 2 minutes, and the
    * tracker writes a Start could not make, once a minute, and the write-back
    * of every started item's state and activity comment, every 5 s (plan Task

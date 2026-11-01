@@ -26,9 +26,14 @@ export const SKILL_IGNORED_NAMES: readonly string[] = ['.git', '.DS_Store'];
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
-/** Where a skill came from. `claude` is a folder under the discovery root (~/.claude/skills). */
+/**
+ * Where a skill came from. `claude` is a folder Claude Code keeps (#129): a
+ * personal skill (~/.claude/skills), an installed plugin's skill (`plugin`
+ * names the plugin, and the library calls it `<plugin>-<skill>`), or a skill
+ * in one of the project's repositories (`.claude/skills`).
+ */
 export type SkillSource =
-  | { readonly kind: 'claude'; readonly path: string }
+  | { readonly kind: 'claude'; readonly path: string; readonly plugin?: string }
   | { readonly kind: 'path'; readonly path: string }
   | { readonly kind: 'git'; readonly url: string; readonly subpath?: string; readonly ref?: string };
 
@@ -169,6 +174,16 @@ export function parseSkillFrontMatter(text: string): SkillFrontMatter {
     description: description === undefined || description === '' ? null : description,
     body: normalized.slice(match[0].length).replace(/^\n+/, ''),
   };
+}
+
+/**
+ * The library name of a plugin's skill (#129): `<plugin>-<skill>`. Claude Code
+ * calls it `plugin:skill`, but a library name becomes a folder name under
+ * `.claude/skills`, where a colon is not portable, and the prefix keeps two
+ * plugins' skills of the same name apart.
+ */
+export function pluginSkillName(plugin: string, skill: string): string {
+  return `${plugin}-${skill}`;
 }
 
 /** Why a name cannot be a skill's name (it becomes a folder name), or null. */
