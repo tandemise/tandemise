@@ -43,6 +43,6 @@
     "@tandemise/terminal": "*"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.18.2"
   }
 }
