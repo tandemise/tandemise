@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.3](https://github.com/tandemise/tandemise/compare/v0.12.2...v0.12.3) (2026-11-01)
+
+
+### Bug Fixes
+
+* bound ci rounds and check them against ci as it is now ([#207](https://github.com/tandemise/tandemise/issues/207)) ([3893229](https://github.com/tandemise/tandemise/commit/38932291d3a08150370aafe15fa8a075c32eca8e))
+* classify a failing ci check before acting on it ([#203](https://github.com/tandemise/tandemise/issues/203)) ([47ba5f2](https://github.com/tandemise/tandemise/commit/47ba5f20da17d1cce60ffbfc8e1b4abc06acc67a))
+
 ## [0.12.2](https://github.com/tandemise/tandemise/compare/v0.12.1...v0.12.2) (2026-11-01)
 
 

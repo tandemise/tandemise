@@ -55,7 +55,7 @@ export class McpStdioServer {
   constructor(
     private readonly bridge: ToolBridgeClient,
     private readonly transport: StdioTransport,
-    private readonly serverVersion = '0.12.2', // x-release-please-version
+    private readonly serverVersion = '0.12.3', // x-release-please-version
   ) {}
 
   start(): void {
