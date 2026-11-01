@@ -24,6 +24,7 @@ export const OFFLINE_CHECKS = [
   'artifact-write-scope-check',
   'brain-check',
   'brain-daemon-check',
+  'brain-restart-check',
   'concurrency-check',
   'coordination-check',
   'coordination-app-check',
