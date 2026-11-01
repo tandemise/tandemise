@@ -384,6 +384,59 @@ await attempt('revert and watch', async () => {
   check('after 8 days with no revert and no broken main: merged_clean, once', w.h.repo.outcomes.listByWorkspace(w.ws, '1970').filter((o) => o.mission === m3.id && o.kind === 'merged_clean').length === 1);
 });
 
+await attempt('main is judged by its own ci', async () => {
+  section('main is judged by its own ci (#186)');
+  const fake = await import('./fake-gh.mjs');
+  const w = await world({ factory: { merge: { ...app.SHIPPED_MERGE, autoMerge: 'on' } }, brain: true });
+  await w.authorize();
+  fake.setRepo(w.ghDir, REPO, { defaultChecks: [{ name: 'unit', conclusion: 'success' }] });
+  const watch = w.h.container.resolve(app.MERGE_WATCH);
+  const run = (id, name, path, event, conclusion, jobs) => ({
+    id, name, path, event, head_branch: 'main', status: 'completed', conclusion, html_url: `https://github.com/${REPO}/actions/runs/${id}`,
+    jobs: jobs.map(([job, c]) => ({ name: job, status: 'completed', conclusion: c, html_url: `https://github.com/${REPO}/actions/runs/${id}/job/${job}` })),
+  });
+  const ci = (id, jobs) => run(id, 'CI', '.github/workflows/ci.yml', 'push', jobs.some(([, c]) => c === 'failure') ? 'failure' : 'success', jobs);
+  const dependabot = (id) => run(id, 'Dependabot Updates', 'dynamic/dependabot/dependabot-updates', 'dynamic', 'failure', [['Dependabot', 'failure']]);
+  // GitHub lists every Actions job as a check run on the commit too.
+  const checksOf = (runs) => runs.flatMap((r) => r.jobs.map((j) => ({ name: j.name, conclusion: j.conclusion })));
+  /** A merged mission; its merge commit and the main commit before it get the runs given. */
+  const merged = async (title, mergeRuns, parentRuns) => {
+    const m = await w.mission(title);
+    await w.h.until(() => w.h.repo.missions.get(m.id).status === 'COMPLETE', 60000);
+    const d = w.h.repo.mergeDecisions.listByMission(m.id).at(-1);
+    const parent = git(w.origin, 'rev-parse', `${d.mergeSha}^`);
+    fake.setRepo(w.ghDir, REPO, { parents: { ...(fake.readState(w.ghDir).repos[REPO].parents ?? {}), [d.mergeSha]: parent } });
+    fake.setRuns(w.ghDir, REPO, d.mergeSha, mergeRuns);
+    fake.setChecks(w.ghDir, REPO, d.mergeSha, checksOf(mergeRuns));
+    fake.setRuns(w.ghDir, REPO, parent, parentRuns);
+    fake.setChecks(w.ghDir, REPO, parent, checksOf(parentRuns));
+    await watch.sweep();
+    await watch.sweep();
+    const cards = w.h.repo.approvals.list({ missionId: m.id }).filter((a) => a.title.startsWith('Main is failing after'));
+    const broke = w.h.repo.outcomes.listByWorkspace(w.ws, '1970').filter((o) => o.mission === m.id && o.kind === 'broke_main');
+    const notes = w.h.repo.events.listByMission(m.id).filter((e) => e.body.type === 'note' && e.body.text.startsWith('Main was already failing')).map((e) => e.body.text);
+    return { m, d, cards, broke, notes };
+  };
+
+  const dyn = await merged('fix: typo in the about title', [ci(101, [['test', 'success']]), dependabot(102)], [ci(91, [['test', 'success']]), dependabot(92)]);
+  check('Dependabot `dynamic` runs failing on the merge commit, CI green: no card, no broke_main', dyn.cards.length === 0 && dyn.broke.length === 0, [dyn.cards.map((c) => c.title), dyn.broke.length]);
+  check('…and no "already failing" note either: they are not this repository\'s CI', dyn.notes.length === 0, dyn.notes);
+
+  const old = await merged('fix: typo in the contact title', [ci(201, [['test', 'success'], ['lint', 'failure']])], [ci(191, [['test', 'success'], ['lint', 'failure']])]);
+  check('a check already failing on the main commit before: no card, no broke_main', old.cards.length === 0 && old.broke.length === 0, [old.cards.map((c) => c.title), old.broke.length]);
+  check('…one "already failing" note, naming it, with nothing to revert', old.notes.length === 1 && old.notes[0].includes('CI › lint') && old.notes[0].includes('nothing to revert'), old.notes);
+
+  const fresh = await merged('fix: typo in the pricing title', [ci(301, [['test', 'failure']]), dependabot(302)], [ci(291, [['test', 'success']])]);
+  const card = fresh.cards[0];
+  check('a check newly failing: one card and one broke_main', fresh.cards.length === 1 && fresh.broke.length === 1, [fresh.cards.length, fresh.broke.length]);
+  check('…Leave it is the first option and the recommended one; Revert is neither', card?.options[0]?.label === 'Leave it' && card.recommendedOptionId === card.options[0].id && card.options.find((o) => o.label === 'Revert')?.id !== card.recommendedOptionId, [card?.options, card?.recommendedOptionId]);
+  check('…the card says plainly what reverting would do', /Revert opens a pull request that undoes this merge/.test(card?.effect ?? ''), card?.effect);
+  const ev = (label) => card?.evidence.find((e) => e.label === label)?.value ?? '';
+  check('…the evidence names the workflow and job, and why it counts', ev('CI › test').startsWith('failed. Counted: runs on the push to main.'), card?.evidence);
+  check('…and why the Dependabot run does not', ev('Dependabot Updates › Dependabot').includes('Not counted: event "dynamic"'), card?.evidence);
+  check('…with a link to the failing run', card?.evidence.some((e) => e.kind === 'link' && e.value.includes('/actions/runs/301')), card?.evidence);
+});
+
 await attempt('learning never loosens', async () => {
   section('learning never loosens');
   const fake = await import('./fake-gh.mjs');
