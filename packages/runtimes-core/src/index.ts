@@ -33,7 +33,7 @@ export type { TandemiseModule } from '@tandemise/kernel';
 export { withDeclaredCapabilities } from './capabilities.js';
 export { BASE_RUNTIME_ENV, buildRuntimeEnv, withheldEnvNames } from './runtime-env.js';
 export type { RuntimeEnvOptions } from './runtime-env.js';
-export { DISPLAY_ENV, agentDisplaySetting, agentEnvPlan, agentHome, onPath, workerEnv } from './agent-env.js';
+export { APP_CONTROL_ENV, DISPLAY_ENV, agentDisplaySetting, agentEnvPlan, agentHome, appControlEnvNames, onPath, withoutInspectorFlags, workerEnv } from './agent-env.js';
 export { FORGE_TOKEN_ENV, GIT_CREDENTIAL_ENV, applyForgeIsolation, forgeIsolation, personGhConfigDir } from './forge-isolation.js';
 export type { ForgeIsolation } from './forge-isolation.js';
 export type { AgentDisplay, AgentEnvPlan } from './agent-env.js';
