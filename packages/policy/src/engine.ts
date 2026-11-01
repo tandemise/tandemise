@@ -42,6 +42,16 @@ export interface PolicyRequest {
    * had agreed to the plan that proposed it. Absent means "not approved".
    */
   readonly planApproved?: boolean;
+  /**
+   * Capabilities a person approved by name on this step's start card, for the
+   * attempt asking (#141). The card lists what the step may use, and saying
+   * yes to it is saying yes to those calls: asking again per call is a second
+   * card for one decision. It answers only the question an ask would have
+   * asked - it never turns a deny into an allow, never reaches past the
+   * grants and their scope, and never covers a destructive or release action,
+   * which are asked every time.
+   */
+  readonly stepApproved?: readonly Capability[];
   /** Carried through to the decision so the event log can attribute it. */
   readonly assignmentId?: WorkerAssignment['id'];
 }
@@ -65,6 +75,9 @@ export interface PolicyEngineOptions {
   readonly clock?: Clock;
   readonly classifier?: RiskClassifier;
 }
+
+/** The risks a step's approval answers for. Destructive and release actions ask every time. */
+const STEP_APPROVABLE: readonly RiskClass[] = ['write_reversible', 'external_side_effect'];
 
 /** allow < require_approval < deny. Combining two constraints takes the max. */
 const SEVERITY: Readonly<Record<PolicyOutcome, number>> = { allow: 0, require_approval: 1, deny: 2 };
@@ -140,7 +153,18 @@ export function createPolicyEngine(options: PolicyEngineOptions = {}): PolicyEng
       const matchedGrant = inScope.find((g) => g.approvalMode === 'auto') ?? inScope[0]!;
       const grantFloor: PolicyOutcome = matchedGrant.approvalMode === 'auto' ? 'allow' : 'require_approval';
       const { outcome: riskFloor, reason: riskReason } = floorForRisk(risk, request.autonomy, request.planApproved ?? false);
-      const outcome = stricter(grantFloor, riskFloor);
+      const asked = stricter(grantFloor, riskFloor);
+      const coveredByStep = asked === 'require_approval'
+        && STEP_APPROVABLE.includes(risk)
+        && anyCapabilityMatches(request.stepApproved ?? [], request.capability);
+      const outcome: PolicyOutcome = coveredByStep ? 'allow' : asked;
+
+      if (coveredByStep) {
+        return {
+          outcome, risk, matchedGrant, assessment,
+          reason: `Allowed: '${request.capability}' was approved with this step${request.resource ? ` for '${request.resource}'` : ''}.`,
+        };
+      }
 
       const reason = outcome === 'allow'
         ? `Allowed: '${request.capability}' is granted${request.resource ? ` for '${request.resource}'` : ''} and classified ${risk}.`

@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export async function engineHarness(HOME, { factory, tiebreak, pullRequests, commandExecutor, shipPollMs, brainRepo, ciGraceMs } = {}) {
+export async function engineHarness(HOME, { factory, tiebreak, pullRequests, commandExecutor, shipPollMs, brainRepo, ciGraceMs, modules = [] } = {}) {
   const app = await import('@tandemise/application');
   const { Container, compose } = await import('@tandemise/kernel');
   const { createLogger, createPaths, systemClock } = await import('@tandemise/shared');
@@ -32,6 +32,7 @@ export async function engineHarness(HOME, { factory, tiebreak, pullRequests, com
     A.createArtifactsModule({ paths }),
     policyModule, contextModule, createEvaluationModule(), runtimesCoreModule, genericRuntimeModule,
     executionCoreModule, executionLocalModule, integrationsCoreModule, app.createApplicationModule({ localPersonName: 'Demo', shipPollMs: shipPollMs ?? 150, shipCiGraceMs: ciGraceMs ?? 300 }),
+    ...modules,
   );
   container.bind(EXEC_CLOCK, () => systemClock, { source: 'check' });
   container.bind(EXEC_LOGGER, () => log, { source: 'check' });

@@ -465,7 +465,8 @@ function prCommand(dir, state, args, out) {
     return;
   }
   const number = Number(args[2]);
-  const pr = prs.find((p) => p.number === number);
+  // Like gh, `pr view` also takes the head branch's name.
+  const pr = Number.isNaN(number) ? prs.find((p) => p.headRefName === args[2]) : prs.find((p) => p.number === number);
   if (pr === undefined) fail(`GraphQL: Could not resolve to a PullRequest with the number of ${number}.`);
   if (verb === 'view') { out(pick(pr, flag(args, '--json'))); return; }
   if (verb === 'edit') {

@@ -1,5 +1,5 @@
 import type {
-  Approval, ApprovalRepositoryPort, AssignmentRepositoryPort, MissionRepositoryPort, MissionTask,
+  Approval, ApprovalRepositoryPort, AssignmentRepositoryPort, Capability, MissionRepositoryPort, MissionTask,
   RunRepositoryPort, TaskRepositoryPort, WorkerAssignment, WorkspaceRepositoryPort,
 } from '@tandemise/domain';
 import { APPROVE_FOR_TASK_OPTION, APPROVE_OPTION, DEFAULT_AUTONOMY, REJECT_OPTION, isTrialMission } from '@tandemise/domain';
@@ -13,6 +13,38 @@ import { summarize } from '@tandemise/shared';
 import type { EventRecorder, EventScope } from './event-recorder.js';
 import { withdrawApproval } from './withdraw.js';
 import { runActorOf } from './run-actor.js';
+import { parkOnPerson, unparkFromPerson } from './park.js';
+import { MAX_PARKED_MS, type RunDeadlines } from '../engine/run-deadline.js';
+
+/**
+ * The evidence row on a step's start card that lists what the step may use.
+ * It is what a person read when they said yes, so it is what that yes binds:
+ * the tool gate reads it back, rather than the card's prose, to know which
+ * calls the step's attempts no longer ask about (#141).
+ */
+export const STEP_CAPABILITIES_LABEL = 'May use';
+
+/**
+ * What a person approved by name for this attempt: the capabilities listed on
+ * an approved start card of its step, decided before the attempt began.
+ *
+ * Bound to the step (the card's task) and to attempts the approval let start,
+ * and to the exact list the card showed - never to a mission or a workspace.
+ * A retry is the same step the person approved, so it is covered the same way
+ * as the first attempt; a card from before this list existed covers nothing,
+ * and its calls ask as they always did.
+ */
+export function stepApprovedCapabilities(
+  approvals: Pick<ApprovalRepositoryPort, 'list'>,
+  assignment: WorkerAssignment,
+): readonly Capability[] {
+  const startedAt = Date.parse(assignment.createdAt);
+  return approvals.list({ missionId: assignment.missionId, statuses: ['APPROVED'] })
+    .filter((a) => a.taskId === assignment.taskId && a.kind === 'action' && a.decidedAt !== null
+      && Date.parse(a.decidedAt) <= startedAt)
+    .flatMap((a) => a.evidence.filter((e) => e.label === STEP_CAPABILITIES_LABEL))
+    .flatMap((e) => e.value.split(',').map((c) => c.trim()).filter((c) => c.length > 0));
+}
 
 export interface PolicyGateDeps {
   readonly policy: PolicyEngine;
@@ -20,6 +52,11 @@ export interface PolicyGateDeps {
   readonly workspaces: WorkspaceRepositoryPort;
   readonly recorder: EventRecorder;
   readonly log: Logger;
+  /**
+   * Where a step's approved start card is read from. Absent: no step approval
+   * answers for a call, and every ask is asked.
+   */
+  readonly approvals?: Pick<ApprovalRepositoryPort, 'list'>;
 }
 
 /**
@@ -58,6 +95,10 @@ export function createPolicyEngineToolGate(deps: PolicyGateDeps): ToolPolicyGate
         grants: assignment.grants,
         autonomy: workspace?.autonomy ?? DEFAULT_AUTONOMY,
         assignmentId: assignment.id,
+        // A person who approved the step with this call on its card has
+        // answered for it already; the engine still applies every grant,
+        // scope and risk rule before taking that answer.
+        ...(deps.approvals === undefined ? {} : { stepApproved: stepApprovedCapabilities(deps.approvals, assignment) }),
       });
 
       if (decision.outcome === 'deny') {
@@ -92,6 +133,12 @@ export interface ApprovalGateDeps {
     readonly addressees: readonly string[];
     readonly escalateAfterMs: number | null;
   };
+  /**
+   * Stops the run's wall-time clock while the person decides (#141). Absent in
+   * a composition without the executor's deadlines: the wait is then bounded
+   * by the run's own signal alone.
+   */
+  readonly deadlines?: RunDeadlines;
 }
 
 /**
@@ -167,17 +214,38 @@ export function createApprovalGate(deps: ApprovalGateDeps): ApprovalGate {
       deps.recorder.record({ ...scopeOf(assignment), actorId }, { type: 'approval.requested', approvalId: approval.id });
       deps.recorder.invalidate('approvals', assignment.missionId);
 
+      // A run waiting on a person is parked, as one asking a question is: its
+      // card says it is your move rather than RUNNING, and its clock stops, so
+      // the wall-time budget never runs out on a person (#141). The park
+      // allowance still bounds the wait, and past it the card expires.
+      parkOnPerson(deps.tasks, assignment.taskId, `Waiting on you to allow ${request.toolName}.`);
+      deps.recorder.invalidate('tasks', assignment.missionId);
+      const allowanceMs = deps.deadlines?.pause(assignment.id) ?? MAX_PARKED_MS;
+      const unanswered = AbortSignal.timeout(Math.max(1, allowanceMs));
+
       let decided: ToolApprovalDecision;
       try {
-        decided = await deps.waiter.wait(approval.id, signal);
+        decided = await deps.waiter.wait(approval.id, AbortSignal.any([signal, unanswered]));
       } finally {
         // Still PENDING means nobody decided: the run was aborted or ended
-        // under the call, or the wait itself failed. The card is withdrawn
-        // either way, or it would sit in the inbox - and escalate - asking
-        // about a call no worker is making any more.
+        // under the call, the allowance ran out, or the wait itself failed.
+        // The card is withdrawn either way, or it would sit in the inbox - and
+        // escalate - asking about a call no worker is making any more.
         if (deps.approvals.get(approval.id)?.status === 'PENDING') {
-          withdrawApproval(deps, approval, 'The run ended before this was decided.');
+          const expired = unanswered.aborted && !signal.aborted;
+          withdrawApproval(
+            deps, approval,
+            expired ? 'Nobody answered within the time a run may wait on a person.' : 'The run ended before this was decided.',
+            expired ? 'EXPIRED' : 'CANCELLED',
+          );
         }
+        // Only the last open wait restarts the clock, and only while this run
+        // is still the live one: a wait that outlived its run must not flip the
+        // next attempt back to RUNNING.
+        if (deps.deadlines === undefined || deps.deadlines.resume(assignment.id) === 'running') {
+          unparkFromPerson(deps.tasks, assignment.taskId);
+        }
+        deps.recorder.invalidate('tasks', assignment.missionId);
       }
       if (decided.approved && decided.selectedOptionId === APPROVE_FOR_TASK_OPTION) {
         const allowed = standing.get(assignment.id) ?? new Set<string>();
