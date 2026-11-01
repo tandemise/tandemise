@@ -16,7 +16,7 @@ ev.check('the report opens in the artifact reader', (await page.evaluate('locati
 for (const heading of ['At a glance', 'Missions', 'Backlog', 'How this report was made']) {
   ev.check(`heading "${heading}"`, text.split('\n').some((l) => l.trim() === heading), text.slice(0, 300));
 }
-ev.check('at a glance: "Needs you: 1", "Working on: 2 of 2", "Criteria verified: 4 of 6", "Stalled: 1"', ['Needs you: 1', 'Working on: 2 of 2 · 0 queued', 'Criteria verified: 4 of 6, across 2 missions in progress', 'Stalled: 1'].every((l) => text.includes(l)), text.split('Missions')[0]);
+ev.check('at a glance: "Needs you: 2", "Working on: 2 of 2", "Criteria verified: 4 of 6", "Stalled: 1"', ['Needs you: 2', 'Working on: 2 of 2 · 0 queued', 'Criteria verified: 4 of 6, across 2 missions in progress', 'Stalled: 1'].every((l) => text.includes(l)), text.split('Missions')[0]);
 // The mission sections, below the handoff (whose points name the same missions).
 const missionsPart = text.slice(text.indexOf('\nMissions\n'));
 const section = (title) => { const rest = missionsPart.split(`\n${title}\n`)[1] ?? ''; return rest.split(/\n(?=K1 |Backlog\n)/)[0]; };

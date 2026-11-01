@@ -124,8 +124,8 @@ function ProjectShell(): JSX.Element {
   useHotkey('mod+n', () => navigate('/missions/new'));
   useNotificationOpen();
 
-  // Approvals addressed to me plus human tasks I can pick up: what is actually mine to do.
-  const pending = inbox.forMeCount;
+  // What waits on me (#151): the same number as Home's "Needs you" tile.
+  const pending = inbox.needsMe.length;
 
   return (
     <div className="app">
