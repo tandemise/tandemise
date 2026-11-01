@@ -73,7 +73,30 @@ export interface RunRequest {
    * holder owns what it ends up holding and must release it or hand it on.
    */
   readonly retainSlot?: SlotRetention;
+  /**
+   * The team's skill this run invokes instead of a role prompt (#131), already
+   * resolved by `resolveSkill`. A fresh run's prompt starts with it as a slash
+   * command and `args`, the prompt following as the command's input; a resumed
+   * run already has it. The adapter checks the session loaded it and fails
+   * with `SKILL_NOT_LOADED` when it did not.
+   */
+  readonly skill?: RunSkillRequest;
 }
+
+/** What a run that invokes a skill is given (#131). */
+export interface RunSkillRequest {
+  /** As the runtime invokes it: `team:build-feature`, `tdd`. */
+  readonly name: string;
+  /** Already filled; may be empty. */
+  readonly args: string;
+  /** Plugin folders the run must load for it (Claude Code's `--plugin-dir`). */
+  readonly pluginDirs: readonly string[];
+}
+
+/** Where a skill a step runs comes from for a profile (#131), or why it can't be run. */
+export type SkillResolution =
+  | { readonly ok: true; readonly pluginDirs: readonly string[]; readonly from: string }
+  | { readonly ok: false; readonly reason: string };
 
 /** Receives the slot a finished run kept; see `RunRequest.retainSlot`. */
 export interface SlotRetention {
@@ -142,6 +165,13 @@ export interface AgentRuntimeAdapter {
    * then reach the run through its prompt instead.
    */
   skillsFolder?(profile: RuntimeProfile): string | null;
+  /**
+   * Finds the skill a step asks this profile to run (#131): a plugin's
+   * (`plugin:skill`), or a plain name in one of `folders` (each a working or
+   * checkout folder) or the person's own skills when the profile loads them.
+   * Absent means this runtime cannot run a skill as a step.
+   */
+  resolveSkill?(profile: RuntimeProfile, name: string, folders: readonly string[]): Promise<SkillResolution>;
 
   start(request: RunRequest): AsyncIterable<AgentEvent>;
   /**

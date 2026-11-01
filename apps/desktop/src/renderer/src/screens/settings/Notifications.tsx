@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { NotificationPreferencesView, UpdateNotificationPreferencesRequest } from '@tandemise/api-contract';
 import { ErrorState, SectionHead, Switch } from '../../components/primitives.js';
 import { useDaemon } from '../../lib/connection.js';
-import { showFlash } from '../../lib/notices.js';
-import { Button, Card } from '@tandemise/design/react';
+import { Banner, Button, Card, StatusPill, type Tone } from '@tandemise/design/react';
+import { Icon } from '../../components/Icon.js';
+import type { NotificationReach } from '../../../../shared/bridge.js';
 
 type Kind = keyof NotificationPreferencesView['kinds'];
 
@@ -19,6 +20,15 @@ const KINDS: ReadonlyArray<{ kind: Kind; title: string; detail: string }> = [
 
 const DEFAULT_QUIET = { from: '22:00', to: '07:00' } as const;
 const KEY = ['settings', 'notifications'] as const;
+const HEALTH_KEY = ['settings', 'notifications', 'health'] as const;
+
+/** How the system treats Tandemise's notifications, in words and a tone (colour is never the only signal). */
+const REACH: Readonly<Record<NotificationReach, { label: string; tone: Tone }>> = {
+  ready: { label: 'Showing', tone: 'succeeded' },
+  hidden: { label: 'No banners', tone: 'blocked' },
+  unavailable: { label: 'Not delivered', tone: 'failed' },
+  unknown: { label: 'Not reported', tone: 'pending' },
+};
 
 /**
  * Settings → Notifications (P16). The daemon keeps the preferences, so they
@@ -33,10 +43,19 @@ export function NotificationSettings(): JSX.Element {
     mutationFn: (body: UpdateNotificationPreferencesRequest) => daemon.updateNotificationPreferences(body),
     onSuccess: (view) => queryClient.setQueryData(KEY, view),
   });
+  const health = useQuery({ queryKey: HEALTH_KEY, queryFn: () => window.tandemise.notificationHealth(),
+    // The person may have just changed a system setting (Do Not Disturb): read it again on every visit.
+    refetchInterval: 30_000, refetchOnMount: 'always', refetchOnWindowFocus: 'always', staleTime: 0,
+  });
   const test = useMutation({
     mutationFn: () => window.tandemise.testNotification(),
-    onSuccess: () => showFlash('Test notification sent.'),
+    onSuccess: (result) => queryClient.setQueryData(HEALTH_KEY, result.health),
   });
+  const desktopEntry = useMutation({
+    mutationFn: (action: 'install' | 'remove') => window.tandemise.notificationDesktopEntry(action),
+    onSuccess: (view) => queryClient.setQueryData(HEALTH_KEY, view),
+  });
+  const entry = health.data?.desktopEntry ?? { offer: null, path: null };
 
   const view = preferences.data;
   const quiet = view?.quietHours ?? null;
@@ -57,6 +76,16 @@ export function NotificationSettings(): JSX.Element {
     <section className="section" aria-label="Notifications">
       <SectionHead title="Notifications" meta={view?.quietNow ? 'Quiet hours now' : undefined} />
       {preferences.isError ? <ErrorState error={preferences.error} onRetry={() => void preferences.refetch()} /> : null}
+      {health.data && (health.data.reach === 'hidden' || health.data.reach === 'unavailable' || health.data.advice !== null) ? (
+        <Banner
+          tone={health.data.reach === 'unavailable' ? 'danger' : health.data.reach === 'hidden' ? 'warn' : 'neutral'}
+          icon={<Icon name={health.data.reach === 'ready' || health.data.reach === 'unknown' ? 'info' : 'alert'} size={14} />}
+          data-notify-banner={health.data.reach}
+        >
+          <strong>{health.data.summary}</strong>
+          {health.data.advice !== null ? <> {health.data.advice}</> : null}
+        </Banner>
+      ) : null}
       <Card flush>
         {KINDS.map(({ kind, title, detail }) => (
           <div className="list__row" key={kind}>
@@ -112,11 +141,22 @@ export function NotificationSettings(): JSX.Element {
           </div>
         ) : null}
 
-        <div className="list__row">
+        <div className="list__row" data-notify-reach={health.data?.reach ?? 'checking'}>
           <div className="list__main">
-            <div className="list__title">Check they reach you</div>
-            <div className="list__subtitle">
-              Sends one notification now. If nothing appears, allow notifications for Tandemise in your system settings.
+            <div className="list__title row">
+              <span>Check they reach you</span>
+              {health.data ? <StatusPill tone={REACH[health.data.reach].tone} label={REACH[health.data.reach].label} /> : null}
+            </div>
+            <div className="list__subtitle" data-notify-summary>
+              {health.data ? health.data.summary : health.isError ? 'Could not ask the system about notifications.' : 'Asking the system…'}
+            </div>
+            {health.data?.lastFailure ? (
+              <div className="list__subtitle" data-notify-failure>
+                Last refused {new Date(health.data.lastFailure.at).toLocaleTimeString()}: {health.data.lastFailure.reason} It is announced again once the system takes it.
+              </div>
+            ) : null}
+            <div className="list__subtitle" role="status" data-notify-test-result>
+              {test.data ? test.data.message : ''}
             </div>
           </div>
           <div className="list__aside">
@@ -125,7 +165,30 @@ export function NotificationSettings(): JSX.Element {
             </Button>
           </div>
         </div>
+
+        {entry.offer !== null ? (
+          <div className="list__row" data-notify-desktop-entry={entry.offer}>
+            <div className="list__main">
+              <div className="list__title">{entry.offer === 'install' ? 'Add Tandemise to your apps' : 'Tandemise is in your apps'}</div>
+              <div className="list__subtitle">
+                {entry.offer === 'install'
+                  ? 'This AppImage is not in your apps, so the desktop shows its notifications without the Tandemise name and icon, and lists no Tandemise in its notification settings. Adding it writes a launcher for this AppImage to your apps folder; nothing else changes.'
+                  : `Tandemise added ${entry.path ?? 'its launcher'} from here. Removing it takes the launcher and its icon away again.`}
+              </div>
+            </div>
+            <div className="list__aside">
+              <Button
+                variant={entry.offer === 'install' ? 'primary' : 'secondary'}
+                disabled={desktopEntry.isPending}
+                onClick={() => desktopEntry.mutate(entry.offer === 'install' ? 'install' : 'remove')}
+              >
+                {entry.offer === 'install' ? 'Add to apps' : 'Remove from apps'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Card>
+      {desktopEntry.isError ? <ErrorState error={desktopEntry.error} /> : null}
       {update.isError ? <ErrorState error={update.error} /> : null}
     </section>
   );

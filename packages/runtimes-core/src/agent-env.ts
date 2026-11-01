@@ -20,6 +20,32 @@ import { forgeIsolation } from './forge-isolation.js';
 
 export type AgentDisplay = 'off' | 'host' | 'virtual';
 
+/**
+ * Variables that point a worker at the person's own Tandemise app (#162):
+ * the Electron/Chromium launch state the daemon inherits from the window,
+ * the AppImage's paths, a DevTools or inspector port, and the daemon's own
+ * port. None of them is something an agent needs, and each is a pointer at
+ * a window whose DevTools protocol has no authentication. A worker that
+ * starts its own copy of the app picks its own ports.
+ */
+export const APP_CONTROL_ENV = ['APPIMAGE', 'APPDIR', 'ARGV0', 'OWD', 'TANDEMISE_PORT', 'NODE_INSPECT_RESUME_ON_START', 'VSCODE_INSPECTOR_OPTIONS'] as const;
+const APP_CONTROL_PATTERN = /^ELECTRON_(?!MIRROR|CUSTOM_DIR|CACHE|SKIP_BINARY_DOWNLOAD|BUILDER_)|REMOTE_DEBUGGING|DEVTOOLS|(^|_)CDP(_|$)|INSPECT(OR)?_PORT/i;
+
+/** Names in `source` that point at the person's app (#162). */
+export function appControlEnvNames(source: NodeJS.ProcessEnv): string[] {
+  return Object.keys(source).filter((name) => (APP_CONTROL_ENV as readonly string[]).includes(name) || APP_CONTROL_PATTERN.test(name));
+}
+
+/**
+ * NODE_OPTIONS without inspector or remote-debugging flags, or null when
+ * nothing else is left. A worker's Node must not open (or join) a debugger
+ * port because the daemon was started with one.
+ */
+export function withoutInspectorFlags(nodeOptions: string): string | null {
+  const kept = nodeOptions.split(/\s+/).filter((t) => t !== '' && !/^--(inspect|inspect-brk|inspect-port|inspect-publish-uid|debug-port|remote-debugging)/.test(t));
+  return kept.length === 0 ? null : kept.join(' ');
+}
+
 export const DISPLAY_ENV = ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR'] as const;
 
 /** The display a profile's `display` setting asks for. */
@@ -52,7 +78,11 @@ export interface AgentEnvPlan {
   readonly wrap: readonly string[] | null;
   /** Which display the run has, in words, for its log: "no display", "this computer's display", "a virtual display (xvfb-run)". */
   readonly display: string;
-  /** Variables removed last: the code-host credentials a worker must not hold (#147). */
+  /**
+   * Variables removed last: the code-host credentials a worker must not hold
+   * (#147), and whatever points at the person's own app or its DevTools
+   * port (#162).
+   */
   readonly unset: readonly string[];
   /** What the run's shell can reach on the code host, in words. */
   readonly forge: string;
@@ -72,7 +102,15 @@ export function agentEnvPlan(input: {
   const home = agentHome(input.runId, input.homeRoot);
   const forge = forgeIsolation({ ghConfigDir: `${home}-gh`, push: anyCapabilityMatches(input.grants ?? [], CORE_CAPABILITIES.gitPush), source });
   const env: Record<string, string> = { ...forge.set, TANDEMISE_HOME: home };
-  const extra = { unset: forge.unset, forge: forge.summary };
+  // #162: nothing that points at the person's window or daemon reaches the worker.
+  const unset = [...forge.unset, ...appControlEnvNames(source)];
+  const nodeOptions = source['NODE_OPTIONS'];
+  if (nodeOptions !== undefined) {
+    const kept = withoutInspectorFlags(nodeOptions);
+    if (kept === null) unset.push('NODE_OPTIONS');
+    else if (kept !== nodeOptions) env['NODE_OPTIONS'] = kept;
+  }
+  const extra = { unset: [...new Set(unset)], forge: forge.summary };
   if (input.display === 'host') {
     let any = false;
     for (const name of DISPLAY_ENV) {
@@ -93,7 +131,8 @@ export function agentEnvPlan(input: {
 /**
  * The environment of a runtime that inherits the daemon's whole environment
  * (Codex, a generic CLI): that environment, with the run's own TANDEMISE_HOME
- * and without the person's code-host credentials (#147).
+ * without the person's code-host credentials (#147) and without what points
+ * at the person's own app or its DevTools port (#162).
  */
 export function workerEnv(request: { readonly runId: string; readonly grants: readonly Capability[] }, source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const plan = agentEnvPlan({ runId: request.runId, display: 'off', grants: request.grants, source });

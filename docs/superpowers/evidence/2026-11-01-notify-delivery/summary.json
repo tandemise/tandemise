@@ -1,0 +1,18 @@
+{
+  "steps": [
+    {
+      "step": 1,
+      "notify": "method call time=1793546753.060959 sender=:1.37 -> destination=:1.12 serial=60 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify\n   string \"Tandemise\"\n   uint32 0\n   string \"\"\n   string \"Decision needed\"\n   string \"Allow a network call\"\n   array [\n      string \"default\"\n      string \"Show\"\n   ]\n   array [\n      dict entry(\n         string \"sender-pid\"\n         variant             int64 3514749\n      )\n      dict entry(\n         string \"desktop-entry\"\n         variant             string \"tandemise\"\n      )\n      dict entry(\n         string \"urgency\"\n         variant             byte 1\n      )\n      dict entry(\n         string \"image-data\"\n         variant             struct {\n               int32 512\n               int32 512\n               int32 2048\n               boolean true\n               int32 8\n               int32 4\n               array of bytes [ …the icon's RGBA pixels, elided… ]\n            }\n      )\n   ]\n   int32 -1",
+      "reply": "method return time=1793546753.309159 sender=:1.12 -> destination=:1.37 serial=31 reply_serial=60\n   uint32 1"
+    },
+    {
+      "step": 2,
+      "notify": "method call time=1793546763.648658 sender=:1.37 -> destination=:1.12 serial=61 path=/org/freedesktop/Notifications; interface=org.freedesktop.Notifications; member=Notify\n   string \"Tandemise\"\n   uint32 0\n   string \"\"\n   string \"Notifications are on\"\n   string \"This is how Tandemise will tell you something needs you.\"\n   array [\n      string \"default\"\n      string \"Show\"\n   ]\n   array [\n      dict entry(\n         string \"desktop-entry\"\n         variant             string \"tandemise\"\n      )\n      dict entry(\n         string \"urgency\"\n         variant             byte 1\n      )\n      dict entry(\n         string \"sender-pid\"\n         variant             int64 3514749\n      )\n   ]\n   int32 -1",
+      "reply": "method return time=1793546763.659202 sender=:1.12 -> destination=:1.37 serial=49 reply_serial=61\n   uint32 2"
+    }
+  ],
+  "server": "('gnome-shell', 'GNOME', '50.1', '1.2')",
+  "globalBanners": "true",
+  "passed": 32,
+  "failures": []
+}

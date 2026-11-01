@@ -112,6 +112,11 @@ export function notReadyMessage(readiness: Readiness): string {
   return `Not ready to plan: ${what.charAt(0).toLowerCase()}${what.slice(1)} first. (${readiness.detail})`;
 }
 
+/** What is left before a refined draft can be marked ready (#135): "Answer 1 question and decide 3 criteria". */
+export function readinessTodo(counts: ReadinessCounts): string {
+  return todo(counts);
+}
+
 /** What is left, in the order a person would do it: answer, decide, then add. */
 function todo(counts: ReadinessCounts): string {
   const parts: string[] = [];

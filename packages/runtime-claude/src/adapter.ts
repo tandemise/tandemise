@@ -4,14 +4,15 @@ import { isAbsolute, resolve } from 'node:path';
 import type {
   AgentEvent, InteractiveInvocation, RuntimeCapability, RuntimeDiscovery, RuntimeHealth, RuntimeProfile,
 } from '@tandemise/domain';
-import { SKILLS_FOLDER } from '@tandemise/domain';
+import { SKILL_NOT_LOADED, SKILLS_FOLDER } from '@tandemise/domain';
 import {
   DEFAULT_TERMINATION_GRACE_MS, NormalizingEventSink, RUNTIME_SIGNED_OUT, SESSION_NOT_FOUND,
   relieveBackPressure, superviseProcessStream,
 } from '@tandemise/runtimes-core';
 import { agentDisplaySetting, agentEnvPlan, buildRuntimeEnv, withDeclaredCapabilities, withheldEnvNames, type AgentEnvPlan } from '@tandemise/runtimes-core';
 import { CLAUDE_SETTINGS_SCHEMA, PARENT_SESSION_ENV, resolveConfigDir } from './settings.js';
-import type { AgentRuntimeAdapter, InteractiveOptions, RunRequest, SupervisedChild } from '@tandemise/runtimes-core';
+import type { AgentRuntimeAdapter, InteractiveOptions, RunRequest, SkillResolution, SupervisedChild } from '@tandemise/runtimes-core';
+import { resolveClaudeSkill } from './skills.js';
 import { TandemiseError, systemClock } from '@tandemise/shared';
 import type { Clock, RunId } from '@tandemise/shared';
 import { buildInteractiveInvocation, buildInvocation } from './cli-args.js';
@@ -165,6 +166,11 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
     return SKILLS_FOLDER;
   }
 
+  /** A step's skill (#131): a plugin's, the repository's own, or the person's when the profile lets theirs in. */
+  resolveSkill(profile: RuntimeProfile, name: string, folders: readonly string[]): Promise<SkillResolution> {
+    return resolveClaudeSkill(profile.settings, name, folders);
+  }
+
   capabilities(profile: RuntimeProfile): readonly RuntimeCapability[] {
     return withDeclaredCapabilities(profile, CLAUDE_CAPABILITIES, this.baseCapabilities);
   }
@@ -226,6 +232,8 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
 
     let sessionMissing = false;
     let signedOutLine: string | null = null;
+    // #131: the skill this run invokes, absent from the session it started.
+    let skillMissing: string | null = null;
     const sink = new NormalizingEventSink({ log, onInvalid: 'raw' });
     const mapper = new ClaudeEventMapper({
       // Probed against the run's working directory: a relative `file_path`
@@ -270,7 +278,22 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
       graceMs: this.#graceMs,
       sink,
       log,
-      onStdoutLine: (line) => this.#handleLine(line, sink, mapper),
+      onStdoutLine: (line) => {
+        // The init record lists what the session loaded, before any model call:
+        // a run asked to invoke a skill it doesn't have stops here, loudly.
+        // Nothing it prints after that is the step's work.
+        if (skillMissing !== null) return;
+        if (request.skill !== undefined) {
+          const missing = missingSkill(line, request.skill.name);
+          if (missing !== null) {
+            skillMissing = missing;
+            log.warn('skill not loaded', { skill: request.skill.name });
+            stream.child.kill('SIGTERM');
+            return;
+          }
+        }
+        this.#handleLine(line, sink, mapper);
+      },
       // Guarded on `resumeSessionRef`: a fresh start has no session to lose, so
       // the same sentence arriving there means something else entirely.
       onStderrLine: (line) => {
@@ -304,7 +327,9 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
         if (event.type === 'completed') this.#signedOut.delete(request.profile.id);
         yield event;
       }
-      if (heldFailure !== null) yield this.#classifyFailure(heldFailure, request, {
+      if (skillMissing !== null && !request.signal.aborted) {
+        yield { type: 'failed', code: SKILL_NOT_LOADED, message: skillMissing, retryable: false };
+      } else if (heldFailure !== null) yield this.#classifyFailure(heldFailure, request, {
         resumeSessionRef, sessionMissing, signedOutLine, didWork, configDir: childEnv['CLAUDE_CONFIG_DIR'] ?? null,
       });
     } finally {
@@ -448,6 +473,27 @@ export class ClaudeCodeAdapter implements AgentRuntimeAdapter {
       });
     });
   }
+}
+
+/**
+ * Why the session a run started can't invoke `name` (#131), read from Claude
+ * Code's `system/init` record (its `skills` and `slash_commands`); null for
+ * any other line, or when the skill is there.
+ */
+export function missingSkill(line: string, name: string): string | null {
+  let parsed: { type?: unknown; subtype?: unknown; skills?: unknown; slash_commands?: unknown };
+  try {
+    parsed = JSON.parse(line) as typeof parsed;
+  } catch {
+    return null;
+  }
+  if (parsed?.type !== 'system' || parsed.subtype !== 'init') return null;
+  const loaded = [parsed.skills, parsed.slash_commands].flatMap((list) => (Array.isArray(list) ? list : [])).filter((s): s is string => typeof s === 'string');
+  if (loaded.includes(name)) return null;
+  const plugin = name.includes(':') ? name.slice(0, name.indexOf(':')) : null;
+  const near = [...new Set(loaded)].filter((s) => (plugin === null ? !s.includes(':') : s.startsWith(`${plugin}:`))).slice(0, 8);
+  return `Claude Code started without the skill /${name}, so the step was stopped before it ran anything.`
+    + (near.length > 0 ? ` The session had ${near.map((s) => `/${s}`).join(', ')}.` : '');
 }
 
 function absoluteWorkingDirectory(dir: string): string {

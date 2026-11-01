@@ -157,6 +157,20 @@ export function planNotifications(input: NotifyPlanInput): NotifyPlan {
   return { notice, state: { notified: remember([...off, ...announce].map((i) => i.id)), held: [] } };
 }
 
+/**
+ * The desktop could not show a notice: forget its ids, so they count as new
+ * again and are announced once the operating system can show them. Recording
+ * an id as notified is a claim that the person was told; this is what keeps it
+ * true when the notification never left the app.
+ */
+export function releaseNotified(state: NotifyState, ids: readonly string[]): NotifyState {
+  const released = new Set(ids);
+  return {
+    notified: state.notified.filter((id) => !released.has(id)),
+    held: state.held.filter((id) => !released.has(id)),
+  };
+}
+
 /** "3 things need you", or the item's own words when it is alone. */
 export function noticeFor(items: readonly NotifyItem[], afterQuietHours: boolean): Notice {
   const workspaces = new Set(items.map((i) => i.workspaceId));

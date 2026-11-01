@@ -367,6 +367,16 @@ export class DaemonClient {
     return this.#request('POST', `/workspaces/${workspaceId}/board/start`, { key, ...(lane === undefined ? {} : { lane }) }, undefined, { timeoutMs: 60_000 });
   }
 
+  /** Refine a draft item (#135): a draft mission and the product agent's pass; nothing is written to the tracker. */
+  refineItem(workspaceId: string, key: string): Promise<MissionSummary> {
+    return this.#request('POST', `/workspaces/${workspaceId}/board/refine`, { key }, undefined, { timeoutMs: 60_000 });
+  }
+
+  /** Writes the refined description and Done-when lines to the tracker and marks the item ready (#135). */
+  markItemReady(workspaceId: string, key: string): Promise<BoardView> {
+    return this.#request('POST', `/workspaces/${workspaceId}/board/ready`, { key }, undefined, { timeoutMs: 60_000 });
+  }
+
   intakeSignals(workspaceId: string, status?: readonly SignalStatus[]): Promise<readonly IntakeSignalView[]> {
     return this.#get(`/workspaces/${workspaceId}/intake/signals`, { status: status?.join(',') });
   }
