@@ -1061,10 +1061,31 @@ export interface SkillPreviewView {
   readonly changes: boolean;
 }
 
+/** Where discovered skills were found (#129): your skills, an installed plugin, a repository. */
+export interface DiscoveredSkillOriginView {
+  readonly id: string;
+  readonly kind: 'personal' | 'plugin' | 'project';
+  /** "Your skills", "Plugin acme 1.2.3", "Repository web". */
+  readonly label: string;
+  /** The plugin's marketplace; null otherwise. */
+  readonly detail: string | null;
+  /** The folder read. */
+  readonly root: string;
+}
+
 export interface DiscoveredSkillView {
-  /** The folder's name under the discovery root. */
+  /** The folder's name under its root; `group/skill` for a skill inside a grouping folder. */
   readonly folder: string;
   readonly path: string;
+  /** Which of `origins` it was found in. */
+  readonly originId: string;
+  /**
+   * How Claude Code invokes it: `acme:hello` for a plugin's, the folder name
+   * otherwise. Null for a skill inside a grouping folder: Claude Code loads
+   * only top-level folders, so it reaches a worker only by importing it.
+   */
+  readonly invocation: string | null;
+  /** Its name in the library (`<plugin>-<skill>` for a plugin's). */
   readonly name: string | null;
   readonly description: string;
   readonly hash: string | null;
@@ -1078,9 +1099,12 @@ export interface DiscoveredSkillView {
 }
 
 export interface DiscoveredSkillsView {
+  /** Where your own skills are looked for (~/.claude/skills unless overridden). */
   readonly root: string;
-  /** False when the root folder does not exist. */
+  /** False when that folder does not exist. */
   readonly exists: boolean;
+  /** Where the skills below were found, in the order they are listed. */
+  readonly origins: readonly DiscoveredSkillOriginView[];
   readonly skills: readonly DiscoveredSkillView[];
 }
 

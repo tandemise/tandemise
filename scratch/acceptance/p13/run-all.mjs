@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // P13 acceptance: the skills library, in the real window, on a brand-new installation.
 //
-//   node scratch/acceptance/p13/run-all.mjs [--keep-going] [--only=n01,n03] [--hold]
+//   node scratch/acceptance/p13/run-all.mjs [--keep-going] [--only=n01,n03] [--hold] [--keep-painting]
 //
 // Fresh TANDEMISE_HOME + project (p0/setup.mjs), the daemon from this
 // checkout's build with its skills discovery root pointed at a fixture folder
@@ -9,12 +9,15 @@
 // user-data-dir and CDP on 9348, then N1-N4 in order. The scripted agent's
 // profile reads skills from .claude/skills (settings.skillsFolder) and records,
 // for every run, which skills it found in that folder and in its prompt.
+// N5 (#129) adds an installed plugin under the fixture root (the Claude config
+// folder is the skills root's parent), a grouping folder and a repository skill.
 // Writes p13/evidence/REPORT.md.
 import { spawn, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { keepPainting } from '../p0/lib/frame-pump.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -70,11 +73,13 @@ const desktop = spawn('npx', ['electron-vite', 'dev', '--', `--remote-debugging-
   detached: true,
 });
 desktop.unref();
+// --keep-painting (or ACCEPTANCE_KEEP_PAINTING=1): for a display that is idle during the run.
+keepPainting([PORT]);
 
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
 // No real-model scenario: which skills a run gets is decided by the daemon; the scripted agent shows what it received.
-const scenarios = ['n01-import.mjs', 'n02-role-run.mjs', 'n03-update.mjs', 'n04-missing.mjs']
+const scenarios = ['n01-import.mjs', 'n02-role-run.mjs', 'n03-update.mjs', 'n04-missing.mjs', 'n05-plugins.mjs']
   .filter((file) => !only || only.some((o) => file.includes(o)));
 
 let failed = null;
@@ -101,7 +106,7 @@ if (!process.argv.includes('--hold')) {
 
 // ---------------------------------------------------------------- report
 const results = readdirSync(EVIDENCE).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(readFileSync(join(EVIDENCE, f), 'utf8')));
-const order = ['N1', 'N2', 'N3', 'N4'];
+const order = ['N1', 'N2', 'N3', 'N4', 'N5'];
 results.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 const lines = [
   '# P13 acceptance report',

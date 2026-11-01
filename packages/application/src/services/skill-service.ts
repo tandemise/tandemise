@@ -1,23 +1,25 @@
 import type {
-  PlannedTask, RoleRepositoryPort, RoleSkill, RoleTemplate, Skill, SkillCatalog, SkillFile, SkillPin, SkillRepositoryPort,
+  PlannedTask, RepoRepositoryPort, RoleRepositoryPort, RoleSkill, RoleTemplate, Skill, SkillCatalog, SkillFile, SkillPin, SkillRepositoryPort,
   SkillSource, SkillVersion,
 } from '@tandemise/domain';
 import {
-  SKILL_FILE, formatSkillSize, hashSkillFiles, parseSkillFrontMatter, resolveSkillPins, shortHash, skillNameProblem,
+  SKILL_FILE, formatSkillSize, hashSkillFiles, parseSkillFrontMatter, pluginSkillName, resolveSkillPins, shortHash, skillNameProblem,
 } from '@tandemise/domain';
 import type {
-  DiscoveredSkillView, DiscoveredSkillsView, ImportSkillRequest, SkillImportView, SkillLibraryView, SkillPreviewView,
+  DiscoveredSkillOriginView, DiscoveredSkillView, DiscoveredSkillsView, ImportSkillRequest, SkillImportView, SkillLibraryView, SkillPreviewView,
   SkillSourceRequest, SkillSourceStatus, SkillVersionDetailView, SkillVersionView, SkillView,
 } from '@tandemise/api-contract';
 import type { Clock, Logger, SkillId, WorkspaceId } from '@tandemise/shared';
 import { TandemiseError, asId, ids, isPathInside } from '@tandemise/shared';
-import type { ScannedSkillFolder, SkillFilesPort } from '../ports.js';
+import type { DiscoveredSkillFolder, ScannedSkillFolder, SkillFilesPort } from '../ports.js';
 
 export interface SkillDeps {
   /** A linked brain hears of each edit so it can write it through (#51). */
   readonly factoryEdits?: { edited(workspaceId: WorkspaceId, what: string): void };
   readonly skills: SkillRepositoryPort;
   readonly roles: RoleRepositoryPort;
+  /** The project's repositories, whose `.claude/skills` discovery reads (#129). Optional for older harnesses. */
+  readonly repositories?: Pick<RepoRepositoryPort, 'listByWorkspace'>;
   readonly files: SkillFilesPort;
   readonly clock: Clock;
   readonly log: Logger;
@@ -63,17 +65,24 @@ export class SkillService {
   }
 
   async discover(workspaceId: WorkspaceId): Promise<DiscoveredSkillsView> {
-    const { exists, folders } = await this.deps.files.discover();
+    const { exists, folders } = await this.deps.files.discover(this.#repositories(workspaceId));
     const found: DiscoveredSkillView[] = [];
-    for (const folder of folders) {
-      const judged = this.#judge({ kind: 'claude', path: folder }, await this.deps.files.scan(folder));
+    const origins = new Map<string, DiscoveredSkillOriginView>();
+    for (const entry of folders) {
+      const origin = originOf(entry);
+      if (!origins.has(origin.id)) origins.set(origin.id, origin);
+      const judged = this.#judge(sourceOf(entry), await this.deps.files.scan(entry.path));
       const existing = judged.name === null ? undefined : this.deps.skills.getByName(workspaceId, judged.name);
       const versions = existing === undefined ? [] : this.deps.skills.versions(existing.id);
       const same = judged.hash === null ? undefined : versions.find((v) => v.hash === judged.hash);
       const newest = versions.at(-1);
+      const folder = entry.path.split('/').pop() ?? entry.path;
       found.push({
-        folder: folder.split('/').pop() ?? folder,
-        path: folder,
+        folder: entry.group === null ? folder : `${entry.group}/${folder}`,
+        path: entry.path,
+        originId: origin.id,
+        // Claude Code loads only top-level skill folders, and names a plugin's `plugin:skill`.
+        invocation: entry.group !== null ? null : entry.plugin === undefined ? folder : `${entry.plugin.name}:${folder}`,
         name: judged.name,
         description: judged.description,
         hash: judged.hash,
@@ -88,11 +97,11 @@ export class SkillService {
         importable: judged.problem === null && same === undefined,
       });
     }
-    return { root: this.deps.files.discoverRoot(), exists, skills: found };
+    return { root: this.deps.files.discoverRoot(), exists, origins: [...origins.values()], skills: found };
   }
 
   async preview(workspaceId: WorkspaceId, source: SkillSourceRequest): Promise<SkillPreviewView> {
-    const judged = await this.#read(this.#source(source));
+    const judged = await this.#read(await this.#source(workspaceId, source));
     if (judged.hash !== null && judged.problem === null) this.#remember(judged);
     return this.#previewView(workspaceId, judged);
   }
@@ -114,7 +123,7 @@ export class SkillService {
   // ------------------------------------------------------------------ writing
 
   async import(workspaceId: WorkspaceId, request: ImportSkillRequest): Promise<SkillImportView> {
-    const source = this.#source(request.source);
+    const source = await this.#source(workspaceId, request.source);
     const cached = this.#previews.get(request.hash);
     const judged = cached !== undefined && sameSource(cached.source, source) ? cached : await this.#read(source);
     if (judged.problem !== null) throw TandemiseError.validation(judged.problem, { source });
@@ -242,7 +251,7 @@ export class SkillService {
     return skill;
   }
 
-  #source(request: SkillSourceRequest): SkillSource {
+  async #source(workspaceId: WorkspaceId, request: SkillSourceRequest): Promise<SkillSource> {
     if (request.kind === 'git') {
       const subpath = request.subpath?.trim().replace(/^\/+|\/+$/g, '') ?? '';
       if (subpath.split('/').some((part) => part === '..')) throw TandemiseError.validation('The subfolder must stay inside the repository.', { subpath });
@@ -254,10 +263,16 @@ export class SkillService {
     }
     const path = request.path.trim();
     if (!path.startsWith('/')) throw TandemiseError.validation('Give the folder as a full path, starting with /.', { path });
-    if (request.kind === 'claude' && !isPathInside(this.deps.files.discoverRoot(), path)) {
-      throw TandemiseError.validation(`That folder is not under ${this.deps.files.discoverRoot()}.`, { path });
-    }
-    return { kind: request.kind, path };
+    if (request.kind === 'path') return { kind: 'path', path };
+    // A Claude skill is one discovery lists (#129): personal, a plugin's, or a repository's.
+    const found = (await this.deps.files.discover(this.#repositories(workspaceId))).folders.find((f) => f.path === path);
+    if (found !== undefined) return sourceOf(found);
+    if (isPathInside(this.deps.files.discoverRoot(), path)) return { kind: 'claude', path };
+    throw TandemiseError.validation(`That folder is not one of the Claude skills found on this computer or in this project (${this.deps.files.discoverRoot()}).`, { path });
+  }
+
+  #repositories(workspaceId: WorkspaceId): readonly { name: string; path: string }[] {
+    return (this.deps.repositories?.listByWorkspace(workspaceId) ?? []).map((r) => ({ name: r.name, path: r.path }));
   }
 
   async #read(source: SkillSource): Promise<Judged> {
@@ -283,7 +298,10 @@ export class SkillService {
     const front = skillMd === null ? null : parseSkillFrontMatter(skillMd);
     const folderName = (source.kind === 'git' ? (source.subpath ?? source.url.replace(/\.git$/, '')) : source.path)
       .replace(/\/+$/, '').split('/').pop() ?? '';
-    const name = front?.name ?? (folderName === '' ? null : folderName);
+    // A plugin's skill is `<plugin>-<folder>` in the library, as Claude Code names it `plugin:folder` (#129).
+    const name = source.kind === 'claude' && source.plugin !== undefined && folderName !== ''
+      ? pluginSkillName(source.plugin, folderName)
+      : front?.name ?? (folderName === '' ? null : folderName);
     const nameProblem = scan.problem === null && name !== null ? skillNameProblem(name) : null;
     const problem = scan.problem ?? nameProblem;
     return {
@@ -440,7 +458,23 @@ function filesLabel(count: number, bytes: number): string {
 
 export function sourceLabel(source: SkillSource): string {
   if (source.kind === 'git') return [source.url, source.subpath, source.ref === undefined ? undefined : `@${source.ref}`].filter(Boolean).join(' · ');
-  return source.path;
+  return source.kind === 'claude' && source.plugin !== undefined ? `Plugin ${source.plugin} · ${source.path}` : source.path;
+}
+
+function sourceOf(entry: DiscoveredSkillFolder): SkillSource {
+  return entry.plugin === undefined ? { kind: 'claude', path: entry.path } : { kind: 'claude', path: entry.path, plugin: entry.plugin.name };
+}
+
+/** The heading a discovered skill is listed under (#129). */
+function originOf(entry: DiscoveredSkillFolder): DiscoveredSkillOriginView {
+  if (entry.origin === 'plugin' && entry.plugin !== undefined) {
+    const { name, marketplace, version } = entry.plugin;
+    return { id: `plugin:${name}@${marketplace}`, kind: 'plugin', label: `Plugin ${name} ${version}`, detail: marketplace, root: entry.root };
+  }
+  if (entry.origin === 'project') {
+    return { id: `project:${entry.root}`, kind: 'project', label: `Repository ${entry.repository ?? ''}`.trim(), detail: null, root: entry.root };
+  }
+  return { id: `personal:${entry.root}`, kind: 'personal', label: 'Your skills', detail: null, root: entry.root };
 }
 
 function sameSource(a: SkillSource, b: SkillSource): boolean {

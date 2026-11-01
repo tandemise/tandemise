@@ -5,7 +5,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { SkillFile } from '@tandemise/domain';
 import { MAX_SKILL_BYTES, MAX_SKILL_FILES, SKILL_FILE, SKILL_IGNORED_NAMES, formatSkillSize, hashSkillFiles } from '@tandemise/domain';
-import type { ScannedSkillFolder, SkillFilesPort } from '@tandemise/application';
+import type { DiscoveredSkillFolder, ScannedSkillFolder, SkillFilesPort } from '@tandemise/application';
 import { errorMessage, isPathInside, type Logger } from '@tandemise/shared';
 
 const run = promisify(execFile);
@@ -35,31 +35,36 @@ export class DaemonSkillFiles implements SkillFilesPort {
     private readonly storeRoot: string,
     private readonly root: string,
     private readonly log: Logger,
+    /** The Claude config folder whose `plugins/installed_plugins.json` lists the plugins (#129). */
+    private readonly claudeConfigDir: string = dirname(root),
   ) {}
 
   discoverRoot(): string {
     return this.root;
   }
 
-  async discover(): Promise<{ exists: boolean; folders: readonly string[] }> {
-    let names: string[];
-    try {
-      names = await readdir(this.root);
-    } catch {
-      return { exists: false, folders: [] };
-    }
-    const folders: string[] = [];
-    for (const name of names.sort()) {
-      if (name.startsWith('.')) continue;
-      const path = join(this.root, name);
-      try {
-        // A linked skill folder (a common way to share one) counts, wherever it points.
-        if ((await stat(path)).isDirectory()) folders.push(path);
-      } catch {
-        // A dangling link is not a skill.
+  /**
+   * Every skill folder Claude Code keeps (#129), in the order the Skills
+   * screen lists them: your own, each installed plugin's, each repository's.
+   * Only names are read here; `scan` reads a folder's files.
+   */
+  async discover(repositories: readonly { name: string; path: string }[] = []): Promise<{ exists: boolean; folders: readonly DiscoveredSkillFolder[] }> {
+    const personal = await skillFolders(this.root);
+    const folders: DiscoveredSkillFolder[] = personal.folders.map((f) => ({ ...f, origin: 'personal', root: this.root }));
+    // Claude Code's own record of what it installed; an unreadable one lists none.
+    for (const plugin of await installedPlugins(this.claudeConfigDir, this.log)) {
+      const skillsRoot = join(plugin.installPath, 'skills');
+      for (const f of (await skillFolders(skillsRoot)).folders) {
+        folders.push({ ...f, origin: 'plugin', root: skillsRoot, plugin: { name: plugin.name, marketplace: plugin.marketplace, version: plugin.version } });
       }
     }
-    return { exists: true, folders };
+    for (const repo of repositories) {
+      const skillsRoot = join(repo.path, '.claude', 'skills');
+      for (const f of (await skillFolders(skillsRoot)).folders) {
+        folders.push({ ...f, origin: 'project', root: skillsRoot, repository: repo.name });
+      }
+    }
+    return { exists: personal.exists, folders };
   }
 
   async scan(folder: string): Promise<ScannedSkillFolder> {
@@ -211,6 +216,109 @@ export class DaemonSkillFiles implements SkillFilesPort {
   #dir(hash: string): string {
     if (!/^[0-9a-f]{64}$/.test(hash)) throw new Error('Not a skill content hash.');
     return join(this.storeRoot, hash);
+  }
+}
+
+/** A plugin install as Claude Code records it. */
+export interface InstalledPlugin {
+  readonly name: string;
+  readonly marketplace: string;
+  readonly version: string;
+  readonly installPath: string;
+  readonly scope: string;
+}
+
+/**
+ * Reads `<config>/plugins/installed_plugins.json` (version 2:
+ * `{ plugins: { "name@marketplace": [{ scope, installPath, version }] } }`).
+ * Installs whose folder is the same are listed once; a missing or malformed
+ * record is an empty list.
+ */
+export async function installedPlugins(configDir: string, log?: Logger): Promise<readonly InstalledPlugin[]> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(join(configDir, 'plugins', 'installed_plugins.json'), 'utf8'));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log?.warn('skills.plugins_unreadable', { configDir, error: errorMessage(e) });
+    return [];
+  }
+  const plugins = (raw as { plugins?: unknown } | null)?.plugins;
+  if (typeof plugins !== 'object' || plugins === null) return [];
+  const out: InstalledPlugin[] = [];
+  const seen = new Set<string>();
+  for (const key of Object.keys(plugins).sort()) {
+    const at = key.lastIndexOf('@');
+    const name = at > 0 ? key.slice(0, at) : key;
+    const marketplace = at > 0 ? key.slice(at + 1) : '';
+    const installs = (plugins as Record<string, unknown>)[key];
+    for (const install of Array.isArray(installs) ? installs : []) {
+      const { installPath, version, scope } = (install ?? {}) as { installPath?: unknown; version?: unknown; scope?: unknown };
+      if (typeof installPath !== 'string' || installPath === '' || seen.has(installPath)) continue;
+      seen.add(installPath);
+      out.push({
+        name, marketplace, installPath,
+        version: typeof version === 'string' ? version : '',
+        scope: typeof scope === 'string' ? scope : 'user',
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * The skill folders under one root, sorted. A folder with a SKILL.md is a
+ * skill. A folder without one whose sub-folders have one groups skills: each
+ * of those is listed with the group's name (one level only, #129). A folder
+ * with neither is listed as itself, so `scan` can say why it isn't a skill.
+ */
+async function skillFolders(root: string): Promise<{ exists: boolean; folders: { path: string; group: string | null }[] }> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return { exists: false, folders: [] };
+  }
+  const folders: { path: string; group: string | null }[] = [];
+  for (const name of names.sort()) {
+    if (name.startsWith('.')) continue;
+    const path = join(root, name);
+    // A linked skill folder (a common way to share one) counts, wherever it points.
+    if (!(await isFolder(path))) continue;
+    if (await isFile(join(path, SKILL_FILE))) {
+      folders.push({ path, group: null });
+      continue;
+    }
+    const inner: { path: string; group: string | null }[] = [];
+    let children: string[] = [];
+    try {
+      children = await readdir(path);
+    } catch {
+      // Unreadable: listed as itself, and the scan says so.
+    }
+    for (const child of children.sort()) {
+      if (child.startsWith('.')) continue;
+      const sub = join(path, child);
+      if (await isFolder(sub) && await isFile(join(sub, SKILL_FILE))) inner.push({ path: sub, group: name });
+    }
+    folders.push(...(inner.length > 0 ? inner : [{ path, group: null }]));
+  }
+  return { exists: true, folders };
+}
+
+async function isFolder(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    // A dangling link is not a skill.
+    return false;
+  }
+}
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
   }
 }
 
