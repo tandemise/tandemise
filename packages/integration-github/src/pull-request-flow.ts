@@ -143,7 +143,7 @@ export class GhPullRequestFlow implements PullRequestPort {
       passed: r.status.toLowerCase() !== 'completed' ? null : ['success', 'neutral', 'skipped'].includes((r.conclusion ?? '').toLowerCase()),
       link: r.details_url ?? null,
     }));
-    return { state, done: finished, total: total + waitingSuites, failing, runs };
+    return { state, done: finished, total: total + waitingSuites, registered: total, failing, runs };
   }
 
   /** The Actions workflow runs on one commit, each with its jobs (#186). A run whose jobs can't be read keeps none. */
@@ -235,6 +235,10 @@ export class GhPullRequestFlow implements PullRequestPort {
   async requestReviewers(cwd: string, repo: string, number: number, reviewers: readonly string[]): Promise<void> {
     if (reviewers.length === 0) return;
     await gh(this.#ctx(cwd), ['pr', 'edit', String(number), '--repo', repo, ...reviewers.flatMap((r) => ['--add-reviewer', r])]);
+  }
+
+  async editTitle(cwd: string, repo: string, number: number, title: string): Promise<void> {
+    await gh(this.#ctx(cwd), ['pr', 'edit', String(number), '--repo', repo, '--title', title]);
   }
 
   async reviews(cwd: string, repo: string, number: number): Promise<readonly { state: string; author: string }[]> {

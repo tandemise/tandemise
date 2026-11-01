@@ -51,6 +51,8 @@ export interface PullRequestChecks {
   readonly state: 'PASS' | 'FAIL' | 'PENDING' | 'NONE';
   readonly done: number;
   readonly total: number;
+  /** Checks GitHub has registered (runs and statuses), not counting a workflow still to create its runs; 0 is "not started". */
+  readonly registered?: number;
   readonly failing: readonly { readonly name: string; readonly link: string | null; readonly logTail: string | null }[];
   /** Every check run on the commit, by name; optional for readers built before the merge watch needed it. */
   readonly runs?: readonly CheckRunSummary[];
@@ -93,6 +95,8 @@ export interface PullRequestPort {
   /** Posts, or edits in place when `existingId` is set. */
   comment(cwd: string, repo: string, number: number, body: string, existingId: number | null): Promise<{ readonly id: number }>;
   requestReviewers(cwd: string, repo: string, number: number, reviewers: readonly string[]): Promise<void>;
+  /** Retitles the pull request (#194): GitHub sends `edited`, which runs a title check again. */
+  editTitle(cwd: string, repo: string, number: number, title: string): Promise<void>;
   reviews(cwd: string, repo: string, number: number): Promise<readonly { readonly state: string; readonly author: string }[]>;
   /** Always bound to the decided head: GitHub refuses it if the head moved. */
   merge(cwd: string, repo: string, number: number, opts: {

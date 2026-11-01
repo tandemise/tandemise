@@ -3,6 +3,7 @@ import { lintGate, lintRule } from '../gate-lint.js';
 import { ARTIFACT_TYPES } from '../entities/artifact.js';
 import { CHECK_NAMES, MAX_CHECK_BUDGET_MINUTES } from '../entities/workspace.js';
 import { stepSkillProblem } from '../entities/skill.js';
+import { CI_CHECK_KINDS } from '../merge/ci-checks.js';
 import { LANES, RISK_LEVELS, SENSITIVITIES, STEP_CLASSES, TASK_SIZES, TASK_TYPES } from './types.js';
 
 /**
@@ -103,10 +104,17 @@ export const plannerConfigSchema = z.object({
   }).default({ minTasks: 5, rate: 0.4 }),
   tiebreak: onOff.default('on'),
   checks: checkSettings.default({ budgets: {} }),
-  /** CI on the pull request (#196): how many rounds a mission takes on its own before a person decides. */
+  /**
+   * CI on the pull request. `checks` (#194): what a failing check is about, a
+   * check's name or a glob over it mapped to `metadata`, `code` or `unknown`,
+   * winning over the defaults, which read the check's name and what it
+   * printed. `maxRounds` (#196): how many rounds a mission takes on its own
+   * before a person decides.
+   */
   ci: z.object({
+    checks: z.record(name, z.enum(CI_CHECK_KINDS)).default({}),
     maxRounds: z.number().int().min(1).max(50).default(3),
-  }).default({ maxRounds: 3 }),
+  }).default({ checks: {}, maxRounds: 3 }),
 });
 
 export type PlannerConfig = z.infer<typeof plannerConfigSchema>;

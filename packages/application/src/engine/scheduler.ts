@@ -144,6 +144,8 @@ export class SchedulerService implements LifecycleComponent {
   readonly #shipReasonBefore = new Map<TaskId, string | null>();
   /** A CI wait's head whose red CI already sent the work back: not sent back again for the same commit. */
   readonly #failedHead = new Map<TaskId, string>();
+  /** A CI wait's head whose pull request was just fixed (#194): its red checks run again, until then. */
+  readonly #rerunHead = new Map<TaskId, { readonly head: string; readonly until: number }>();
   /** Missions whose task branches have already been merged, so it happens once. */
   readonly #integrated = new Set<MissionId>();
   #timer: NodeJS.Timeout | undefined;
@@ -509,7 +511,11 @@ export class SchedulerService implements LifecycleComponent {
     const prWait = this.deps.prWait;
     const options = {
       ...(target === null || prWait === undefined ? {} : {
-        look: (waitedMs: number) => prWait.look({ mission, target, repository, waitedMs, failedHead: this.#failedHead.get(task.id) ?? null }),
+        look: (waitedMs: number) => {
+          const rerun = this.#rerunHead.get(task.id);
+          const rerunHead = rerun !== undefined && rerun.until > this.deps.clock.epochMs() ? rerun.head : null;
+          return prWait.look({ mission, target, repository, waitedMs, failedHead: this.#failedHead.get(task.id) ?? null, rerunHead });
+        },
       }),
       progress: (detail: string, pr: PullRequestRef | null) => {
         if (pr !== null) this.deps.ship?.found(mission, task, pr);
@@ -560,7 +566,13 @@ export class SchedulerService implements LifecycleComponent {
         return;
       case 'ciFailed': {
         const ship = this.deps.ship;
-        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : await ship.ciFailed(mission, current(), outcome.failing, outcome.pr.headSha);
+        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : await ship.ciFailed(mission, current(), [outcome.failing, ...(outcome.others ?? [])], outcome.pr);
+        if (sent.kind === 'waiting') {
+          // The pull request itself was fixed (#194): the wait goes on while its checks run again.
+          this.#rerunHead.set(task.id, { head: outcome.pr.headSha, until: sent.until ?? this.deps.clock.epochMs() });
+          return;
+        }
+        this.#rerunHead.delete(task.id);
         if (sent.kind === 'reopened') {
           this.#failedHead.set(task.id, outcome.pr.headSha);
           this.#setStatus(current(), scope, 'PENDING', sent.reason);

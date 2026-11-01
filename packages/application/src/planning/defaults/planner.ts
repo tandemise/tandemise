@@ -58,6 +58,7 @@ export const SHIPPED_PLANNER = {
   // Each check's time budget in minutes (#111). A repository's own budget, set
   // in Project settings → Repositories, wins over these.
   checks: { budgets: {} },
-  // Rounds a mission takes on its own (review findings, red CI) before a card asks you (#196).
-  ci: { maxRounds: 3 },
+  // What a failing CI check is about (#194), when its name and output don't say: `"deploy-*": code`; and the
+  // rounds a mission takes on its own (review findings, red CI) before a card asks you (#196).
+  ci: { checks: {}, maxRounds: 3 },
 } as const;
