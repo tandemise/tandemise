@@ -5,6 +5,7 @@
  * showed `artifact.ChangeSet.exists && checks.tests == PASS && …`, and the
  * mission title was the goal cut at 80 characters ("…the N most frequent w…").
  */
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +41,19 @@ console.log('\n── a title from the goal\n');
   const clauseTooShort = titleFromGoal('Fix it, then make every other page of the application load in under a second');
   ok('a clause too short to name anything falls back to words', clauseTooShort.startsWith('Fix it, then') && clauseTooShort.length <= 60, clauseTooShort);
   ok('never longer than 60', titleFromGoal('x'.repeat(200)).length <= 60);
+}
+
+console.log('\n── the first project form\n');
+{
+  // Found dogfooding v0.10.0: the Project name field suggested "Beveloce", the
+  // name of an unrelated product, which a new user reads as a leftover.
+  const renderer = join(root, 'apps/desktop/src/renderer/src');
+  const files = readdirSync(renderer, { recursive: true }).filter((f) => /\.(tsx?|css|html)$/.test(f));
+  const named = files.filter((f) => /beveloce/i.test(readFileSync(join(renderer, f), 'utf8')));
+  ok('no Beveloce reference in the desktop renderer', named.length === 0, named.join(', '));
+  const form = readFileSync(join(renderer, 'screens/FirstProject.tsx'), 'utf8');
+  const placeholder = /<Field label="Project name">[\s\S]*?placeholder="([^"]*)"/.exec(form)?.[1];
+  ok('the project name placeholder is a neutral example', placeholder === 'Acme web', String(placeholder));
 }
 
 console.log(`\n${bad === 0 ? 'FIRST-RUN WORDS: ALL PASSED' : `${bad} FAILED`}`);

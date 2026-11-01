@@ -73,7 +73,7 @@ export function ProjectForm({ onCreated }: { onCreated?: (id: string) => void })
           className="input"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Beveloce"
+          placeholder="Acme web"
           autoFocus
         />
       </Field>
