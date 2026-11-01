@@ -1,7 +1,7 @@
 import { TandemiseError, asId, type Clock, type MissionId, type TaskId } from '@tandemise/shared';
 import type {
   ApprovalPolicy, ArtifactRequirement, ArtifactType, Capability, ExecutionPolicy, MissionTask,
-  ModelPolicy, RetryPolicy, SkillPin, TaskRepositoryPort, TaskStatus,
+  ModelPolicy, RetryPolicy, SkillPin, StepSkill, TaskRepositoryPort, TaskStatus,
 } from '@tandemise/domain';
 import { DEFAULT_RETRY_POLICY, NO_APPROVAL } from '@tandemise/domain';
 import type { ResolvedStaffingSnapshot, StaffingPatch, TaskExecutor, WaitPolicy } from '@tandemise/domain';
@@ -33,6 +33,7 @@ interface TaskRow {
   retry_feedback: string | null;
   model_policy: string | null;
   skills: string | null;
+  run_skill: string | null;
   step_class: string | null;
   staffing: string | null;
   staffing_override: string | null;
@@ -84,6 +85,7 @@ function toRow(t: MissionTask): TaskRow {
     retry_feedback: t.retryFeedback ?? null,
     model_policy: toJsonOrNull(t.modelPolicy ?? null),
     skills: toJsonOrNull(t.skills ?? null),
+    run_skill: toJsonOrNull(t.runSkill ?? null),
     step_class: t.stepClass ?? null,
     staffing: toJsonOrNull(t.staffing),
     staffing_override: toJsonOrNull(t.staffingOverride),
@@ -127,6 +129,7 @@ function fromRow(r: TaskRow, dependsOn: readonly string[]): MissionTask {
     retryFeedback: r.retry_feedback,
     modelPolicy: parseJsonOrNull<ModelPolicy>(r.model_policy),
     skills: parseJsonOrNull<SkillPin[]>(r.skills),
+    runSkill: parseJsonOrNull<StepSkill>(r.run_skill),
     stepClass: (r.step_class ?? null) as MissionTask['stepClass'],
     staffing: parseJsonOrNull<ResolvedStaffingSnapshot>(r.staffing),
     staffingOverride: parseJsonOrNull<StaffingPatch>(r.staffing_override),
@@ -144,7 +147,7 @@ function fromRow(r: TaskRow, dependsOn: readonly string[]): MissionTask {
 
 const COLUMNS = `id, mission_id, "key", title, objective, role_id, required_capabilities,
   input_artifacts, expected_outputs, execution_policy, approval_policy, retry_policy,
-  completion_gate, status, status_reason, attempts, remediates_task_id, repository_id, executor, wait_policy, retry_feedback, model_policy, skills, step_class,
+  completion_gate, status, status_reason, attempts, remediates_task_id, repository_id, executor, wait_policy, retry_feedback, model_policy, skills, run_skill, step_class,
   staffing, staffing_override, assignee_id, responsible_id, needs_attention, round, order_hint,
   created_at, updated_at, started_at, finished_at`;
 
@@ -169,7 +172,7 @@ export class SqliteTaskRepository implements TaskRepositoryPort {
       `INSERT INTO mission_tasks (${COLUMNS}) VALUES (
         :id, :mission_id, :key, :title, :objective, :role_id, :required_capabilities,
         :input_artifacts, :expected_outputs, :execution_policy, :approval_policy, :retry_policy,
-        :completion_gate, :status, :status_reason, :attempts, :remediates_task_id, :repository_id, :executor, :wait_policy, :retry_feedback, :model_policy, :skills, :step_class,
+        :completion_gate, :status, :status_reason, :attempts, :remediates_task_id, :repository_id, :executor, :wait_policy, :retry_feedback, :model_policy, :skills, :run_skill, :step_class,
         :staffing, :staffing_override, :assignee_id, :responsible_id, :needs_attention, :round, :order_hint,
         :created_at, :updated_at, :started_at, :finished_at)`,
     );
@@ -181,7 +184,7 @@ export class SqliteTaskRepository implements TaskRepositoryPort {
          approval_policy = :approval_policy, retry_policy = :retry_policy,
          completion_gate = :completion_gate, status = :status, status_reason = :status_reason,
          attempts = :attempts, remediates_task_id = :remediates_task_id,
-         repository_id = :repository_id, executor = :executor, wait_policy = :wait_policy, retry_feedback = :retry_feedback, model_policy = :model_policy, skills = :skills, step_class = :step_class,
+         repository_id = :repository_id, executor = :executor, wait_policy = :wait_policy, retry_feedback = :retry_feedback, model_policy = :model_policy, skills = :skills, run_skill = :run_skill, step_class = :step_class,
          staffing = :staffing, staffing_override = :staffing_override, assignee_id = :assignee_id,
          responsible_id = :responsible_id, needs_attention = :needs_attention,
          round = :round, order_hint = :order_hint,

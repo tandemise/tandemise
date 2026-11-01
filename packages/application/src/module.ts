@@ -330,6 +330,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       limits: r.resolve(t.LIMIT_SERVICE),
       skills: r.resolve(t.SKILL_SERVICE),
       skillInstaller: new SkillInstaller(r.resolve(t.EVENT_RECORDER)),
+      trackerItems: { get: (id) => r.tryResolve(it.TRACKER_ITEM_REPOSITORY)?.get(id as import('@tandemise/shared').TrackerItemId) },
       runScores: r.resolve(t.RUN_SCORE_REPOSITORY),
       // Resolved per call: the eval runner is composed from this executor.
       trialContext: (mission) => r.resolve(t.EVAL_RUNNER).contextFor(mission),
@@ -612,6 +613,7 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       factoryEdits: brainEdits(r),
       skills: r.resolve(t.SKILL_REPOSITORY),
       roles: r.resolve(t.ROLE_REPOSITORY),
+      repositories: r.resolve(t.REPO_REPOSITORY),
       files: r.resolve(t.SKILL_FILES),
       clock: clock(r),
       log: log(r).child({ component: 'skills' }),
@@ -1192,6 +1194,11 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       missions: r.resolve(t.MISSION_REPOSITORY),
       createMission: (caller, request, origin) => r.resolve(t.MISSION_SERVICE).create(caller, request, origin),
       planDraft: (missionId) => r.resolve(t.PLANNING_SERVICE).begin(missionId),
+      // Refine on a draft item (#135), resolved per call like the mission service.
+      refinement: {
+        begin: (caller, missionId) => r.resolve(t.REFINEMENT_SERVICE).begin(caller, missionId),
+        view: (missionId) => r.resolve(t.REFINEMENT_SERVICE).view(missionId),
+      },
       claims: r.resolve(it.INTAKE_CLAIMS),
       settings: r.resolve(t.SETTINGS_STORE),
       members: r.resolve(t.MEMBER_REPOSITORY),
@@ -1449,6 +1456,7 @@ function shipPrFacts(r: Resolver, mission: import('@tandemise/domain').Mission):
     issue: item === undefined ? null : { label, key: item.key, url: item.url },
     holds,
     qaReported: artifacts.latest(mission.id, 'QAReport') !== undefined,
+    trackerType: item?.type ?? null,
   };
 }
 

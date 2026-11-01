@@ -1,0 +1,177 @@
+{
+  "id": "I13",
+  "title": "Start is off for a container, a type the project does not build and another repository's item",
+  "ok": true,
+  "checks": [
+    {
+      "label": "proof (API): the tracker now builds Bug and Task, for repo:web",
+      "ok": true,
+      "observed": {
+        "kind": "youtrack",
+        "url": "http://127.0.0.1:45397",
+        "project": "GAR",
+        "board": "project: GAR #Unresolved",
+        "states": {
+          "ready": [
+            "Open",
+            "Submitted"
+          ],
+          "in_progress": "In Progress",
+          "in_review": "In Review",
+          "done": [
+            "Fixed",
+            "Done"
+          ],
+          "wont_do": [
+            "Won't fix",
+            "Duplicate",
+            "Obsolete"
+          ]
+        },
+        "onComplete": "in_review",
+        "workflows": {
+          "Bug": "intake-fix",
+          "Task": "intake-fix"
+        },
+        "buildTypes": [
+          "Bug",
+          "Task"
+        ],
+        "repoTag": "repo:web"
+      }
+    },
+    {
+      "label": "the container (GAR-5) stays on the Board under Ready, its type Task shown",
+      "ok": true,
+      "observed": {
+        "type": "Task",
+        "reason": "Has 2 subtasks. Start one of them.",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "…with \"Has 2 subtasks. Start one of them.\" beside a disabled Start",
+      "ok": true,
+      "observed": {
+        "type": "Task",
+        "reason": "Has 2 subtasks. Start one of them.",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "the Spike (GAR-8) stays on the Board under Ready, its type Spike shown",
+      "ok": true,
+      "observed": {
+        "type": "Spike",
+        "reason": "Spike: this project starts Bug and Task items.",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "…with \"Spike: this project starts Bug and Task items.\" beside a disabled Start",
+      "ok": true,
+      "observed": {
+        "type": "Spike",
+        "reason": "Spike: this project starts Bug and Task items.",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "another repository's Bug (GAR-9) stays on the Board under Ready, its type Bug shown",
+      "ok": true,
+      "observed": {
+        "type": "Bug",
+        "reason": "Belongs to another repository (repo:api).",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "…with \"Belongs to another repository (repo:api).\" beside a disabled Start",
+      "ok": true,
+      "observed": {
+        "type": "Bug",
+        "reason": "Belongs to another repository (repo:api).",
+        "start": {
+          "disabled": true
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "a plain Task (GAR-10) shows its type and Start is on",
+      "ok": true,
+      "observed": {
+        "type": "Task",
+        "reason": null,
+        "start": {
+          "disabled": false
+        },
+        "group": "ready"
+      }
+    },
+    {
+      "label": "proof (API): Start of GAR-5 is refused in the same words",
+      "ok": true,
+      "observed": {
+        "status": 409,
+        "message": "Has 2 subtasks. Start one of them."
+      }
+    },
+    {
+      "label": "proof (API): Start of GAR-8 is refused in the same words",
+      "ok": true,
+      "observed": {
+        "status": 409,
+        "message": "Spike: this project starts Bug and Task items."
+      }
+    },
+    {
+      "label": "proof (API): Start of GAR-9 is refused in the same words",
+      "ok": true,
+      "observed": {
+        "status": 409,
+        "message": "Belongs to another repository (repo:api)."
+      }
+    },
+    {
+      "label": "proof (fake YouTrack): none of the three moved",
+      "ok": true,
+      "observed": [
+        "GAR-5 Open",
+        "GAR-8 Open",
+        "GAR-9 Open"
+      ]
+    },
+    {
+      "label": "Start on GAR-10 opens its mission",
+      "ok": true,
+      "observed": "msn_01m6b4zgr3ep2btwztqg"
+    },
+    {
+      "label": "proof (fake YouTrack): GAR-10 is In Progress",
+      "ok": true,
+      "observed": "In Progress"
+    }
+  ],
+  "notes": [],
+  "shots": [
+    "I13-settings-start-rules.png",
+    "I13-board-start-off.png",
+    "I13-plain-task-started.png"
+  ]
+}

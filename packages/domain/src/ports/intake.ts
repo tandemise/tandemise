@@ -239,6 +239,11 @@ export interface PrimaryTracker {
    */
   comment(ref: TrackerRef, c: { readonly marker: string; readonly body: string; readonly knownId?: string }): Promise<{ commentId: string }>;
   transition(ref: TrackerRef, state: string): Promise<void>;
+  /**
+   * Replaces the item's description (#135): only on a person's "Write … and
+   * mark ready" after refining a draft, never on Tandemise's own initiative.
+   */
+  updateDescription(ref: TrackerRef, description: string): Promise<void>;
   markDuplicate?(dup: TrackerRef, of: TrackerRef): Promise<void>;
   assign?(ref: TrackerRef, login: string): Promise<void>;
   /** The signed-in user's login. */

@@ -182,6 +182,37 @@ section('daemon: intake config, tokens, pushes and the CLI');
     check('POST board/start with a lane starts the mission with it', quick.status === 200 && quick.body?.mission?.laneRequest === 'careful', quick.body?.mission ?? quick);
     const badLane = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-2', lane: 'fast' });
     check('a lane that is not quick or careful is a 400', badLane.status === 400, badLane);
+
+    // #136: a container, a type the project does not build and another repository's item are on the board, not startable.
+    const scoped = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: fake.url, buildTypes: ['Bug', 'Task'], repoTag: 'repo:web' } });
+    check('PUT intake/config keeps buildTypes and repoTag', scoped.status === 200 && JSON.stringify(scoped.body?.tracker?.buildTypes) === '["Bug","Task"]' && scoped.body?.tracker?.repoTag === 'repo:web', scoped.body?.tracker ?? scoped);
+    const badTag = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...config.tracker, url: fake.url, repoTag: 'web' } });
+    check('a repoTag without a prefix is a 400', badTag.status === 400, badTag);
+    const container = fake.putIssue({ summary: 'Container of the checkout work', state: 'Open', type: 'Task' });
+    for (const n of [1, 2, 3, 4]) fake.putIssue({ summary: `Checkout part ${n}`, state: 'Open', type: 'Task', parent: container.idReadable });
+    const spike = fake.putIssue({ summary: 'Research a faster cache', state: 'Open', type: 'Spike' });
+    const elsewhereItem = fake.putIssue({ summary: 'Fix the API timeout', state: 'Open', type: 'Bug', tags: ['repo:api'] });
+    const plainTask = fake.putIssue({ summary: 'Add the web footer', description: '## Done when\n- [ ] The footer shows', state: 'Open', type: 'Task', tags: ['repo:web'] });
+    const scopedBoard = await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+    const ready = scopedBoard.body?.groups?.ready ?? [];
+    const card = (key) => ready.find((i) => i.key === key);
+    check('the container shows: Has 4 subtasks. Start one of them.', card(container.idReadable)?.startable?.reason === 'Has 4 subtasks. Start one of them.', card(container.idReadable));
+    check('the Spike shows: Spike: this project starts Bug and Task items.', card(spike.idReadable)?.startable?.reason === 'Spike: this project starts Bug and Task items.' && card(spike.idReadable)?.type === 'Spike', card(spike.idReadable));
+    check("another repository's item shows: Belongs to another repository (repo:api).", card(elsewhereItem.idReadable)?.startable?.reason === 'Belongs to another repository (repo:api).', card(elsewhereItem.idReadable));
+    check('a plain Task stays startable and carries its type', card(plainTask.idReadable)?.startable?.ok === true && card(plainTask.idReadable)?.type === 'Task', card(plainTask.idReadable));
+    check('the subtasks are on the board and startable', ready.filter((i) => i.title.startsWith('Checkout part')).length === 4 && ready.filter((i) => i.title.startsWith('Checkout part')).every((i) => i.startable.ok === true));
+    for (const [item, reason] of [[container, 'Has 4 subtasks. Start one of them.'], [spike, 'Spike: this project starts Bug and Task items.'], [elsewhereItem, 'Belongs to another repository (repo:api).']]) {
+      const refusedStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: item.idReadable });
+      check(`POST board/start ${item.idReadable} is 409: ${reason}`, refusedStart.status === 409 && refusedStart.body?.error?.message === reason && fake.issues.get(item.idReadable)?.state === 'Open', refusedStart);
+    }
+    // Read fresh: a Task that became a container since the last refresh is refused too.
+    const grown = fake.putIssue({ summary: 'Grows a subtask', state: 'Open', type: 'Task' });
+    await call('POST', `/v1/workspaces/${ws}/board/refresh`);
+    fake.putIssue({ summary: 'Its only part', state: 'Open', type: 'Task', parent: grown.idReadable });
+    const grownStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: grown.idReadable });
+    check('Start reads the item fresh: a new subtask refuses it (Has 1 subtask. Start it instead.)', grownStart.status === 409 && grownStart.body?.error?.message === 'Has 1 subtask. Start it instead.', grownStart);
+    const plainStart = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: plainTask.idReadable });
+    check('a plain Task still starts', plainStart.status === 200 && fake.issues.get(plainTask.idReadable)?.state === 'In Progress', plainStart.body?.mission ?? plainStart);
   } catch (e) {
     check('the daemon section ran', false, String(e?.stack ?? e));
   } finally {
@@ -303,6 +334,99 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
     await sentry?.close();
     await fakeB?.close();
     await sentryB?.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+section('daemon: Refine a draft, write it back as ready, then Start it (#135)');
+{
+  const root = mkdtempSync(join(tmpdir(), 'tdi-refine-'));
+  const home = join(root, 'h');
+  const { startDaemon } = await import('../apps/daemon/dist/main.js');
+  let daemon;
+  let fake;
+  try {
+    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot', states: ['Draft', 'Open', 'In Progress', 'In Review', 'Done', "Won't fix"] });
+    fake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: 'Customers on Safari cannot pay.', state: 'Draft' });
+    fake.putIssue({ idReadable: 'GAR-8', summary: 'Ready already', description: '## Done when\n- [ ] It works', state: 'Open' });
+    daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
+    const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
+    const call = async (method, path, body) => {
+      const res = await fetch(`${daemon.url}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'x-tandemise-api-version': 'v1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text ? JSON.parse(text) : undefined };
+    };
+    const ws = (await call('POST', '/v1/workspaces', { name: 'Refine' })).body?.workspace?.id;
+    await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
+    const tracker = {
+      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
+    };
+    const noDraft = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...tracker, states: { ...tracker.states, draft: ['Drafty'] } } });
+    check('a draft state YouTrack lacks is refused before it is saved', noDraft.status >= 400 && /no state 'Drafty'/.test(noDraft.body?.error?.message ?? ''), noDraft.body);
+    const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker: { ...tracker, states: { ...tracker.states, draft: ['Draft'] } } });
+    check('the mapping takes an optional draft state', put.status === 200 && JSON.stringify(put.body?.tracker?.states?.draft) === '["Draft"]', put.body?.tracker?.states);
+
+    const board = (await call('POST', `/v1/workspaces/${ws}/board/refresh`)).body;
+    const draftRow = board?.groups?.draft?.find((i) => i.key === 'GAR-7');
+    check('the board has a Draft group with GAR-7: Refine offered, Start refused', draftRow?.refine?.ok === true && draftRow.refine.refinement === null
+      && draftRow.startable.ok === false && draftRow.startable.reason === 'Refine it first' && !board.groups.ready.some((i) => i.key === 'GAR-7'), draftRow);
+    const startDraft = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-7' });
+    check('Start on a draft is 409: GAR-7 is a draft in YouTrack. Refine it first.', startDraft.status === 409 && startDraft.body?.error?.message === 'GAR-7 is a draft in YouTrack. Refine it first.', startDraft.body);
+    const refineReady = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-8' });
+    check('Refine on a ready item is 409', refineReady.status === 409 && /not a draft/.test(refineReady.body?.error?.message ?? ''), refineReady.body);
+
+    const writesBefore = fake.calls.filter((c) => c.method === 'POST').length;
+    const refined = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-7' });
+    const missionId = refined.body?.mission?.id;
+    check('POST board/refine makes a draft mission linked to GAR-7', refined.status === 200 && refined.body?.mission?.status === 'DRAFT' && typeof missionId === 'string', refined.body?.mission ?? refined);
+    const again = await call('POST', `/v1/workspaces/${ws}/board/refine`, { key: 'GAR-7' });
+    check('…a second Refine answers the same mission', again.body?.mission?.id === missionId, again.body?.mission?.id);
+    // Several write-back passes (every 5 s at a 200 ms tick would be one; wait for two).
+    await new Promise((r) => setTimeout(r, 6_000));
+    const writesDuring = fake.calls.filter((c) => c.method === 'POST').slice(writesBefore);
+    check('Refine, and the passes after it, write nothing to YouTrack', writesDuring.length === 0 && fake.issues.get('GAR-7')?.state === 'Draft'
+      && (fake.comments.get('GAR-7') ?? []).length === 0, writesDuring.map((c) => c.path));
+
+    const early = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-7' });
+    check('Write and mark ready before anything is accepted is refused in words', early.status >= 400 && /Add at least one Done-when criterion on its mission first\./.test(early.body?.error?.message ?? ''), early.body);
+    const waiting = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'GAR-7');
+    check('the card says what is left, not ready', waiting?.refine?.refinement?.ready === false && waiting.refine.refinement.sentence === 'Add at least one Done-when criterion on its mission, then write it to YouTrack.', waiting?.refine);
+
+    await call('POST', `/v1/missions/${missionId}/criteria`, { statement: 'Checkout completes on Safari 17' });
+    const readyRow = (await call('GET', `/v1/workspaces/${ws}/board`)).body?.groups?.draft?.find((i) => i.key === 'GAR-7');
+    check('with a Done-when line the card is ready to write', readyRow?.refine?.refinement?.ready === true && readyRow.refine.refinement.sentence === 'Ready to write to YouTrack: 1 Done-when line.', readyRow?.refine);
+    const written = await call('POST', `/v1/workspaces/${ws}/board/ready`, { key: 'GAR-7' });
+    const issue = fake.issues.get('GAR-7');
+    check('POST board/ready writes the description with its Done-when section', written.status === 200
+      && issue?.description === 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Checkout completes on Safari 17', issue?.description);
+    check('…moves GAR-7 to Open', issue?.state === 'Open', issue?.state);
+    const comments = fake.comments.get('GAR-7') ?? [];
+    check('…and posts the activity comment: Refined in Tandemise by <name>: 1 Done-when line. Moved from Draft to Open.',
+      comments.length === 1 && /^<!-- tandemise:activity -->\n\nRefined in Tandemise by .+: 1 Done-when line\. Moved from Draft to Open\.$/.test(comments[0].text), comments.map((c) => c.text));
+    const nowReady = written.body?.groups?.ready?.find((i) => i.key === 'GAR-7');
+    check('the board answered has GAR-7 ready, Start offered, its mission still the draft', nowReady?.startable?.ok === true && nowReady.mission?.id === missionId && written.body.groups.draft.length === 0, nowReady);
+    await new Promise((r) => setTimeout(r, 6_000));
+    check('…and no pass moves it to In Progress on its own', fake.issues.get('GAR-7')?.state === 'Open', fake.issues.get('GAR-7')?.state);
+
+    const started = await call('POST', `/v1/workspaces/${ws}/board/start`, { key: 'GAR-7' });
+    check('Start adopts the refined mission rather than making a second one', started.status === 200 && started.body?.mission?.id === missionId && started.body.mission.status !== 'DRAFT', started.body?.mission ?? started);
+    check('…GAR-7 moves to In Progress', fake.issues.get('GAR-7')?.state === 'In Progress', fake.issues.get('GAR-7')?.state);
+    const after = fake.comments.get('GAR-7') ?? [];
+    check('…and the activity comment, edited in place, keeps the refined line on top of Started', after.length === 1
+      && /^<!-- tandemise:activity -->\n\nRefined in Tandemise by .+\n\nStarted in Tandemise by /.test(after[0].text), after.map((c) => c.text));
+    const missions = (await call('GET', `/v1/missions?workspaceId=${ws}`)).body;
+    const list = Array.isArray(missions) ? missions : missions?.missions ?? [];
+    check('one mission for GAR-7', list.filter((s) => (s.mission ?? s).title === 'Pay on Safari').length === 1, list.length);
+  } catch (e) {
+    check('the refine section ran', false, String(e?.stack ?? e));
+  } finally {
+    await daemon?.stop();
+    await fake?.close();
     rmSync(root, { recursive: true, force: true });
   }
 }

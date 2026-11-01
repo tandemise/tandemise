@@ -10,7 +10,7 @@ import {
   dismissFeedbackRequest, giveFeedbackRequest, startRoundRequest,
   addCriterionRequest, answerQuestionRequest, criterionVerdictRequest, updateMissionRequest, workspaceUsageQuery,
   advanceClockRequest, createRoutineRequest, updateRoutineRequest, importSkillRequest, previewSkillRequest,
-  takeNotificationsRequest, updateNotificationPreferencesRequest,
+  takeNotificationsRequest, releaseNotificationsRequest, updateNotificationPreferencesRequest,
   updateIssueSettingsRequest,
   applySetupRequest, exportSetupRequest, previewSetupRequest,
   parkTaskRequest, handBackRequest, resolveWorkspaceLinkRequest,
@@ -18,7 +18,7 @@ import {
   planMissionRequest, setLaneRequest, mergePolicyRequest,
   ACCEPTED_INTAKE_SCHEMAS, intakeSignalsQuery, mintIntakeTokenRequest,
   decideIntakeSignalRequest,
-  startBoardItemRequest,
+  startBoardItemRequest, boardItemKeyRequest,
   saveIntakeSourceSecretRequest, saveTrackerSecretRequest, setIntakeSourceEnabledRequest,
   ackIntakeClosureRequest,
   connectRelayRequest, coordinationEndpointRequest, coordinationPullRequest, projectKeyRequest, takeOverClaimRequest,
@@ -96,6 +96,9 @@ export function buildRouter(services: TandemiseServices, options: {
     services.notifications.updatePreferences(await ctx.body(updateNotificationPreferencesRequest)));
   r.post('/v1/notifications/take', async (ctx) =>
     services.notifications.take(ctx.caller, await ctx.body(takeNotificationsRequest)));
+  // The desktop took a notice the operating system did not accept: announce those ids again later.
+  r.post('/v1/notifications/release', async (ctx) =>
+    services.notifications.release((await ctx.body(releaseNotificationsRequest)).ids));
 
   // ------------------------------------------------------------ workspaces
   r.get('/v1/home', (ctx) => services.projections.home(ctx.query.get('workspaceId') ?? undefined));
@@ -230,6 +233,17 @@ export function buildRouter(services: TandemiseServices, options: {
     if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
     return summary;
   });
+  // Refine a draft item, then write it back as ready (#135): the second is the only one that writes to the tracker.
+  r.post('/v1/workspaces/:id/board/refine', async (ctx) => {
+    const workspaceId = asId<'WorkspaceId'>(ctx.params.id!);
+    const request = await ctx.body(boardItemKeyRequest);
+    const mission = await services.tracker.refine(ctx.caller, workspaceId, request.key);
+    const summary = services.missions.list({ workspaceId }).find((s) => s.mission.id === mission.id);
+    if (summary === undefined) throw TandemiseError.notFound('Mission', mission.id);
+    return summary;
+  });
+  r.post('/v1/workspaces/:id/board/ready', async (ctx) =>
+    services.tracker.markReady(ctx.caller, asId(ctx.params.id!), (await ctx.body(boardItemKeyRequest)).key));
 
   // Skills (P13): the project's library, imported by content hash and pinned per run.
   r.get('/v1/workspaces/:id/skills', (ctx) => services.skills.list(asId(ctx.params.id!)));

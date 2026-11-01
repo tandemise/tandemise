@@ -15,9 +15,27 @@ Open **Skills** in the sidebar (or ⌘K → Skills) and click **Import skills**.
 
 | Tab | Imports from |
 |---|---|
-| **Your Claude skills** | every folder in `~/.claude/skills`, with a box to tick for each |
+| **Your Claude skills** | every skill Claude Code keeps, with a box to tick for each (see below) |
 | **A folder** | any folder on this machine that has a `SKILL.md` at its top |
 | **A git repository** | a repository URL (https://, ssh://, git@host:) and, if the skill is not at its top, the subfolder it is in |
+
+**Your Claude skills** lists them under where they came from:
+
+- **Your skills**: each folder in `~/.claude/skills` (or `$CLAUDE_CONFIG_DIR/skills`).
+  A folder with no `SKILL.md` whose sub-folders have one only groups skills:
+  each of those is listed as `group/skill`. Claude Code itself doesn't load a
+  skill nested like that, so importing it is how a worker gets it.
+- **Plugin team 2.4.0**: the skills of each plugin Claude Code installed, as
+  its `plugins/installed_plugins.json` records them, with the plugin's version
+  and marketplace. A plugin's skill reads `team:build-feature`, the way you
+  invoke it in Claude Code, and is imported as `team-build-feature`: a library
+  name becomes a folder name, and the prefix keeps two plugins' `review`
+  skills apart. Importing copies that one skill's folder. A skill that relies
+  on the rest of its plugin (its agents, hooks or scripts) won't find them
+  there.
+- **Repository web**: each of the project's repositories' own
+  `.claude/skills`. Claude Code already loads these in a worker; importing one
+  pins a version of it.
 
 Click **Preview** first. You see the skill's name and description (from its
 `SKILL.md` front matter), every file in it, and the `SKILL.md` itself — before
@@ -111,6 +129,15 @@ files brings back the same version.
 
 You can't delete a skill a role still pins; detach it in Team → Roles first.
 
+## Can a step run my team's skill instead of its role's prompt?
+
+Yes, with Claude Code. `planner.yaml`'s `stepSkills` (or a workflow step's
+`runSkill`) names the skill as Claude Code invokes it, `team:build-feature`,
+and the step's run starts with that slash command, the step's context as its
+input. A plugin's skill doesn't need importing: it runs from where the plugin
+is installed. See "Your team's own skills as steps" in
+[the factory guide](../FACTORY.md).
+
 ## Checking skills in a gate
 
 Two facts are measured for every step, so a gate can require its skills:
@@ -126,8 +153,10 @@ Two facts are measured for every step, so a gate can require its skills:
 
 ## For tests and other runtimes
 
-- `TANDEMISE_SKILLS_DISCOVER_DIR` changes where **Your Claude skills** looks
-  (the default is `~/.claude/skills`).
+- `TANDEMISE_SKILLS_DISCOVER_DIR` changes where **Your skills** are looked for
+  (the default is `~/.claude/skills`, or `$CLAUDE_CONFIG_DIR/skills`). The
+  plugins are then read from that folder's parent, so a test never reads the
+  real home's.
 - A generic CLI runtime that reads `.claude/skills` in its working folder can
   say so with `"skillsFolder": true` in its settings; otherwise its skills go
   into the prompt.

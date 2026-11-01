@@ -1414,8 +1414,10 @@
   margin-left: var(--s2);
 }
 
+/* Who did it goes first and is never squeezed: when both do not fit on a line, the actions wrap below it. */
 .feedcard__byline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
   min-width: 0;
@@ -1431,9 +1433,11 @@
 
 .feedcard__actions {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s1);
-  flex: none;
+  flex: 0 1 auto;
+  max-width: 100%;
   margin-left: auto;
   /* Ghost buttons carry padding; pulling them out lines their text up with the time above. */
   margin-right: calc(-1 * var(--s2));

@@ -118,6 +118,12 @@ export class BrainService {
   readonly #info = new Map<string, BrainInfo>();
   readonly #pending = new Map<string, PendingAdopt>();
   readonly #listeners: BrainSyncListener[] = [];
+  /**
+   * Projects whose listeners have seen their brain since this daemon started
+   * (#153). The listeners keep what they read in memory, so a restart starts
+   * them empty; until they are told once, the brain's tracker is unknown.
+   */
+  readonly #announced = new Set<string>();
 
   readonly #factory: BrainFactory;
   readonly #promotions: Promotions | null;
@@ -359,8 +365,28 @@ export class BrainService {
     if (this.deps.brains.get(workspaceId) === undefined) return this.view(workspaceId);
     // What this machine learned goes up before the pull, so a person's Sync shares it.
     await this.#writer.flush(workspaceId);
-    await this.#exclusive(workspaceId, () => this.#syncLocked(workspaceId, why));
+    await this.#exclusive(workspaceId, async () => {
+      try {
+        await this.#syncLocked(workspaceId, why);
+      } finally {
+        await this.#announceOnce(workspaceId);
+      }
+    });
     return this.view(workspaceId);
+  }
+
+  /**
+   * The first sync after a start tells the listeners about the brain as of
+   * `lastPulledSha` (from null, as a link does) when the sync itself did not:
+   * the head did not move, or the remote was out of reach (#153). Without it,
+   * a project whose tracker comes from its brain had none after a restart.
+   */
+  async #announceOnce(workspaceId: WorkspaceId): Promise<void> {
+    if (this.#announced.has(workspaceId)) return;
+    const sha = this.deps.brains.get(workspaceId)?.lastPulledSha ?? null;
+    if (sha === null) return;
+    await this.#notify(workspaceId, null, sha);
+    this.deps.recorder.invalidate('workspaces');
   }
 
   /** The brain commit an attempt reads: the head after a pull, when the last pull is stale. */
@@ -529,6 +555,8 @@ export class BrainService {
     `Your change to ${conflicted[0] ?? 'the brain'} conflicts with the brain.`;
 
   async #notify(workspaceId: WorkspaceId, from: string | null, to: string | null): Promise<void> {
+    if (to === null) this.#announced.delete(workspaceId);
+    else this.#announced.add(workspaceId);
     for (const listener of this.#listeners) {
       try {
         await listener(workspaceId, from, to);

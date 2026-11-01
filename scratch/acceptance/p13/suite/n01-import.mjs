@@ -40,7 +40,7 @@ for (const name of ['tdd', 'house-style']) {
 }
 await page.click('Import 2 skills', { within: '[role=dialog]' });
 await until(async () => (await c.dialogText('Import skills')) === '', { label: 'dialog closed', timeoutMs: 20_000 });
-const status = await page.evaluate(`document.querySelector('[role=status]')?.innerText ?? ''`);
+const status = await page.evaluate(`[...document.querySelectorAll('[role=status]')].map((s) => s.innerText).join(' ')`);
 ev.check('"Imported tdd v1. Imported house-style v1."', status.includes('Imported tdd v1.') && status.includes('Imported house-style v1.'), status);
 
 const folderPreview = await importFolder(c, `${SCRATCH}/more-skills/lint-rules`);
