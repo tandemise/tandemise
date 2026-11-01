@@ -265,6 +265,17 @@ the new policy) and records a Decision. **Stop auto-merging** turns it off and
 re-decides every waiting pull request. Each decision is kept in full, written
 as one comment on the pull request, and cited in the squash commit's
 `Tandemise-Merge`, `Tandemise-Policy` and `Tandemise-Mission` trailers.
+
+The pull request's title is a Conventional Commit, because a squash merge makes
+it the commit on your default branch. An item already titled as one
+(`fix: …`) is used as written. Otherwise the type comes from, in order: the
+item's tracker type (`Bug` → `fix`), the planner's profile (which reads the
+item's labels when it has them), and the agent's own commits on the branch. It is `chore` only when none of them says
+anything. The subject is the agent's commit subject when it wrote a
+Conventional Commit, because that says what changed. Otherwise it is the
+item's title. A tracker key, an acronym or a name keeps its case (`KEY-77`,
+`API`, `GitHub`). The Review and merge card shows the pull request as GitHub
+has it: `Review and merge #45: fix(settings): …`.
 **Revert** on the ship card undoes a merge through its own pull request. For a
 day after a merge, a failing check on main puts a card in the Inbox; Tandemise
 never reverts on its own.
@@ -333,3 +344,19 @@ stay as a second layer.
 
 The run's log line `agent environment` says which of the two cases a run had
 (`codeHost`).
+
+### Your own window is not the agent's to drive
+
+A Tandemise window started with `--remote-debugging-port` listens for DevTools
+connections, which have no authentication (#162). Nothing a worker inherits
+points at it. Every worker's environment loses Electron's and an AppImage's
+launch variables (`ELECTRON_RUN_AS_NODE`, `APPIMAGE`, ...), `TANDEMISE_PORT`,
+any variable naming a CDP, DevTools or remote-debugging port, and inspector
+flags in `NODE_OPTIONS`. An agent that proves a UI change starts its own
+window, with its own `TANDEMISE_HOME` and a port of its own choosing.
+
+This is not a block either. An agent runs as you and can list this computer's
+listening ports, so a window with its DevTools port open can still be found.
+The packaged app opens none, and `scripts/factory.sh` opens one only with
+`start --cdp`, on a random port. See
+[Known limitations](KNOWN_LIMITATIONS.md#an-agent-can-reach-a-windows-devtools-port-if-one-is-open).
