@@ -307,6 +307,70 @@ section('daemon: secrets over the API and the opt-in webhook listener (plan Task
   }
 }
 
+section("daemon: saving the tracker token clears the board's cached problem (#134)");
+{
+  const root = mkdtempSync(join(tmpdir(), 'tdi-token-'));
+  const home = join(root, 'h');
+  const { startDaemon } = await import('../apps/daemon/dist/main.js');
+  let daemon;
+  let fake;
+  try {
+    fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+    fake.putIssue({ summary: 'Checkout fails on Safari', description: '## Done when\n- [ ] Checkout works on Safari', state: 'Open' });
+    daemon = await startDaemon({ home, logLevel: 'error', tickIntervalMs: 200 });
+    const token = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')).token;
+    const call = async (method, path, body) => {
+      const res = await fetch(`${daemon.url}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'x-tandemise-api-version': 'v1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text ? JSON.parse(text) : undefined };
+    };
+    const until = async (cond, ms = 10_000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await cond()) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return Boolean(await cond());
+    };
+    const ws = (await call('POST', '/v1/workspaces', { name: 'Token' })).body?.workspace?.id;
+    const tracker = {
+      kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
+    };
+    // The order a person may take in Settings → Intake: the tracker first, the token after.
+    const put = await call('PUT', `/v1/workspaces/${ws}/intake/config`, { tracker });
+    check('the tracker is saved before any token', put.status === 200, put);
+    const cachedProblem = await until(async () => /permanent token/.test((await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem ?? ''));
+    const before = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+    check('without a token the board caches the "Save a YouTrack permanent token" problem', cachedProblem && before?.groups?.ready?.length === 0, before);
+
+    const saved = await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:test' });
+    check('the token is saved (204)', saved.status === 204, saved);
+    // No POST board/refresh: the next 2-minute tick is far away, so only the save can have read it.
+    const cleared = await until(async () => {
+      const board = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+      return board?.problem === null && board?.groups?.ready?.some((i) => i.key === 'GAR-1');
+    });
+    const after = (await call('GET', `/v1/workspaces/${ws}/board`)).body;
+    check('GET board answers no problem and GAR-1 ready right after the token is saved, without a refresh', cleared, after);
+
+    // A wrong token is still said: the save reads the board again, and that read sets the problem again.
+    await call('PUT', `/v1/workspaces/${ws}/intake/tracker/secret`, { value: 'perm:wrong' });
+    const wrong = await until(async () => /Couldn't reach YouTrack/.test((await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem ?? ''));
+    check('…and a token YouTrack refuses sets the problem again, in its own words', wrong, (await call('GET', `/v1/workspaces/${ws}/board`)).body?.problem);
+  } catch (e) {
+    check('the token section ran', false, String(e?.stack ?? e));
+  } finally {
+    await daemon?.stop();
+    await fake?.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 section('daemon: a custom source reads and acks its closures (plan Task 13)');
 {
   const root = mkdtempSync(join(tmpdir(), 'tdi-closures-'));
