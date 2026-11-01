@@ -564,7 +564,7 @@ export type AdvanceClockRequest = z.infer<typeof advanceClockRequest>;
 
 /** Where a skill is imported from. A path must be absolute (the desktop's folder picker gives one). */
 export const skillSourceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('claude'), path: z.string().trim().min(1).max(4096) }),
+  z.object({ kind: z.literal('claude'), path: z.string().trim().min(1).max(4096), plugin: z.string().trim().min(1).max(200).optional() }),
   z.object({ kind: z.literal('path'), path: z.string().trim().min(1).max(4096) }),
   z.object({
     kind: z.literal('git'),

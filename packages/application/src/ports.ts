@@ -213,6 +213,20 @@ export interface ScannedSkillFolder {
   readonly problem: string | null;
 }
 
+/** A skill folder discovery found, and where (#129). */
+export interface DiscoveredSkillFolder {
+  /** Absolute. */
+  readonly path: string;
+  readonly origin: 'personal' | 'plugin' | 'project';
+  /** The folder it was found under: the personal root, a plugin's `skills`, a repository's `.claude/skills`. */
+  readonly root: string;
+  /** The grouping folder it sits in (`synced` for `synced/tdd`), or null at the top. */
+  readonly group: string | null;
+  readonly plugin?: { readonly name: string; readonly marketplace: string; readonly version: string };
+  /** The repository's name, for a project skill. */
+  readonly repository?: string;
+}
+
 /**
  * Where skills' files come from and where their content is kept (P13).
  *
@@ -224,8 +238,15 @@ export interface ScannedSkillFolder {
 export interface SkillFilesPort {
   /** Where "Your Claude skills" looks: ~/.claude/skills unless TANDEMISE_SKILLS_DISCOVER_DIR says otherwise. */
   discoverRoot(): string;
-  /** The discovery root's sub-folders, absolute, sorted; empty when it does not exist. */
-  discover(): Promise<{ readonly exists: boolean; readonly folders: readonly string[] }>;
+  /**
+   * Every skill folder Claude Code keeps (#129): the personal root's, each
+   * installed plugin's, and each given repository's `.claude/skills`, one
+   * level of grouping folders walked. `exists` is about the personal root.
+   */
+  discover(repositories: readonly { readonly name: string; readonly path: string }[]): Promise<{
+    readonly exists: boolean;
+    readonly folders: readonly DiscoveredSkillFolder[];
+  }>;
   /** Reads a folder under the skill rules: SKILL.md present, size and count limits, no link outside. */
   scan(folder: string): Promise<ScannedSkillFolder>;
   /** Clones a repository shallow into a temporary folder (hooks off, nothing run); `dispose` removes it. */

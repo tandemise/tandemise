@@ -174,7 +174,7 @@ export function bootstrap(config: DaemonConfig, options: { readonly localPersonN
   // Skills (P13) are the person's folders and git repositories, read by the
   // daemon; the application only ever sees bytes and hashes.
   container.rebind(SKILL_FILES, (r) =>
-    new DaemonSkillFiles(config.paths.skills, config.skillsDiscoverRoot, r.resolve(LOGGER).child({ component: 'skills' })), { source: 'bootstrap' });
+    new DaemonSkillFiles(config.paths.skills, config.skillsDiscoverRoot, r.resolve(LOGGER).child({ component: 'skills' }), config.claudeConfigDir), { source: 'bootstrap' });
 
   // Eval case inputs (P3b) are content-addressed bytes on disk, the same shape as the skills store.
   // The application module binds an in-memory default; this replaces it with the real one.
