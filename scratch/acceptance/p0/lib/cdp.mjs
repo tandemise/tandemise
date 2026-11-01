@@ -23,12 +23,16 @@ export async function connect(port = 9333, { timeoutMs = 60_000 } = {}) {
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let seq = 0;
   const pending = new Map();
+  let listener = null;
   ws.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
     if (data.id && pending.has(data.id)) {
       const { resolve, reject } = pending.get(data.id);
       pending.delete(data.id);
       if (data.error) reject(new Error(data.error.message)); else resolve(data.result);
+    } else if (data.method && listener !== null) {
+      // A protocol event (Fetch.requestPaused, ...), for a scenario that set `page.onEvent`.
+      listener(data);
     }
   };
   const send = (method, params = {}) => new Promise((resolve, reject) => {
@@ -44,6 +48,8 @@ export async function connect(port = 9333, { timeoutMs = 60_000 } = {}) {
   };
 
   const page = {
+    /** Receives every protocol event (`{ method, params }`) while set; null to stop. */
+    set onEvent(fn) { listener = fn; },
     send, evaluate,
     close: () => ws.close(),
     async navigate(hash) {

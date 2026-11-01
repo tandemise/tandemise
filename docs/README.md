@@ -82,3 +82,6 @@ Each feature is designed, then planned, then proven in the real app:
 - [superpowers/evidence/](superpowers/evidence/): acceptance reports and
   screenshots from the real app. The pivot end to end is
   [2026-10-31-integrated/REPORT.md](superpowers/evidence/2026-10-31-integrated/REPORT.md).
+- [accessibility/](accessibility/): the WCAG 2.1 AA audit of the desktop app
+  ([AUDIT-2026-10-31.md](accessibility/AUDIT-2026-10-31.md)), with its evidence in
+  [2026-10-31-wcag/](superpowers/evidence/2026-10-31-wcag/).

@@ -81,15 +81,19 @@
   color: var(--text);
 }
 
+/* The wash is laid over the surface, never over whatever tinted panel holds the button: two washes stacked
+   took the label under 4.5:1 (1.4.3). */
 .btn--danger {
   color: var(--status-failed);
   border-color: var(--status-failed-line);
-  background: var(--status-failed-soft);
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--status-failed-soft), var(--status-failed-soft));
 }
 
+/* Hover strengthens the edge, not the wash: a deeper wash took the label under 4.5:1 in dark (1.4.3). */
 .btn--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--status-failed) 22%, transparent);
   border-color: var(--status-failed);
+  box-shadow: inset 0 0 0 1px var(--status-failed);
 }
 
 .btn--lg {
@@ -186,11 +190,14 @@
   color: var(--text-tertiary);
 }
 
+/* The focus ring (2.4.7, 1.4.11): the border takes the ring's colour and a second pixel doubles it, so focus
+   is never a 1px hue change. */
 .input:focus,
 .textarea:focus,
 .select:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px var(--focus-ring);
   background: var(--surface);
 }
 
@@ -574,8 +581,11 @@
 /* -------------------------------------------------------------- segmented */
 
 /* A small set of mutually exclusive choices (a radio group): theme, window, priority. */
+/* Wraps rather than overflowing when the page is narrow (zoomed in, 1.4.10). */
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   padding: 2px;
   gap: 2px;
   background: var(--surface-sunken);
@@ -831,4 +841,34 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* --------------------------------------------------------------- skip link */
+
+/* The first stop on a page (WCAG 2.4.1): not drawn until it has keyboard focus, then over the page's corner. */
+.skip-link {
+  position: fixed;
+  top: var(--s2);
+  left: var(--s2);
+  z-index: var(--z-tooltip);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--tds-radius-sm);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--tds-shadow-md);
+}
+
+.skip-link:focus {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
 }
