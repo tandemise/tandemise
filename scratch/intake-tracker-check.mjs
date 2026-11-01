@@ -42,7 +42,7 @@ const STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'To Verify', 'F
 // ------------------------------------------------------------------ pure
 section('pure: refs, markers and the Sources section');
 {
-  check('trackerRef is <tracker>:<key>', D.trackerRef?.('youtrack', 'GAR-12') === 'youtrack:GAR-12' && D.trackerRef?.('github', 'acme/web#42') === 'github:acme/web#42');
+  check('trackerRef is <tracker>:<key>', D.trackerRef?.('youtrack', 'ACME-12') === 'youtrack:ACME-12' && D.trackerRef?.('github', 'acme/web#42') === 'github:acme/web#42');
   check('markerLine is an HTML comment', D.markerLine?.('tandemise:sources') === '<!-- tandemise:sources -->' && D.markerLine?.('tandemise:activity') === '<!-- tandemise:activity -->');
   const parsed = D.parseSourcesSection?.('x\n\n## Sources\n- Sentry · acme/web · https://s.test/1\n- Slack thread · https://slack.test/a');
   check('parseSourcesSection lists the URLs', eq(parsed, ['https://s.test/1', 'https://slack.test/a']), parsed);
@@ -108,9 +108,9 @@ try {
   check('@tandemise/integration-youtrack loads', false, String(e?.message ?? e));
   finish();
 }
-const fake = await startFakeYouTrack({ project: 'GAR', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
+const fake = await startFakeYouTrack({ project: 'ACME', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
 try {
-  const yt = new Y.YouTrackTracker({ url: fake.url, project: 'GAR', token: 'perm:test' });
+  const yt = new Y.YouTrackTracker({ url: fake.url, project: 'ACME', token: 'perm:test' });
   check('kind and capabilities', yt.kind === 'youtrack' && eq(yt.capabilities, { editComments: true, attachments: true, duplicateLinks: true }), yt.capabilities);
 
   const described = await yt.describe();
@@ -118,12 +118,12 @@ try {
   check('describe() lists every field name', ['State', 'Type', 'Assignee'].every((f) => described.fields.includes(f)), described.fields);
 
   const mapping = (states, onComplete = 'in_review') => ({
-    kind: 'youtrack', url: fake.url, project: 'GAR', board: 'project: GAR #Unresolved', onComplete,
+    kind: 'youtrack', url: fake.url, project: 'ACME', board: 'project: ACME #Unresolved', onComplete,
     states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'], ...states },
   });
   const bad = D.stateMappingProblem(mapping({ in_progress: 'In Review!' }), described);
-  check("a mapping naming a missing state: YouTrack has no state 'In Review!' in GAR. Its states are: …",
-    bad === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
+  check("a mapping naming a missing state: YouTrack has no state 'In Review!' in ACME. Its states are: …",
+    bad === "YouTrack has no state 'In Review!' in ACME. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
   const noReview = mapping({});
   const { in_review: _dropped, ...withoutReview } = noReview.states;
   const missing = D.stateMappingProblem({ ...noReview, states: withoutReview }, described);
@@ -133,40 +133,40 @@ try {
   check('a valid mapping has no problem', D.stateMappingProblem(mapping({}), described) === null);
 
   const created = await yt.create({ title: 'T', description: 'D\n\n## Sources\n- Sentry · acme/web · https://s.test/1', type: 'Bug' });
-  check("create() returns key 'GAR-1' and ref youtrack:GAR-1", created.key === 'GAR-1' && created.ref === 'youtrack:GAR-1' && created.title === 'T', created);
-  check('create() reads the item back: type Bug, state Open, a url on the tracker', created.type === 'Bug' && created.state === 'Open' && created.url === `${fake.url}/issue/GAR-1`, created);
-  check('the type is set as data, not by command (#187): Type=Bug on GAR-1, no command', eq(fake.fieldSets, [{ issue: 'GAR-1', fields: ['Type=Bug'] }]) && fake.commands.length === 0, { sets: fake.fieldSets, commands: fake.commands });
+  check("create() returns key 'ACME-1' and ref youtrack:ACME-1", created.key === 'ACME-1' && created.ref === 'youtrack:ACME-1' && created.title === 'T', created);
+  check('create() reads the item back: type Bug, state Open, a url on the tracker', created.type === 'Bug' && created.state === 'Open' && created.url === `${fake.url}/issue/ACME-1`, created);
+  check('the type is set as data, not by command (#187): Type=Bug on ACME-1, no command', eq(fake.fieldSets, [{ issue: 'ACME-1', fields: ['Type=Bug'] }]) && fake.commands.length === 0, { sets: fake.fieldSets, commands: fake.commands });
   check('every request carried the token and asked for JSON', fake.calls.length > 0 && fake.calls.every((c) => c.authorization === 'Bearer perm:test' && c.accept === 'application/json'));
 
   const found = await yt.search({ url: 'https://s.test/1', limit: 5 });
-  check('search({ url }) finds GAR-1', eq(found.map((i) => i.key), ['GAR-1']), found.map((i) => i.key));
+  check('search({ url }) finds ACME-1', eq(found.map((i) => i.key), ['ACME-1']), found.map((i) => i.key));
   const searchCall = fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET');
-  check('search({ url }) is a quoted query scoped to the project', searchCall?.query.get('query') === 'project: GAR "https://s.test/1"' && searchCall?.query.get('$top') === '5', searchCall?.query.get('query'));
+  check('search({ url }) is a quoted query scoped to the project', searchCall?.query.get('query') === 'project: ACME "https://s.test/1"' && searchCall?.query.get('$top') === '5', searchCall?.query.get('query'));
   check('search({ url }) of an unknown URL finds nothing', (await yt.search({ url: 'https://s.test/2', limit: 5 })).length === 0);
 
   const second = await yt.create({ title: "TypeError: cannot read 'id' of undefined", description: 'x', fields: { Subsystem: 'Web' } });
-  check('fields are set in one request', eq(fake.fieldSets.at(-1), { issue: 'GAR-2', fields: ['Subsystem=Web'] }), fake.fieldSets.at(-1));
+  check('fields are set in one request', eq(fake.fieldSets.at(-1), { issue: 'ACME-2', fields: ['Subsystem=Web'] }), fake.fieldSets.at(-1));
   await yt.search({ text: "TypeError: cannot read 'id' of undefined in checkout", unresolvedOnly: true, limit: 20 });
   const textCall = fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET');
-  check('search({ text }) asks for the unresolved items with the title words', textCall?.query.get('query') === 'project: GAR #Unresolved typeerror read id undefined checkout' && textCall?.query.get('$top') === '20', textCall?.query.get('query'));
+  check('search({ text }) asks for the unresolved items with the title words', textCall?.query.get('query') === 'project: ACME #Unresolved typeerror read id undefined checkout' && textCall?.query.get('$top') === '20', textCall?.query.get('query'));
   const byText = await yt.search({ text: "TypeError: cannot read 'id' of undefined", unresolvedOnly: true, limit: 20 });
   check('search({ text }) finds the item whose title has those words', eq(byText.map((i) => i.key), [second.key]), byText.map((i) => i.key));
   const longTitle = 'one two three four five six seven eight nine ten';
   await yt.search({ text: longTitle, limit: 20 });
   check('search({ text }) sends at most 8 words, and no #Unresolved unless asked',
-    fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET')?.query.get('query') === 'project: GAR one two three four five six seven eight');
+    fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET')?.query.get('query') === 'project: ACME one two three four five six seven eight');
 
   const ref = created.ref;
   const c1 = await yt.comment(ref, { marker: 'tandemise:activity', body: 'v1' });
   const c2 = await yt.comment(ref, { marker: 'tandemise:activity', body: 'v2' });
-  const onGar1 = fake.comments.get('GAR-1') ?? [];
-  check('comment() twice leaves exactly one comment on GAR-1', onGar1.length === 1, onGar1);
+  const onGar1 = fake.comments.get('ACME-1') ?? [];
+  check('comment() twice leaves exactly one comment on ACME-1', onGar1.length === 1, onGar1);
   check('its text starts with the marker and ends with v2', onGar1[0]?.text.startsWith('<!-- tandemise:activity -->') && onGar1[0]?.text.endsWith('v2'), onGar1[0]?.text);
   check('the second call edited the first comment', c1.commentId === c2.commentId && c1.commentId === onGar1[0]?.id, { c1, c2 });
   const c3 = await yt.comment(ref, { marker: 'tandemise:activity', body: 'v3', knownId: c1.commentId });
-  check('a known id is edited in place', c3.commentId === c1.commentId && (fake.comments.get('GAR-1') ?? []).length === 1 && fake.comments.get('GAR-1')[0].text.endsWith('v3'));
+  check('a known id is edited in place', c3.commentId === c1.commentId && (fake.comments.get('ACME-1') ?? []).length === 1 && fake.comments.get('ACME-1')[0].text.endsWith('v3'));
   const c4 = await yt.comment(ref, { marker: 'tandemise:activity', body: 'v4', knownId: '999-999' });
-  check('a known id that is gone falls back to the comment found by marker', c4.commentId === c1.commentId && fake.comments.get('GAR-1')[0].text.endsWith('v4'), c4);
+  check('a known id that is gone falls back to the comment found by marker', c4.commentId === c1.commentId && fake.comments.get('ACME-1')[0].text.endsWith('v4'), c4);
 
   fake.putComment(second.key, { author: 'someone-else', text: '<!-- tandemise:activity -->\n\nI copied the marker.' });
   const c5 = await yt.comment(second.ref, { marker: 'tandemise:activity', body: 'ours' });
@@ -176,52 +176,52 @@ try {
 
   await yt.link(ref, { url: 'https://slack.test/a', title: 'Slack thread', context: 'Ana: checkout is broken' });
   await yt.link(ref, { url: 'https://slack.test/a', title: 'Slack thread', context: 'Ana: checkout is broken again' });
-  const sourcesComments = (fake.comments.get('GAR-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
-  check('link() twice with the same URL keeps one sources comment', sourcesComments.length === 1, fake.comments.get('GAR-1'));
+  const sourcesComments = (fake.comments.get('ACME-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
+  check('link() twice with the same URL keeps one sources comment', sourcesComments.length === 1, fake.comments.get('ACME-1'));
   check('…with one line for that URL, carrying the latest context', sourcesComments[0]?.text.split('https://slack.test/a').length === 2 && sourcesComments[0]?.text.includes('broken again'), sourcesComments[0]?.text);
   await yt.link(ref, { url: 'https://s.test/9', title: 'Sentry · acme/web', context: '' });
-  const afterThird = (fake.comments.get('GAR-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
+  const afterThird = (fake.comments.get('ACME-1') ?? []).filter((c) => c.text.startsWith('<!-- tandemise:sources -->'));
   check('a new URL is added to the same comment', afterThird.length === 1 && eq(D.parseSourcesSection(afterThird[0].text), ['https://slack.test/a', 'https://s.test/9']), afterThird[0]?.text);
-  check('search({ url }) finds an item by a URL in its sources comment', eq((await yt.search({ url: 'https://slack.test/a', limit: 5 })).map((i) => i.key), ['GAR-1']));
+  check('search({ url }) finds an item by a URL in its sources comment', eq((await yt.search({ url: 'https://slack.test/a', limit: 5 })).map((i) => i.key), ['ACME-1']));
 
   await yt.transition(ref, 'In Progress');
-  check('transition() sets State as data, so a state with a space is sent as written (#187): State=In Progress', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['State=In Progress'] }), fake.fieldSets.at(-1));
+  check('transition() sets State as data, so a state with a space is sent as written (#187): State=In Progress', eq(fake.fieldSets.at(-1), { issue: 'ACME-1', fields: ['State=In Progress'] }), fake.fieldSets.at(-1));
   const viaCommand = await fetch(`${fake.url}/api/commands`, {
     method: 'POST', headers: { authorization: 'Bearer perm:test', accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({ query: 'State {In Progress}', issues: [{ idReadable: 'GAR-1' }] }),
+    body: JSON.stringify({ query: 'State {In Progress}', issues: [{ idReadable: 'ACME-1' }] }),
   });
   check('…the fake refuses that value as a command, as a real YouTrack did: 400 State expected: {In Progress}', viaCommand.status === 400 && (await viaCommand.json()).error_description === 'State expected: {In Progress}');
   const got = await yt.get(ref);
-  check("get() then shows state 'In Progress'", got.state === 'In Progress' && got.key === 'GAR-1', got);
+  check("get() then shows state 'In Progress'", got.state === 'In Progress' && got.key === 'ACME-1', got);
 
   await yt.markDuplicate(second.ref, ref);
-  check('markDuplicate(GAR-2, GAR-1) sends the command duplicates GAR-1 to GAR-2', fake.commands.at(-1)?.query === 'duplicates GAR-1' && fake.commands.at(-1)?.issues[0].idReadable === 'GAR-2', fake.commands.at(-1));
+  check('markDuplicate(ACME-2, ACME-1) sends the command duplicates ACME-1 to ACME-2', fake.commands.at(-1)?.query === 'duplicates ACME-1' && fake.commands.at(-1)?.issues[0].idReadable === 'ACME-2', fake.commands.at(-1));
   // Ruling 26: a repeated merge. YouTrack's links are a set, so the same command again changes nothing and comments nothing.
-  const gar2Comments = (fake.comments.get('GAR-2') ?? []).length;
+  const gar2Comments = (fake.comments.get('ACME-2') ?? []).length;
   await yt.markDuplicate(second.ref, ref);
-  check('markDuplicate again: still one duplicates link on GAR-2, and no comment',
-    fake.issues.get('GAR-2')?.links.filter((l) => l.type === 'duplicates').length === 1 && (fake.comments.get('GAR-2') ?? []).length === gar2Comments,
-    { links: fake.issues.get('GAR-2')?.links, comments: (fake.comments.get('GAR-2') ?? []).length });
+  check('markDuplicate again: still one duplicates link on ACME-2, and no comment',
+    fake.issues.get('ACME-2')?.links.filter((l) => l.type === 'duplicates').length === 1 && (fake.comments.get('ACME-2') ?? []).length === gar2Comments,
+    { links: fake.issues.get('ACME-2')?.links, comments: (fake.comments.get('ACME-2') ?? []).length });
   await yt.assign(ref, 'ana');
-  check('assign() sets Assignee as data, by login', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['Assignee=ana'] }) && (await yt.get(ref)).assignee === 'ana');
+  check('assign() sets Assignee as data, by login', eq(fake.fieldSets.at(-1), { issue: 'ACME-1', fields: ['Assignee=ana'] }) && (await yt.get(ref)).assignee === 'ana');
   check('viewer() is the signed-in login', (await yt.viewer()) === 'tandemise-bot');
 
-  // GAR-2 is a duplicate now, so resolved; GAR-1 is fixed by a person; GAR-3 is new.
-  fake.setState('GAR-1', 'Fixed');
+  // ACME-2 is a duplicate now, so resolved; ACME-1 is fixed by a person; ACME-3 is new.
+  fake.setState('ACME-1', 'Fixed');
   fake.putIssue({ summary: 'Fresh' });
-  const board = await yt.board({ query: 'project: GAR #Unresolved', limit: 50 });
-  check('board() runs the given query: resolved items are not on it', eq(board.map((i) => i.key), ['GAR-3']), board.map((i) => i.key));
-  const all = await yt.board({ query: 'project: GAR', limit: 50 });
-  check('board() maps every item', eq(all.map((i) => i.key).sort(), ['GAR-1', 'GAR-2', 'GAR-3']) && all.every((i) => i.ref.startsWith('youtrack:') && typeof i.updatedAt === 'string' && typeof i.createdAt === 'string'));
-  const since = await yt.board({ query: 'project: GAR', updatedSince: all.find((i) => i.key === 'GAR-3').updatedAt, limit: 50 });
-  check('board({ updatedSince }) keeps only the items updated since', eq(since.map((i) => i.key), ['GAR-3']), since.map((i) => i.key));
+  const board = await yt.board({ query: 'project: ACME #Unresolved', limit: 50 });
+  check('board() runs the given query: resolved items are not on it', eq(board.map((i) => i.key), ['ACME-3']), board.map((i) => i.key));
+  const all = await yt.board({ query: 'project: ACME', limit: 50 });
+  check('board() maps every item', eq(all.map((i) => i.key).sort(), ['ACME-1', 'ACME-2', 'ACME-3']) && all.every((i) => i.ref.startsWith('youtrack:') && typeof i.updatedAt === 'string' && typeof i.createdAt === 'string'));
+  const since = await yt.board({ query: 'project: ACME', updatedSince: all.find((i) => i.key === 'ACME-3').updatedAt, limit: 50 });
+  check('board({ updatedSince }) keeps only the items updated since', eq(since.map((i) => i.key), ['ACME-3']), since.map((i) => i.key));
   check('refFromUrl() knows its own items and nothing else',
-    yt.refFromUrl(`${fake.url}/issue/GAR-12/checkout-breaks`) === 'youtrack:GAR-12' && yt.refFromUrl(`${fake.url}/issue/OTHER-1`) === null && yt.refFromUrl('https://s.test/1') === null);
+    yt.refFromUrl(`${fake.url}/issue/ACME-12/checkout-breaks`) === 'youtrack:ACME-12' && yt.refFromUrl(`${fake.url}/issue/OTHER-1`) === null && yt.refFromUrl('https://s.test/1') === null);
 
-  const notThere = await refusal(() => yt.get(D.trackerRef('youtrack', 'GAR-404')));
+  const notThere = await refusal(() => yt.get(D.trackerRef('youtrack', 'ACME-404')));
   check('get() of a missing item is NOT_FOUND', notThere?.code === 'NOT_FOUND', notThere?.message);
 
-  const wrong = new Y.YouTrackTracker({ url: fake.url, project: 'GAR', token: 'perm:wrong' });
+  const wrong = new Y.YouTrackTracker({ url: fake.url, project: 'ACME', token: 'perm:wrong' });
   const refused = await refusal(() => wrong.search({ url: 'https://s.test/1', limit: 5 }));
   check("a wrong token: INTEGRATION_FAILED, YouTrack refused the token. Make a new permanent token and save it in the project's tracker settings.",
     refused?.code === 'INTEGRATION_FAILED' && refused?.message === "YouTrack refused the token. Make a new permanent token and save it in the project's tracker settings.", { code: refused?.code, message: refused?.message });
@@ -250,7 +250,7 @@ try {
   check('get() reports the tags', eq(read.tags, ['repo:web']), read.tags);
   check('every issue read asks for the tags and the subtasks', fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('tags(name)')
     && fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('subtasks(issues(idReadable,resolved))'));
-  const onBoard = await yt.board({ query: 'project: GAR #Unresolved', limit: 50 });
+  const onBoard = await yt.board({ query: 'project: ACME #Unresolved', limit: 50 });
   const boardSpike = onBoard.find((i) => i.key === spike.idReadable);
   const plain = onBoard.find((i) => i.title === 'First part');
   check('board() reports the type, tags and subtasks too', boardSpike?.type === 'Spike' && eq(boardSpike?.tags, ['repo:api', 'research']) && boardSpike?.subtasks === 0
@@ -270,7 +270,7 @@ try {
 
   // Ruling 26: a 429 with Retry-After makes this tracker wait, refusing in plain words rather than asking again.
   let ytNow = Date.parse('2026-10-30T12:00:00Z');
-  const paced = new Y.YouTrackTracker({ url: fake.url, project: 'GAR', token: 'perm:test', now: () => ytNow });
+  const paced = new Y.YouTrackTracker({ url: fake.url, project: 'ACME', token: 'perm:test', now: () => ytNow });
   fake.rateLimitNext('/api/issues', 30);
   const slowed = await refusal(() => paced.search({ text: 'Fresh', limit: 5 }));
   check('YouTrack answers 429 with Retry-After: 30 → a retryable INTEGRATION_FAILED: YouTrack asked Tandemise to slow down; it waits 30 s before asking again.',
@@ -286,7 +286,7 @@ try {
   check('…and once the wait is over it asks again', resumed === null && fake.calls.length === askedBefore + 1, { error: resumed?.message, asked: fake.calls.length - askedBefore });
 
   fake.delayNext('/api/users/me', 300);
-  const slow = new Y.YouTrackTracker({ url: fake.url, project: 'GAR', token: 'perm:test', timeoutMs: 50 });
+  const slow = new Y.YouTrackTracker({ url: fake.url, project: 'ACME', token: 'perm:test', timeoutMs: 50 });
   const timedOut = await refusal(() => slow.viewer());
   check('a request past its timeout fails as INTEGRATION_FAILED, retryable', timedOut?.code === 'INTEGRATION_FAILED' && timedOut?.retryable === true, { code: timedOut?.code, message: timedOut?.message });
 } catch (e) {
@@ -498,20 +498,20 @@ section('refine a draft (#135, #185): the description only gains lines, the acti
   const started = D.activityCommentBody({ starter: 'Ana', missionTitle: 'Checkout', steps: null, prUrl: null, completed: null, cancelled: null, refined: D.refinedLineOf(`${line}`) });
   check('a later activity comment keeps the refined line on top', started === `${line}\n\nStarted in Tandemise by Ana: Checkout.`, started);
   check('refinedLineOf finds nothing in a plain activity comment', D.refinedLineOf('Started in Tandemise by Ana: Checkout.') === null);
-  const mapping = { kind: 'youtrack', project: 'GAR', states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: [], draft: ['Draft'] }, onComplete: 'done' };
-  check('a draft state the tracker lacks is a mapping problem', D.stateMappingProblem(mapping, { states: ['Open', 'In Progress', 'Done'] })?.startsWith("YouTrack has no state 'Draft' in GAR."));
+  const mapping = { kind: 'youtrack', project: 'ACME', states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: [], draft: ['Draft'] }, onComplete: 'done' };
+  check('a draft state the tracker lacks is a mapping problem', D.stateMappingProblem(mapping, { states: ['Open', 'In Progress', 'Done'] })?.startsWith("YouTrack has no state 'Draft' in ACME."));
   check('…and one it has is not', D.stateMappingProblem(mapping, { states: ['Draft', 'Open', 'In Progress', 'Done'] }) === null);
 
   const Y = await import('@tandemise/integration-youtrack');
-  const ytFake = await startFakeYouTrack({ project: 'GAR', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
+  const ytFake = await startFakeYouTrack({ project: 'ACME', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
   try {
-    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: acItem, state: 'Draft' });
-    const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'GAR', token: 'perm:test' });
-    const ref = D.trackerRef('youtrack', 'GAR-7');
+    ytFake.putIssue({ idReadable: 'ACME-7', summary: 'Pay on Safari', description: acItem, state: 'Draft' });
+    const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'ACME', token: 'perm:test' });
+    const ref = D.trackerRef('youtrack', 'ACME-7');
     await yt.updateDescription(ref, plain);
-    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === plain
-      && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/GAR-7'), ytFake.issues.get('GAR-7')?.description);
-    check('…and leaves the summary and state alone', ytFake.issues.get('GAR-7')?.summary === 'Pay on Safari' && ytFake.issues.get('GAR-7')?.state === 'Draft');
+    check('youtrack: updateDescription posts the description to /api/issues/ACME-7', ytFake.issues.get('ACME-7')?.description === plain
+      && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/ACME-7'), ytFake.issues.get('ACME-7')?.description);
+    check('…and leaves the summary and state alone', ytFake.issues.get('ACME-7')?.summary === 'Pay on Safari' && ytFake.issues.get('ACME-7')?.state === 'Draft');
   } catch (e) {
     check('the youtrack refine section ran', false, String(e?.stack ?? e));
   } finally {
@@ -541,7 +541,7 @@ section('refine a draft (#135, #185): the description only gains lines, the acti
 
 // ------------------------------------------------------------------ resolver
 section('resolver: a project\'s tracker from its config and the secret store');
-const fake2 = await startFakeYouTrack({ project: 'GAR', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
+const fake2 = await startFakeYouTrack({ project: 'ACME', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
 try {
   const memorySecrets = () => {
     const values = new Map();
@@ -555,7 +555,7 @@ try {
     };
   };
   const ytConfig = (states = {}) => ({
-    kind: 'youtrack', url: fake2.url, project: 'GAR', board: 'project: GAR #Unresolved', onComplete: 'in_review',
+    kind: 'youtrack', url: fake2.url, project: 'ACME', board: 'project: ACME #Unresolved', onComplete: 'in_review',
     states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix"], ...states },
   });
   const configs = new Map();
@@ -573,12 +573,12 @@ try {
   check('the secret name is intake:<ws>:tracker', app.trackerSecretName('ws_yt') === 'intake:ws_yt:tracker');
   await resolver.saveCredential('ws_yt', 'perm:test');
   const { tracker, config } = await resolver.for('ws_yt');
-  check('a youtrack config with its token stored resolves to a YouTrackTracker', tracker instanceof Y.YouTrackTracker && config.project === 'GAR' && (await tracker.viewer()) === 'tandemise-bot');
+  check('a youtrack config with its token stored resolves to a YouTrackTracker', tracker instanceof Y.YouTrackTracker && config.project === 'ACME' && (await tracker.viewer()) === 'tandemise-bot');
   check('the same config resolves to the same tracker (cached)', (await resolver.for('ws_yt')).tracker === tracker);
   check('validate() of a valid mapping is null', (await resolver.validate('ws_yt')) === null);
   configs.set('ws_yt', ytConfig({ in_progress: 'In Review!' }));
   const v = await resolver.validate('ws_yt');
-  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
+  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in ACME. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
   check('a changed config builds a new tracker', (await resolver.for('ws_yt')).tracker !== tracker);
   await resolver.saveCredential('ws_yt', 'perm:wrong');
   check('a new credential replaces the old one in the store', (await secrets.list()).filter((r) => r.includes(':intake:ws_yt:tracker:')).length === 1);
@@ -603,8 +603,8 @@ try {
 // the token to the new host until this machine's person confirms it.
 section('resolver: the tracker token stays with the address it was saved for (Ruling 23)');
 {
-  const ytA = await startFakeYouTrack({ project: 'GAR', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
-  const ytB = await startFakeYouTrack({ project: 'GAR', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
+  const ytA = await startFakeYouTrack({ project: 'ACME', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
+  const ytB = await startFakeYouTrack({ project: 'ACME', states: STATES, types: ['Bug', 'Task'], token: 'perm:test', login: 'tandemise-bot' });
   try {
     const values = new Map();
     let n = 0;
@@ -621,7 +621,7 @@ section('resolver: the tracker token stays with the address it was saved for (Ru
       set: (ws, credential, origin) => { if (origin === null) origins.delete(`${ws}|${credential}`); else origins.set(`${ws}|${credential}`, origin); },
     };
     const yt = (url) => ({
-      kind: 'youtrack', url, project: 'GAR', board: 'project: GAR #Unresolved', onComplete: 'in_review',
+      kind: 'youtrack', url, project: 'ACME', board: 'project: ACME #Unresolved', onComplete: 'in_review',
       states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix"] },
     });
     const configs = new Map();

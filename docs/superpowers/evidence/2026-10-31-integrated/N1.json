@@ -53,12 +53,12 @@
         "fingerprint": "custom:web-form:form-7",
         "title": "Typo in the settings title",
         "source": "custom",
-        "status": "Filed as GAR-2",
-        "text": "Typo in the settings title\ncustom\nFiled as GAR-2\njust now"
+        "status": "Filed as ACME-2",
+        "text": "Typo in the settings title\ncustom\nFiled as ACME-2\njust now"
       }
     },
     {
-      "label": "fake YouTrack: GAR-2 exists, a Bug, Open",
+      "label": "fake YouTrack: ACME-2 exists, a Bug, Open",
       "ok": true,
       "observed": {
         "summary": "Typo in the settings title",
@@ -67,9 +67,9 @@
       }
     },
     {
-      "label": "Board: GAR-2 is under Ready with Start",
+      "label": "Board: ACME-2 is under Ready with Start",
       "ok": true,
-      "observed": "GAR-2\nTypo in the settings title\ncustom · web-form\nStart"
+      "observed": "ACME-2\nTypo in the settings title\ncustom · web-form\nStart"
     },
     {
       "label": "Start: the factory decides the workflow (auto)",
@@ -101,7 +101,7 @@
       ]
     },
     {
-      "label": "fake YouTrack: GAR-2 is In Progress",
+      "label": "fake YouTrack: ACME-2 is In Progress",
       "ok": true,
       "observed": "In Progress"
     },
@@ -238,7 +238,7 @@
       "observed": "Waiting for your review\n\nWaiting for your review: Auto-merge is off for this project.\n\nacme/web #1\nOpen in GitHub\nMerge\nAuto-merge is off for this project.\nThis repository has no CI checks, so Tandemise never merges it on its own.\nRisk score 4 of 2 allowed: no tests changed, no independent review, a person had to step in.\n\nRisk score 4 of 2 allowed: no tests changed (+2), no independent review (+1), a person had to step in (+1)\n\nWhat would have happened with auto-merge on: would still ask: score 4 of 2\n\nChecked 1b55e69 · policy shipped"
     },
     {
-      "label": "fake YouTrack: GAR-2 moved to In Review while the pull request waits for you",
+      "label": "fake YouTrack: ACME-2 moved to In Review while the pull request waits for you",
       "ok": true,
       "observed": "In Review"
     },
@@ -255,12 +255,12 @@
       ]
     },
     {
-      "label": "Board: GAR-2 shows its mission",
+      "label": "Board: ACME-2 shows its mission",
       "ok": true,
-      "observed": "GAR-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nHas a mission\nStart"
+      "observed": "ACME-2\nTypo in the settings title\ncustom · web-form\nMission: Executing\nHas a mission\nStart"
     },
     {
-      "label": "Home → Who's working on what: GAR-2 (Typo in the settings title), yours",
+      "label": "Home → Who's working on what: ACME-2 (Typo in the settings title), yours",
       "ok": true,
       "observed": "Who's working on what\nYou\nGAR-2\nTypo in the settings title\nsince 20:28"
     },

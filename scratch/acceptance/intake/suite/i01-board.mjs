@@ -1,6 +1,6 @@
-// I1 — The project's tracker is a (fake) YouTrack project GAR. The Board opens and lists the fake's
-// unresolved items grouped by mapped state: GAR-1 under Ready, GAR-2 under In progress (kim's), GAR-3 under
-// In review; GAR-4 (Fixed) is not on it. Settings → Intake shows the tracker and the three sources.
+// I1 — The project's tracker is a (fake) YouTrack project ACME. The Board opens and lists the fake's
+// unresolved items grouped by mapped state: ACME-1 under Ready, ACME-2 under In progress (kim's), ACME-3 under
+// In review; ACME-4 (Fixed) is not on it. Settings → Intake shows the tracker and the three sources.
 import { context } from '../../p0/lib/ctx.mjs';
 import { Evidence } from '../../p0/lib/evidence.mjs';
 import { REAL_YOUTRACK, boardGroups, openBoard, yt } from '../common.mjs';
@@ -24,11 +24,11 @@ if (REAL_YOUTRACK) {
   ev.check('the window lists what the daemon read from the real YouTrack', keys(groups.ready.rows) === keys(board.groups.ready) && keys(groups.inProgress.rows) === keys(board.groups.inProgress), { window: keys(groups.ready.rows), daemon: keys(board.groups.ready) });
 } else {
   const keysOf = (g) => (g?.rows ?? []).map((r) => r.key);
-  ev.check('Ready lists GAR-1 "Checkout fails on Safari" with Start', keysOf(groups.ready).join() === 'GAR-1' && groups.ready.rows[0].title === 'Checkout fails on Safari' && groups.ready.rows[0].text.includes('Start'), groups.ready);
-  ev.check('In progress lists GAR-2 with its assignee', keysOf(groups.inProgress).join() === 'GAR-2' && groups.inProgress.rows[0].text.includes('kim'), groups.inProgress);
-  ev.check('In review lists GAR-3', keysOf(groups.inReview).join() === 'GAR-3', groups.inReview);
-  ev.check('GAR-4 (Fixed) is not on the Board', !JSON.stringify(groups).includes('GAR-4'));
-  const reads = (await yt.state()).calls.filter((x) => x.method === 'GET' && x.path === '/api/issues' && new URLSearchParams(x.query).get('query') === 'project: GAR #Unresolved');
+  ev.check('Ready lists ACME-1 "Checkout fails on Safari" with Start', keysOf(groups.ready).join() === 'ACME-1' && groups.ready.rows[0].title === 'Checkout fails on Safari' && groups.ready.rows[0].text.includes('Start'), groups.ready);
+  ev.check('In progress lists ACME-2 with its assignee', keysOf(groups.inProgress).join() === 'ACME-2' && groups.inProgress.rows[0].text.includes('kim'), groups.inProgress);
+  ev.check('In review lists ACME-3', keysOf(groups.inReview).join() === 'ACME-3', groups.inReview);
+  ev.check('ACME-4 (Fixed) is not on the Board', !JSON.stringify(groups).includes('ACME-4'));
+  const reads = (await yt.state()).calls.filter((x) => x.method === 'GET' && x.path === '/api/issues' && new URLSearchParams(x.query).get('query') === 'project: ACME #Unresolved');
   ev.check('proof (fake YouTrack): the board query was read as written', reads.length > 0, reads.length);
 }
 await page.screenshot(ev.shot('board'));

@@ -41,7 +41,7 @@ Success means the owner's "normal day" from the pivot notes works: open Tandemis
 | **Runner** | Code that listens to a source and pushes signals. Shipped runners run inside the daemon; custom runners run anywhere and push over HTTP or the CLI. |
 | **Signal** | One "something that might be work", in the intake contract. Identified by its **fingerprint** (`<kind>:<instance>:<key>`). A repeat of the same thing updates the same signal. |
 | **Primary tracker** | The project's one board (YouTrack project, GitHub repository's issues). Configured in the brain repo. |
-| **Tracker item** | A task in the primary tracker (`GAR-12`, `tandemise/tandemise#52`). |
+| **Tracker item** | A task in the primary tracker (`ACME-12`, `tandemise/tandemise#52`). |
 | **Start** | The act, by a person, that turns a tracker item into a Tandemise mission. |
 | **Closure** | What Tandemise writes back to a source when the tracker item is done. |
 
@@ -157,7 +157,7 @@ Each person's daemon may run the same runners. Two protections, used together:
 
 Slack Socket Mode already sends each event to only one of an app's open connections, which helps. Discord's gateway sends every event to every connection, so it relies on the claim or on dedupe.
 
-Starting work uses a claim too: `('tracker_item', itemRef)`. That is the server's "who is working on what". Without the server, Start re-reads the item and refuses if it is already in a mapped in-progress state ("GAR-12 is already in progress (Ana).").
+Starting work uses a claim too: `('tracker_item', itemRef)`. That is the server's "who is working on what". Without the server, Start re-reads the item and refuses if it is already in a mapped in-progress state ("ACME-12 is already in progress (Ana).").
 
 ### 4. The pipeline
 
@@ -213,7 +213,7 @@ In order, stopping at the first answer:
 3. **Exact URL in the tracker.** Every item Tandemise creates or links carries a **Sources** section listing each source URL (in the description on create, in Tandemise's sources comment on link). `PrimaryTracker.search({ url })` looks for the exact URL. A hit → `linked`. This is what makes dedupe work across daemons with no server.
 4. **Similarity.** `PrimaryTracker.search({ text })` asks the tracker's own search for candidates among unresolved items (title words, top 20). `IntakeSimilarity.score(signal, candidate)` ranks them with a lexical score in `@tandemise/domain`: normalised title tokens (Jaccard), shared stack frames or error type for error signals, shared URLs. Thresholds come from the brain (defaults `link ≥ 0.85`, `ask ≥ 0.55`):
    - **≥ link:** linked automatically (`linkedBy: similarity`, score recorded).
-   - **between ask and link:** `needs_decision`. An Inbox card asks: "Is this the same as GAR-12?" with **Same task**, **New task** and **Not work**. The card is a decision, not a message. P16 announces it like any other Inbox item.
+   - **between ask and link:** `needs_decision`. An Inbox card asks: "Is this the same as ACME-12?" with **Same task**, **New task** and **Not work**. The card is a decision, not a message. P16 announces it like any other Inbox item.
    - **below ask:** `new`.
 
 `IntakeSimilarity` is a port. The lexical scorer is the default. A later model-backed judge (approach 3) can replace it without changing the pipeline.
@@ -274,8 +274,8 @@ The brain maps the tracker's own states to the five Tandemise needs. Nothing els
 tracker:
   kind: youtrack
   url: https://acme.youtrack.cloud
-  project: GAR
-  board: "project: GAR #Unresolved sort by: updated desc"
+  project: ACME
+  board: "project: ACME #Unresolved sort by: updated desc"
   states:
     ready: [Open, Submitted]       # where intake creates; what the board offers to Start
     in_progress: In Progress
@@ -285,7 +285,7 @@ tracker:
   onComplete: in_review            # in_review | done: what Tandemise writes when a mission completes
 ```
 
-- On load, the daemon calls `describe()` and refuses a mapping that names a state the tracker doesn't have, in plain words, in the project's settings ("YouTrack has no state 'In Review' in GAR. Its states are: …").
+- On load, the daemon calls `describe()` and refuses a mapping that names a state the tracker doesn't have, in plain words, in the project's settings ("YouTrack has no state 'In Review' in ACME. Its states are: …").
 - `in_review` may be absent; then `onComplete` must be `done`.
 - **A project with no tracker configured has no intake.** Runners can't be switched on, and a push answers `409 "Set this project's tracker first."` See "Migration from P14" for existing users.
 
@@ -293,15 +293,15 @@ tracker:
 
 **The board.** A new desktop screen, **Board** (`screens/Board.tsx`), replaces the Backlog as the place to choose work. It lists the tracker items the brain's `board` query returns, grouped by mapped state (Ready, In progress, In review). Each row shows: key, title, source chips ("Sentry · 132 events", "Slack thread"), assignee, the linked mission's status if any, and **Start**. **Check sources now** runs every due runner and refreshes the board. The board is a local cache (`tracker_items`), refreshed on the scheduler tick (every 2 minutes by default) and on open. Tandemise never reorders or edits it.
 
-An **Intake** tab next to it lists every recorded signal with its status and reason (held back, needs decision, linked to GAR-12, closure failed), so "everything entered is recorded" is visible.
+An **Intake** tab next to it lists every recorded signal with its status and reason (held back, needs decision, linked to ACME-12, closure failed), so "everything entered is recorded" is visible.
 
-**Start** (`POST /v1/tracker-items/:ref/start`, the Board's button, or `tandemise start GAR-12`):
+**Start** (`POST /v1/tracker-items/:ref/start`, the Board's button, or `tandemise start ACME-12`):
 
 1. Take the `('tracker_item', ref)` claim (or, without the server, re-read the item and refuse if it is already in a mapped in-progress state).
 2. Read the item fresh: title, description, Sources, and the linked signals' recorded context.
 3. Create the mission through `MissionService.create` (`packages/application/src/services/mission-service.ts:124`), the only way a mission is made, as P14 does. The changes:
    - `origin` gains `trackerItemId` (new `missions.tracker_item_id` column), alongside `routineId` and `issueLinkId`.
-   - **Goal:** the item, attributed and quoted as data: "YouTrack GAR-12, started by you: <url>. The task as written in the tracker: …", followed by each source's context.
+   - **Goal:** the item, attributed and quoted as data: "YouTrack ACME-12, started by you: <url>. The task as written in the tracker: …", followed by each source's context.
    - **Done when:** parsed from the description with P14's `parseIssueCriteria`, generalised to `parseCriteria` (`packages/domain/src/entities/issue.ts`), and recorded as coming from the tracker.
    - **Workflow:** from the brain's mapping by item type (`Bug → fix-bug`) when present, else the project's default.
    - **planNow:** true when criteria were found, because the person pressed Start and the P6 readiness gate passes. With no criteria, the mission opens as a draft in refinement. That is still the person's started work, and they refine it there. It is **never queued** for the P7 pull.
@@ -335,10 +335,10 @@ For each signal linked to the item, one closure row is written (`closure_pending
 
 | Source | Closure |
 |---|---|
-| GitHub issue | A comment ("Fixed in <PR link>; tracked as GAR-12."), then close. P14's guard holds: close only when the source's "close" setting is on. |
+| GitHub issue | A comment ("Fixed in <PR link>; tracked as ACME-12."), then close. P14's guard holds: close only when the source's "close" setting is on. |
 | Sentry | Resolve in the fixing commit (`statusDetails.inCommit`) when the merge commit and repository are known and the repo is linked in Sentry, else "resolve in next release" (`inNextRelease`). A regression later reopens it in Sentry, and the runner sees it again as the same fingerprint. |
 | PostHog | Mark the error-tracking issue resolved. Signals that aren't error issues (an insight, a survey) close with nothing to write. |
-| Slack | One reply in the thread: "Done: <title> · GAR-12 · <PR>". Plus the reaction swap (`:eyes:` → `:white_check_mark:`), if on. |
+| Slack | One reply in the thread: "Done: <title> · ACME-12 · <PR>". Plus the reaction swap (`:eyes:` → `:white_check_mark:`), if on. |
 | Discord | One reply to the original message, same words. |
 | Custom | Published on the closures feed (§2) for the runner to act on and acknowledge. |
 
@@ -425,9 +425,9 @@ It covers:
 |---|---|---|
 | I1 | Brain maps a fake YouTrack project; Board opens | the Board lists the fake's Ready items, grouped by mapped state |
 | I2 | A fake Sentry issue with 132 events; Check sources now | one new item on the Board with a "Sentry · 132 events" chip; the fake YouTrack recorded one create with a Sources section |
-| I3 | The same error reported through a Slack reaction | no new item; the existing item's chips show Slack too; the Intake tab says "Linked to GAR-…" |
+| I3 | The same error reported through a Slack reaction | no new item; the existing item's chips show Slack too; the Intake tab says "Linked to ACME-…" |
 | I4 | A Sentry issue with 3 events | not on the Board; the Intake tab says "Held back: 3 events in 24 h; this source needs 20" |
-| I5 | A similar-but-unsure signal | an Inbox card "Is this the same as GAR-…?"; "Same task" links it |
+| I5 | A similar-but-unsure signal | an Inbox card "Is this the same as ACME-…?"; "Same task" links it |
 | I6 | Start an item | a mission opens with the item's criteria; the fake YouTrack shows In Progress and one activity comment |
 | I7 | The mission completes (scripted agent) | the item moves to the mapped `onComplete` state; the activity comment shows the criteria table |
 | I8 | The item is set to Done in the fake tracker | Sentry resolved (`inCommit`), one Slack thread reply, the Intake tab shows both closed |

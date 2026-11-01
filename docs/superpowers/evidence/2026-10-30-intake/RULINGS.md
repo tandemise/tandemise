@@ -178,7 +178,7 @@ was ambiguous or wrong, decided against the spec
     the same way. "Unresolved" is the tracker's flag plus the mapping: a state in `done` or `wont_do` never
     counts as a hit or a candidate.
   - The tracker's text search wants every word (YouTrack and GitHub alike), so a candidate whose title
-    lacks one of the signal's words is never found by the full title (the plan's own case: GAR-1's title
+    lacks one of the signal's words is never found by the full title (the plan's own case: ACME-1's title
     plus " in checkout"). When the full-title search finds nothing at or above `ask`, one broader search with
     the title's first ⌈ask × n⌉ tokens follows. Both searches are `unresolvedOnly`, top 20.
   - "Last count written" needs a record: `intake_links` gains a nullable `written` JSON column
@@ -458,12 +458,12 @@ was ambiguous or wrong, decided against the spec
   relay spec:
   - **Item claims are the relay's claims.** `INTAKE_CLAIMS.item`/`releaseItem` are `CoordinationService.claimItem`/
     `releaseItem`: a claim in the workspace's project (`projectKey`) on the tracker item's ref, already
-    `<tracker>:<key>` (`youtrack:GAR-12`, `github:acme/web#7`) and normalised by `normalizeItemRef`. Start claims
+    `<tracker>:<key>` (`youtrack:ACME-12`, `github:acme/web#7`) and normalised by `normalizeItemRef`. Start claims
     before the mission exists, under the id the mission will have: `MissionService.create` takes an optional
     `origin.missionId`, so the mission's own start (`assertMayStart`) finds the claim already its own, and
     `itemFor` maps a mission's `trackerItemId` to its `tracker_items` row. Release follows the relay's rules:
     `done` on COMPLETE, `released` on CANCELLED/FAILED or a Start that failed after claiming. A refusal is the
-    holder's sentence ("Ana is working on GAR-12 since 10:42."). Solo (coordination `local`, or none bound) Start
+    holder's sentence ("Ana is working on ACME-12 since 10:42."). Solo (coordination `local`, or none bound) Start
     is always granted, as spec §3 says; your own leftover claim on this computer whose mission is gone or over
     is released and claimed again. A coordination fault never blocks Start.
   - **Source claims are short leases, not item claims.** Relay claims never expire, so the spec's
@@ -668,7 +668,7 @@ was ambiguous or wrong, decided against the spec
   - **Lease cap.** A device holds at most `MAX_LEASES_PER_DEVICE = 200` live relay leases. Past that, `POST /relay/v1/leases` answers `429 RATE_LIMITED` ("This device already holds 200 source leases; let some go before taking more."). Renewing a lease the device already holds is never refused. The route is listed in the relay spec's route table.
   - **Scoped release on a failed Start.** `releaseItem(itemRef, reason, localRef?)`: when the mission create fails, Start releases only the claim whose `localRef` is its pre-named mission id. A release without `localRef` (mission end) still lets go of all of the person's claims on the item.
   - **Proof.** Both are proven in `relay-check` and `intake-check`, which failed before the change.
-- Ruling 29 (the board shows the board query, found by I10): the cache keeps items that a mission or a signal points at, even when the board query no longer returns them (Ruling 13). I10 showed this leaking onto the board: after the tracker moved to YouTrack B, A's `GAR-1` stayed in Ready because a signal was linked to it.
+- Ruling 29 (the board shows the board query, found by I10): the cache keeps items that a mission or a signal points at, even when the board query no longer returns them (Ruling 13). I10 showed this leaking onto the board: after the tracker moved to YouTrack B, A's `ACME-1` stayed in Ready because a signal was linked to it.
   - `TrackerService` now remembers which refs the last successful read returned, and `board()` lists only those.
   - Until the first read after a daemon start, the whole cache shows.
   - Proven offline in `intake-check`, which failed before the change: a narrowed board query hides a linked, still-Open item, and it reappears once the query returns it again. Proven in the real app by I10.

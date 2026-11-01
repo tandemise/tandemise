@@ -152,13 +152,13 @@ async function open({ bindings, home: reopened } = {}) {
 }
 
 const ytTracker = (url) => ({
-  kind: 'youtrack', url, project: 'GAR', board: 'project: GAR #Unresolved', onComplete: 'in_review',
+  kind: 'youtrack', url, project: 'ACME', board: 'project: ACME #Unresolved', onComplete: 'in_review',
   states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'] },
 });
 const GITHUB_SOURCE = { id: 'github-acme-web', kind: 'github', instance: 'acme/web', every: '10m', closeOnDone: true, closeWontDo: false };
 const WHATSAPP_SOURCE = { id: 'whatsapp-sales', kind: 'whatsapp', instance: 'sales', closeOnDone: false, closeWontDo: false };
 
-const fake = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+const fake = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
 const ytCreates = () => fake.calls.filter((c) => c.method === 'POST' && c.path === '/api/issues').length;
 
 try {
@@ -188,7 +188,7 @@ try {
     const s1 = d1.repo.findSignal(ws, 'github:acme/web:1');
     const s2 = d1.repo.findSignal(ws, 'github:acme/web:2');
     const refs = [s1, s2].map((s) => s && d1.repo.linkFor(s.id)?.itemRef).sort();
-    check('1. checkNow creates GAR-1 and GAR-2 from the two labelled issues', ytCreates() === 2 && eq(refs, ['youtrack:GAR-1', 'youtrack:GAR-2']) && s1?.status === 'created' && s2?.status === 'created',
+    check('1. checkNow creates ACME-1 and ACME-2 from the two labelled issues', ytCreates() === 2 && eq(refs, ['youtrack:ACME-1', 'youtrack:ACME-2']) && s1?.status === 'created' && s2?.status === 'created',
       { creates: ytCreates(), refs, s1: s1?.status, s2: s2?.status, reason: s1?.reason });
     check('…the unlabelled issue is not read', d1.repo.findSignal(ws, 'github:acme/web:3') === undefined);
     check('…the signal carries the issue: key, URL, reporter and the bug hint',
@@ -218,19 +218,19 @@ try {
     });
     const closure = (kind, number, prUrl) => ({
       kind, signal: { fingerprint: `github:acme/web:${number}`, key: String(number), url: `https://github.com/acme/web/issues/${number}`, instance: 'acme/web', title: 't', reply: null },
-      item: { key: 'GAR-1', url: `${fake.url}/issue/GAR-1` }, prUrl, commit: null,
+      item: { key: 'ACME-1', url: `${fake.url}/issue/ACME-1` }, prUrl, commit: null,
     });
     const done = await runner.close(closure('done', 1, 'https://github.com/acme/web/pull/9'), ctx(GITHUB_SOURCE));
     const c1 = commentsOf(GH, 'acme/web', 1);
-    check('close(done) comments "Fixed in <pr>; tracked as GAR-1." and returns its id',
-      done.ok && c1.length === 1 && c1[0].body.endsWith('Fixed in https://github.com/acme/web/pull/9; tracked as GAR-1.') && done.externalId === String(c1[0].id), { done, c1 });
+    check('close(done) comments "Fixed in <pr>; tracked as ACME-1." and returns its id',
+      done.ok && c1.length === 1 && c1[0].body.endsWith('Fixed in https://github.com/acme/web/pull/9; tracked as ACME-1.') && done.externalId === String(c1[0].id), { done, c1 });
     check('…and closes the issue, since the source closes on done', readState(GH).repos['acme/web'].issues.find((i) => i.number === 1).state === 'CLOSED');
     const again = await runner.close(closure('done', 1, 'https://github.com/acme/web/pull/9'), ctx(GITHUB_SOURCE));
     check('…a second close edits the same comment instead of posting another', again.ok && commentsOf(GH, 'acme/web', 1).length === 1 && again.externalId === done.externalId, commentsOf(GH, 'acme/web', 1));
     const leftOpen = await runner.close(closure('done', 2, null), ctx({ ...GITHUB_SOURCE, closeOnDone: false }));
     const c2 = commentsOf(GH, 'acme/web', 2);
-    check('without closeOnDone: "Done; tracked as GAR-1." and the issue stays open',
-      leftOpen.ok && c2.length === 1 && c2[0].body.endsWith('Done; tracked as GAR-1.') && readState(GH).repos['acme/web'].issues.find((i) => i.number === 2).state === 'OPEN', c2);
+    check('without closeOnDone: "Done; tracked as ACME-1." and the issue stays open',
+      leftOpen.ok && c2.length === 1 && c2[0].body.endsWith('Done; tracked as ACME-1.') && readState(GH).repos['acme/web'].issues.find((i) => i.number === 2).state === 'OPEN', c2);
     const notPlanned = await runner.close(closure('not_planned', 2, null), ctx({ ...GITHUB_SOURCE, closeOnDone: false }));
     check('not_planned without closeWontDo writes nothing', notPlanned.ok && notPlanned.externalId === null && commentsOf(GH, 'acme/web', 2).length === 1, notPlanned);
 
@@ -416,8 +416,8 @@ try {
     await d3?.dispose();
   }
   // ------------------------------------------------------------------ Task 11: Sentry, PostHog and the webhook listener
-  // A fresh fake YouTrack, so the items these sections file are GAR-1 and on.
-  const yt2 = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+  // A fresh fake YouTrack, so the items these sections file are ACME-1 and on.
+  const yt2 = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
   const sentry = await startFakeSentry({ token: 'sntrys_test', org: 'acme', project: 'web', repos: ['acme/web'] });
   const posthog = await startFakePostHog({ key: 'phx_test', project: '4242' });
   const yt2Creates = () => yt2.calls.filter((c) => c.method === 'POST' && c.path === '/api/issues').length;
@@ -469,9 +469,9 @@ try {
     const listCall = sentry.calls.find((c) => c.method === 'GET' && c.path === '/api/0/projects/acme/web/issues/' && c.authorization === 'Bearer sntrys_test');
     check('the poll asks for the unresolved issues of the last 24 h, with the token as a bearer',
       listCall?.query.get('query') === 'is:unresolved' && listCall?.query.get('statsPeriod') === '24h', listCall && { q: listCall.query.toString() });
-    const created = yt2.issues.get('GAR-1');
-    check('132 events, 41 users → GAR-1 created, with "132 events, 41 users" in its Sources',
-      yt2Creates() === 1 && s101?.status === 'created' && d4.repo.linkFor(s101.id)?.itemRef === 'youtrack:GAR-1' && created?.description?.includes('132 events, 41 users'),
+    const created = yt2.issues.get('ACME-1');
+    check('132 events, 41 users → ACME-1 created, with "132 events, 41 users" in its Sources',
+      yt2Creates() === 1 && s101?.status === 'created' && d4.repo.linkFor(s101.id)?.itemRef === 'youtrack:ACME-1' && created?.description?.includes('132 events, 41 users'),
       { creates: yt2Creates(), s101: s101?.status, reason: s101?.reason, description: created?.description });
     check('…the signal maps the issue: key, permalink, title, culprit + value, impact',
       s101?.key === '101' && s101?.url === 'https://acme.sentry.io/issues/101/' && s101?.title === 'TypeError: cart is undefined'
@@ -521,7 +521,7 @@ try {
     const secrets ={ token: 'sntrys_test', clientSecret: 'whsec_sentry', apiKey: 'phx_test', webhookSecret: 'whsec_posthog' };
     const sentryClosure = (id, commit) => ({
       kind: 'done', signal: { fingerprint: `sentry:acme/web:${id}`, key: id, url: `https://acme.sentry.io/issues/${id}/`, instance: 'acme/web', title: 't', reply: null },
-      item: { key: 'GAR-1', url: `${yt2.url}/issue/GAR-1` }, prUrl: 'https://github.com/acme/web/pull/7', commit,
+      item: { key: 'ACME-1', url: `${yt2.url}/issue/ACME-1` }, prUrl: 'https://github.com/acme/web/pull/7', commit,
     });
     const lastPut = (id) => sentry.calls.filter((c) => c.method === 'PUT' && c.path === `/api/0/issues/${id}/`).at(-1)?.body;
     const inCommit = await sentryRunner?.close(sentryClosure('101', { sha: 'abc123', repo: 'acme/web' }), runnerCtx(ws, SENTRY_SOURCE, secrets));
@@ -572,7 +572,7 @@ try {
       && eq(sph?.impact, { level: 'error', events: 88, users: 23, firstSeen: hoursAgo(10), lastSeen: hoursAgo(1) }), sph);
     const phClosure = (key) => ({
       kind: 'done', signal: { fingerprint: `posthog:4242:${key}`, key, url: 'https://us.posthog.com/x', instance: '4242', title: 't', reply: null },
-      item: { key: 'GAR-3', url: `${yt2.url}/issue/GAR-3` }, prUrl: null, commit: null,
+      item: { key: 'ACME-3', url: `${yt2.url}/issue/ACME-3` }, prUrl: null, commit: null,
     });
     const phDone = await posthogRunner?.close(phClosure(ph.id), runnerCtx(ws, POSTHOG_SOURCE, secrets));
     const patch = posthog.calls.filter((c) => c.method === 'PATCH').at(-1);
@@ -732,7 +732,7 @@ try {
   }
 
   // ------------------------------------------------------------------ Task 12: Slack and Discord
-  // A fresh fake YouTrack again, so these sections file GAR-1 and on. The
+  // A fresh fake YouTrack again, so these sections file ACME-1 and on. The
   // sockets run on real timers (the runner's backoff is wall-clock); the
   // daemon's clock stays the check's.
   const until = async (cond, ms = 3_000) => {
@@ -743,7 +743,7 @@ try {
     }
     return Boolean(await cond());
   };
-  const yt3 = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+  const yt3 = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
   const slack = await startFakeSlack({ workspace: 'acme' });
   const discord = await startFakeDiscord({ token: 'bot-test', heartbeatMs: 100 });
   const sentry3 = await startFakeSentry({ token: 'sntrys_test', org: 'acme', project: 'web' });
@@ -778,7 +778,7 @@ try {
     await until(() => d5.repo.findSignal(ws, slackFp(root.ts))?.status === 'created');
     await d5.settle();
     const s1 = d5.repo.findSignal(ws, slackFp(root.ts));
-    check('reaction_added :tandemise: → GAR-1 created', yt3Creates() === 1 && s1?.status === 'created' && d5.repo.linkFor(s1.id)?.itemRef === 'youtrack:GAR-1',
+    check('reaction_added :tandemise: → ACME-1 created', yt3Creates() === 1 && s1?.status === 'created' && d5.repo.linkFor(s1.id)?.itemRef === 'youtrack:ACME-1',
       { creates: yt3Creates(), status: s1?.status, reason: s1?.reason });
     check('…the envelope was acked', slack.acks.includes(env1), { env1, acks: slack.acks });
     const eyes = slackCalls('reactions.add').find((c) => c.body?.name === 'eyes');
@@ -809,7 +809,7 @@ try {
     sentry3.putIssue({ id: '501', title: 'Login page spins forever', culprit: 'login.ts', level: 'error', count: '80', userCount: 12, firstSeen: hoursAgo(5), lastSeen: hoursAgo(1) });
     await d5.host.checkNow(d5.caller, ws);
     await d5.settle();
-    check('the Sentry issue is GAR-2', yt3Creates() === 2 && d5.repo.linkFor(d5.repo.findSignal(ws, 'sentry:acme/web:501')?.id)?.itemRef === 'youtrack:GAR-2', yt3Creates());
+    check('the Sentry issue is ACME-2', yt3Creates() === 2 && d5.repo.linkFor(d5.repo.findSignal(ws, 'sentry:acme/web:501')?.id)?.itemRef === 'youtrack:ACME-2', yt3Creates());
     // Through a mention this time: the app is named in the thread's root.
     const root2 = slack.postMessage({ channel: 'C0SUPPORT', user: 'U0SAM', text: '<@U0BOT> Login page spins forever' });
     slack.emit({ type: 'app_mention', user: 'U0SAM', text: root2.text, ts: root2.ts, channel: 'C0SUPPORT', event_ts: root2.ts });
@@ -817,10 +817,10 @@ try {
     await d5.settle();
     const s2 = d5.repo.findSignal(ws, slackFp(root2.ts));
     const l2 = s2 && d5.repo.linkFor(s2.id);
-    check('app_mention → linked to GAR-2 with similarity 1, no new item',
-      s2?.status === 'linked' && l2?.itemRef === 'youtrack:GAR-2' && l2?.score === 1 && yt3Creates() === 2 && s2?.title === 'Login page spins forever', { status: s2?.status, reason: s2?.reason, link: l2, creates: yt3Creates() });
-    const sources2 = (yt3.comments.get('GAR-2') ?? []).find((c) => c.text.startsWith('<!-- tandemise:sources -->'));
-    check("…and GAR-2's sources comment lists the Slack permalink", sources2?.text.includes(slack.permalink('C0SUPPORT', root2.ts)), yt3.comments.get('GAR-2'));
+    check('app_mention → linked to ACME-2 with similarity 1, no new item',
+      s2?.status === 'linked' && l2?.itemRef === 'youtrack:ACME-2' && l2?.score === 1 && yt3Creates() === 2 && s2?.title === 'Login page spins forever', { status: s2?.status, reason: s2?.reason, link: l2, creates: yt3Creates() });
+    const sources2 = (yt3.comments.get('ACME-2') ?? []).find((c) => c.text.startsWith('<!-- tandemise:sources -->'));
+    check("…and ACME-2's sources comment lists the Slack permalink", sources2?.text.includes(slack.permalink('C0SUPPORT', root2.ts)), yt3.comments.get('ACME-2'));
 
     section('slack: closing twice, across a restart, replies once (Review Focus 5)');
     const slackRunner = d5.container.resolveAll(I.INTAKE_RUNNERS).find((r) => r.kind === 'slack');
@@ -828,22 +828,22 @@ try {
       kind: 'done', signal: { fingerprint: s.fingerprint, key: s.key, url: s.url, instance: s.instance, title: s.title, reply: s.reply },
       item: { key, url: `${yt3.url}/issue/${key}` }, prUrl, commit: null,
     });
-    const c1 = await slackRunner?.close(slackClosure(s1, 'GAR-1', 'https://github.com/acme/web/pull/7'), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
+    const c1 = await slackRunner?.close(slackClosure(s1, 'ACME-1', 'https://github.com/acme/web/pull/7'), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
     // A restart: a new runner instance, nothing in memory, the same Slack.
-    const c2 = await new R.SlackRunner().close(slackClosure(s1, 'GAR-1', 'https://github.com/acme/web/pull/7'), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
+    const c2 = await new R.SlackRunner().close(slackClosure(s1, 'ACME-1', 'https://github.com/acme/web/pull/7'), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
     const posts = slackCalls('chat.postMessage');
-    check("exactly one chat.postMessage: 'Done: Checkout button does nothing on Safari · GAR-1 · https://github.com/acme/web/pull/7'",
-      posts.length === 1 && posts[0].body?.text === 'Done: Checkout button does nothing on Safari · GAR-1 · https://github.com/acme/web/pull/7'
+    check("exactly one chat.postMessage: 'Done: Checkout button does nothing on Safari · ACME-1 · https://github.com/acme/web/pull/7'",
+      posts.length === 1 && posts[0].body?.text === 'Done: Checkout button does nothing on Safari · ACME-1 · https://github.com/acme/web/pull/7'
       && posts[0].body?.thread_ts === root.ts && posts[0].body?.channel === 'C0SUPPORT', posts.map((p) => p.body));
     check('…both closes succeed and name the same reply', c1?.ok === true && c2?.ok === true && c1.externalId !== null && c1.externalId === c2.externalId, { c1, c2 });
     check('…the bot user came from auth.test', slackCalls('auth.test').length >= 1);
     check('…and the reaction is swapped: eyes off, white_check_mark on',
       eq([...(slack.reactions.get(`C0SUPPORT:${root.ts}`) ?? [])], ['white_check_mark']), [...(slack.reactions.get(`C0SUPPORT:${root.ts}`) ?? [])]);
-    const c3 = await slackRunner?.close(slackClosure(s2, 'GAR-2', null), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
-    check("without a pull request: 'Done: Login page spins forever · GAR-2'", c3?.ok === true && slackCalls('chat.postMessage').at(-1)?.body?.text === 'Done: Login page spins forever · GAR-2', slackCalls('chat.postMessage').at(-1)?.body);
-    const wontDo = await slackRunner?.close({ ...slackClosure(s2, 'GAR-2', null), kind: 'not_planned' }, runnerCtx(ws, SLACK_SOURCE, chatSecrets));
+    const c3 = await slackRunner?.close(slackClosure(s2, 'ACME-2', null), runnerCtx(ws, SLACK_SOURCE, chatSecrets));
+    check("without a pull request: 'Done: Login page spins forever · ACME-2'", c3?.ok === true && slackCalls('chat.postMessage').at(-1)?.body?.text === 'Done: Login page spins forever · ACME-2', slackCalls('chat.postMessage').at(-1)?.body);
+    const wontDo = await slackRunner?.close({ ...slackClosure(s2, 'ACME-2', null), kind: 'not_planned' }, runnerCtx(ws, SLACK_SOURCE, chatSecrets));
     check('not_planned without closeWontDo writes nothing', wontDo?.ok === true && wontDo.externalId === null && slackCalls('chat.postMessage').length === 2, wontDo);
-    const badToken = await slackRunner?.close(slackClosure(s1, 'GAR-1', null), runnerCtx(ws, SLACK_SOURCE, { botToken: 'xoxb-wrong' }));
+    const badToken = await slackRunner?.close(slackClosure(s1, 'ACME-1', null), runnerCtx(ws, SLACK_SOURCE, { botToken: 'xoxb-wrong' }));
     check('a refused bot token fails in the plan\'s words, without retry',
       badToken?.ok === false && badToken.retryable === false && badToken.error === 'Slack refused the token. Save a new one in Settings → Intake.', badToken);
 
@@ -874,7 +874,7 @@ try {
     await d5.settle();
     const sd = d5.repo.findSignal(ws, discordFp(dmsg.id));
     const dItem = sd && d5.repo.linkFor(sd.id)?.itemRef;
-    check('the :tandemise: reaction creates an item (another emoji does not)', sd?.status === 'created' && dItem === 'youtrack:GAR-4' && yt3Creates() === 4, { status: sd?.status, reason: sd?.reason, dItem, creates: yt3Creates() });
+    check('the :tandemise: reaction creates an item (another emoji does not)', sd?.status === 'created' && dItem === 'youtrack:ACME-4' && yt3Creates() === 4, { status: sd?.status, reason: sd?.reason, dItem, creates: yt3Creates() });
     check('…the signal: key <channel>:<message>, the message link, the first line as title, the message as reply address',
       sd?.key === `${DISCORD_CHANNEL}:${dmsg.id}` && sd?.url === `https://discord.com/channels/${discord.guildId}/${DISCORD_CHANNEL}/${dmsg.id}`
       && sd?.title === 'Uploads over 10 MB fail' && sd?.description?.includes('**sam:** Uploads over 10 MB fail') && sd?.reply?.address === `${DISCORD_CHANNEL}:${dmsg.id}`, sd);
@@ -890,13 +890,13 @@ try {
       && d5.repo.findSignal(ws, discordFp(plain.id)) === undefined && yt3Creates() === 5, { creates: yt3Creates() });
 
     const discordRunner = d5.container.resolveAll(I.INTAKE_RUNNERS).find((r) => r.kind === 'discord');
-    const discordClosure = { kind: 'done', signal: { fingerprint: sd.fingerprint, key: sd.key, url: sd.url, instance: sd.instance, title: sd.title, reply: sd.reply }, item: { key: 'GAR-4', url: `${yt3.url}/issue/GAR-4` }, prUrl: 'https://github.com/acme/web/pull/8', commit: null };
+    const discordClosure = { kind: 'done', signal: { fingerprint: sd.fingerprint, key: sd.key, url: sd.url, instance: sd.instance, title: sd.title, reply: sd.reply }, item: { key: 'ACME-4', url: `${yt3.url}/issue/ACME-4` }, prUrl: 'https://github.com/acme/web/pull/8', commit: null };
     const dc1 = await discordRunner?.close(discordClosure, runnerCtx(ws, DISCORD_SOURCE, { botToken: 'bot-test' }));
     const dc2 = await new R.DiscordRunner().close(discordClosure, runnerCtx(ws, DISCORD_SOURCE, { botToken: 'bot-test' }));
     const dposts = discord.calls.filter((c) => c.method === 'POST' && c.path === `/channels/${DISCORD_CHANNEL}/messages`);
     check('closing twice (a new runner the second time) yields one reply, with message_reference.message_id set',
       dposts.length === 1 && dposts[0].body?.message_reference?.message_id === dmsg.id
-      && dposts[0].body?.content === 'Done: Uploads over 10 MB fail · GAR-4 · https://github.com/acme/web/pull/8', dposts.map((p) => p.body));
+      && dposts[0].body?.content === 'Done: Uploads over 10 MB fail · ACME-4 · https://github.com/acme/web/pull/8', dposts.map((p) => p.body));
     check('…both closes succeed and name the same reply', dc1?.ok === true && dc2?.ok === true && dc1.externalId !== null && dc1.externalId === dc2.externalId, { dc1, dc2 });
 
     section('slack and discord: stopping closes the sockets');
@@ -917,7 +917,7 @@ try {
   // the closures and `closures.tick()` hands each to its source's runner.
   // Signals arrive through the pipeline directly (as a runner pushes them), so
   // no socket or poll runs here.
-  const yt4 = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+  const yt4 = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
   const slack4 = await startFakeSlack({ workspace: 'acme' });
   const sentry4 = await startFakeSentry({ token: 'sntrys_test', org: 'acme', project: 'web', repos: ['acme/web'] });
   const C_SLACK = { id: 'slack-support', kind: 'slack', instance: 'acme.slack.com#support', api: slack4.url, closeOnDone: true, closeWontDo: false };
@@ -933,7 +933,7 @@ try {
   };
   let d6 = null;
   try {
-    section('closure: a person sets GAR-1 Fixed; Sentry and Slack close (plan Task 13, 1)');
+    section('closure: a person sets ACME-1 Fixed; Sentry and Slack close (plan Task 13, 1)');
     d6 = await open({ bindings: shared });
     const home6 = d6.home;
     const ws = (await d6.services.workspaces.create(d6.caller, { name: 'Closing' })).workspace.id;
@@ -970,12 +970,12 @@ try {
     await push(d6, 'slack-support', slackSignal(root1.ts, 'TypeError: cart is undefined'));
     const sSentry = d6.repo.findSignal(ws, 'sentry:acme/web:101');
     const sSlack = d6.repo.findSignal(ws, `slack:acme.slack.com#support:C0SUPPORT:${root1.ts}`);
-    check('the Sentry signal created GAR-1 and the Slack thread linked to it',
-      d6.repo.linkFor(sSentry?.id)?.itemRef === 'youtrack:GAR-1' && d6.repo.linkFor(sSlack?.id)?.itemRef === 'youtrack:GAR-1',
+    check('the Sentry signal created ACME-1 and the Slack thread linked to it',
+      d6.repo.linkFor(sSentry?.id)?.itemRef === 'youtrack:ACME-1' && d6.repo.linkFor(sSlack?.id)?.itemRef === 'youtrack:ACME-1',
       { sentry: sSentry?.status, slack: sSlack?.status, reason: sSlack?.reason });
     // A started mission in a repository whose remote is acme/web, with a commit and the pull request its ship step opened (#53).
     await d6.services.tracker.refreshBoard(ws);
-    const gar1 = d6.container.resolve(app.TRACKER_ITEM_REPOSITORY).byKey(ws, 'GAR-1');
+    const gar1 = d6.container.resolve(app.TRACKER_ITEM_REPOSITORY).byKey(ws, 'ACME-1');
     const checkout = join(home6, 'web');
     mkdirSync(checkout, { recursive: true });
     d6.container.resolve(app.REPO_REPOSITORY).create({ id: 'rep_web', workspaceId: ws, name: 'web', path: checkout, defaultBranch: 'main', remoteUrl: 'https://github.com/acme/web.git', checks: D.NO_CHECKS });
@@ -988,7 +988,7 @@ try {
     });
     // The ship step records its pull request as an event, not as a handoff link.
     d6.container.resolve(app.EVENT_RECORDER).record({ workspaceId: ws, missionId: mission.id }, { type: 'ship.pr_opened', repo: 'acme/web', number: 7, url: 'https://github.com/acme/web/pull/7', headSha: 'a'.repeat(40) });
-    yt4.setState('GAR-1', 'Fixed');
+    yt4.setState('ACME-1', 'Fixed');
     await d6.services.tracker.refreshBoard(ws);
     check('the refresh writes a pending closure per linked signal, and both signals read closure_pending',
       closureOf(d6, 'sentry-web', sSentry?.fingerprint)?.state === 'pending' && closureOf(d6, 'slack-support', sSlack?.fingerprint)?.state === 'pending'
@@ -998,8 +998,8 @@ try {
     const put101 = sentryPuts('101').at(-1)?.body;
     check('Sentry 101 resolved inCommit abc123 (the newest git.commit of the mission, the repo from its remote)',
       put101?.status === 'resolved' && put101?.statusDetails?.inCommit?.commit === 'abc123' && put101?.statusDetails?.inCommit?.repository === 'acme/web', put101);
-    check("Slack got one reply: 'Done: TypeError: cart is undefined · GAR-1 · https://github.com/acme/web/pull/7'",
-      threadReplies(root1.ts).length === 1 && threadReplies(root1.ts)[0].body?.text === 'Done: TypeError: cart is undefined · GAR-1 · https://github.com/acme/web/pull/7',
+    check("Slack got one reply: 'Done: TypeError: cart is undefined · ACME-1 · https://github.com/acme/web/pull/7'",
+      threadReplies(root1.ts).length === 1 && threadReplies(root1.ts)[0].body?.text === 'Done: TypeError: cart is undefined · ACME-1 · https://github.com/acme/web/pull/7',
       threadReplies(root1.ts).map((c) => c.body));
     const cSentry = closureOf(d6, 'sentry-web', sSentry?.fingerprint);
     const cSlack = closureOf(d6, 'slack-support', sSlack?.fingerprint);
@@ -1116,7 +1116,7 @@ try {
     const ctx7 = (pushed = []) => ({ ...runnerCtx('ws_sentry7', S7, { token: 'sntrys_test' }), push: async (sig) => { pushed.push(sig); return { status: 'accepted' }; } });
     const closure7 = (id, commit) => ({
       kind: 'done', signal: { fingerprint: `sentry:acme/web:${id}`, key: id, url: `https://acme.sentry.io/issues/${id}/`, instance: 'acme/web', title: 't', reply: null },
-      item: { key: 'GAR-1', url: 'https://youtrack.example/issue/GAR-1' }, prUrl: null, commit,
+      item: { key: 'ACME-1', url: 'https://youtrack.example/issue/ACME-1' }, prUrl: null, commit,
     });
     const putsOf = (id) => s7.calls.filter((c) => c.method === 'PUT' && c.path === `/api/0/issues/${id}/`).map((c) => c.body);
     const listAsks = () => s7.calls.filter((c) => c.path === '/api/0/projects/acme/web/issues/');
@@ -1293,7 +1293,7 @@ try {
       check('a :tandemise: reaction still files the thread', ['created', 'linked'].includes(s9?.status), s9 && { status: s9.status, reason: s9.reason });
       const closed9 = await new R.SlackRunner().close({
         kind: 'done', signal: { fingerprint: s9?.fingerprint, key: s9?.key, url: s9?.url, instance: s9?.instance, title: s9?.title, reply: s9?.reply },
-        item: { key: 'GAR-9', url: `${fake.url}/issue/GAR-9` }, prUrl: null, commit: null,
+        item: { key: 'ACME-9', url: `${fake.url}/issue/ACME-9` }, prUrl: null, commit: null,
       }, runnerCtx(ws, SL9, secrets9));
       check('…closing still replies in the thread', closed9?.ok === true && slack9.calls.filter((c) => c.path === '/chat.postMessage').length === 1, closed9);
       check('…and neither intake nor closure calls reactions.add or reactions.remove', reactionCalls() === 0, slack9.calls.filter((c) => c.path.startsWith('/reactions.')).map((c) => c.body));
@@ -1338,7 +1338,7 @@ try {
       check('…with no 👀 reaction PUT at intake', reactionPuts().length === 0, reactionPuts().map((c) => c.path));
       const closed11 = await new R.DiscordRunner().close({
         kind: 'done', signal: { fingerprint: s11?.fingerprint, key: s11?.key, url: s11?.url, instance: s11?.instance, title: s11?.title, reply: s11?.reply },
-        item: { key: 'GAR-11', url: `${fake.url}/issue/GAR-11` }, prUrl: null, commit: null,
+        item: { key: 'ACME-11', url: `${fake.url}/issue/ACME-11` }, prUrl: null, commit: null,
       }, runnerCtx(ws, QUIET, { botToken: 'bot-test' }));
       check('…closing still replies to the message', closed11?.ok === true && discord11.calls.filter((c) => c.method === 'POST' && c.path === `/channels/${CH11}/messages`).length === 1, closed11);
       check('…and no reaction PUT at closure either', reactionPuts().length === 0, reactionPuts().map((c) => c.path));

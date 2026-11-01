@@ -80,7 +80,7 @@ Why it stays splittable:
 
 One schema, owned by a new package `packages/coordination`. Every table is prefixed `coord_` so it can live inside the daemon's database without colliding. The same DDL runs in the daemon's SQLite file (solo, and as a mirror in relay mode) and in the relay's own SQLite file. That is what "the same shape" means here: not a similar schema, but the same one.
 
-A relay instance is one team. A team has one or more **projects**. A project is identified by a `projectKey`, a stable string. Once #51 lands, the key is the brain repo's identity (for example `github.com/garipass/brain`). Until then, a workspace gets a `coordination.projectKeys[workspaceId]` setting. Its default is the workspace's first repository's remote, normalised (`github.com/acme/app`), so two people's installs of one repository agree without setting anything; with no remote, it is the workspace id. The key is written to the setting on first use and kept, so a remote added or changed later never moves a workspace's claims to another project. *(Amended at build time; controller ruling.)*
+A relay instance is one team. A team has one or more **projects**. A project is identified by a `projectKey`, a stable string. Once #51 lands, the key is the brain repo's identity (for example `github.com/acme/brain`). Until then, a workspace gets a `coordination.projectKeys[workspaceId]` setting. Its default is the workspace's first repository's remote, normalised (`github.com/acme/app`), so two people's installs of one repository agree without setting anything; with no remote, it is the workspace id. The key is written to the setting on first use and kept, so a remote added or changed later never moves a workspace's claims to another project. *(Amended at build time; controller ruling.)*
 
 | Table | Fields | Notes |
 |---|---|---|
@@ -94,7 +94,7 @@ A relay instance is one team. A team has one or more **projects**. A project is 
 | `coord_mailbox` | `id` (monotonic), `endpoint_id`, `received_at`, `method`, `query`, `headers` (JSON), `content_type`, `body` (BLOB), `lease_device`, `lease_until`, `attempts`, `acked_at`, `acked_by` | One stored request. |
 
 Field rules:
-- **`item_ref`** is a normalised tracker key: `<tracker>:<key>`, for example `youtrack:GAR-123` or `github:garipass/garipass#42`. Normalisation lives in `coordination` so the daemon and the relay agree. Today's GitHub issue links (`packages/persistence/src/migrations/019_issues.ts`: `github_repo`, `issue_number`) map to `github:<github_repo>#<issue_number>`. #52 adds the other trackers.
+- **`item_ref`** is a normalised tracker key: `<tracker>:<key>`, for example `youtrack:ACME-123` or `github:acme/acme#42`. Normalisation lives in `coordination` so the daemon and the relay agree. Today's GitHub issue links (`packages/persistence/src/migrations/019_issues.ts`: `github_repo`, `issue_number`) map to `github:<github_repo>#<issue_number>`. #52 adds the other trackers.
 - **`local_ref`** is opaque to the relay: the daemon's mission id. It lets the holder's own daemon tie a claim back to its mission. Other members never see it resolved.
 - **`seq`** is a team-wide monotonic counter, bumped on every claim, presence or member change. Clients use it to skip stale frames. It is not a change log.
 - **Relay member ↔ local person.** The local `Person.handles` map ("External identities, e.g. `{ github: 'demogar', slack: 'U123' }`", `member.ts`) gains a `relay` handle: `<relay host>/<member id>`. No new column is needed on `people`. Local `AccessLevel` (`owner`/`admin`/`member`/`guest`) keeps governing what a person may do *in their own install*. The relay's two roles only govern the relay: admins invite, remove members, revoke devices and manage endpoints.
@@ -161,7 +161,7 @@ Reads (`claims`, `members`, `presence`) always come from the local `coord_*` tab
 ### Where the engine calls it
 
 - **Starting a mission linked to a tracker item** calls `claim` before the first task is dispatched. Today that link is `missions.issue_link_id`; #52 generalises it.
-  - `held_by` refuses the start in plain words: "Ana is working on GAR-123 since 10:42."
+  - `held_by` refuses the start in plain words: "Ana is working on ACME-123 since 10:42."
   - A mission with no tracker item claims nothing.
 - **Completing a mission** releases its claim with `done`. Cancelling it, or the person pressing **Stop working on this**, releases it with `released`.
 - **The daemon's intake runners (#52)** call `mailbox.pull` on their own tick and `ack` after they have recorded the item. Recording means created or linked in the tracker, per "create or link, never duplicate".
@@ -280,7 +280,7 @@ type RelayClientFrame =
 - **One active claim per item.** The unique partial index on `(project_key, item_ref) WHERE state='active'` makes the relay's commit order the only arbiter. Client clocks never decide anything.
 - **Two people start the same item:**
   - The first `INSERT` to commit wins.
-  - The second gets `409 CONFLICT` (`details.reason: "claim_held"`) with the holder's name and `started_at`, and its daemon refuses to start the mission: "Ana is working on GAR-123 since 10:42."
+  - The second gets `409 CONFLICT` (`details.reason: "claim_held"`) with the holder's name and `started_at`, and its daemon refuses to start the mission: "Ana is working on ACME-123 since 10:42."
   - The desktop offers **Take over** only where the rules allow it, plus **Not now**.
   - There is no "start anyway" that leaves two active claims. Silent parallel work is the failure this exists to prevent.
 - **Same person, second device or second mission:** `409 CONFLICT` (`details.reason: "claim_held"`) with `self: true`. The desktop says "You're already working on this on <device>", and offers to open the existing mission if it is on this machine.
@@ -288,7 +288,7 @@ type RelayClientFrame =
 - **Stale.** A claim is *stale* when none of its holder's devices has been seen for `RELAY_STALE_AFTER` (default 24 h).
   - The desktop labels it: "Ana · last seen yesterday".
   - Any member may take over a stale claim. Only an admin may take over a fresh one.
-  - A take-over is recorded (`ended_reason: taken_over`, `ended_by`). The original holder's daemon sees it on its next snapshot and shows "Bruno took over GAR-123", with the mission left as it is (below).
+  - A take-over is recorded (`ended_reason: taken_over`, `ended_by`). The original holder's daemon sees it on its next snapshot and shows "Bruno took over ACME-123", with the mission left as it is (below).
 - **The relay never stops anyone's work.** When a daemon learns that its claim ended with `taken_over` or `removed`, it does not cancel the mission. It marks the mission **Unclaimed** (a banner on the mission, and an Inbox row for the person). The person decides: **Stop**, **Take it back** (normal take-over rules), or **Keep going without a claim**. Decisions belong to people and their local engine, never to the relay.
 - **Tracker state is separate.** Moving the tracker item to "In progress" or assigning it is #52's job, done through the brain's state mapping. The relay doesn't call trackers.
 
@@ -299,7 +299,7 @@ type RelayClientFrame =
 | Relay unreachable at daemon start | The mirror serves reads. Status is **offline since …**. Local work is unaffected. |
 | Claim while offline | Recorded in the outbox and shown as **pending** ("Will tell the team when you're back online"). The mission starts: local work is never blocked by the network. |
 | Reconnect, pending claim is free | Accepted. The mirror marks it confirmed. |
-| Reconnect, someone claimed it meanwhile | The relay returns `409`. The local claim becomes **conflicted**, and the mission gets the Unclaimed banner: "Ana started GAR-123 at 10:40, while you were offline." Same three choices as above. The relay's order wins. |
+| Reconnect, someone claimed it meanwhile | The relay returns `409`. The local claim becomes **conflicted**, and the mission gets the Unclaimed banner: "Ana started ACME-123 at 10:40, while you were offline." Same three choices as above. The relay's order wins. |
 | Release or ack while offline | Queued in the outbox, and applied on reconnect. Ack of an expired lease is ignored: the message was re-leased and may be processed twice, so intake must be idempotent by message id (below). |
 | Relay down for good | **Settings → Team relay → Disconnect** falls back to local, keeping the mirror. |
 

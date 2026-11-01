@@ -53,8 +53,8 @@ class FakeCoordination {
   }
   async claim(input) {
     if (this.next === 'held_by') {
-      const ana = this.#view({ ...input, itemRef: 'youtrack:GAR-123', localRef: null }, 'ana', 'Ana');
-      return { kind: 'held_by', claim: ana, self: false, sentence: 'Ana is working on GAR-123 since 10:42.', mayTakeOver: false };
+      const ana = this.#view({ ...input, itemRef: 'youtrack:ACME-123', localRef: null }, 'ana', 'Ana');
+      return { kind: 'held_by', claim: ana, self: false, sentence: 'Ana is working on ACME-123 since 10:42.', mayTakeOver: false };
     }
     const c = this.#view(input, 'me', 'Demo');
     this.#claims.push(c);
@@ -280,7 +280,7 @@ const card = h.repo.approvals.create({
 });
 fake.next = 'held_by';
 const onApprove = await err(h.services.approvals.decide(caller, card.id, { optionId: 'approve' }));
-check('approving is refused with the holder\'s name', onApprove?.code === 'CONFLICT' && onApprove.message === 'Ana is working on GAR-123 since 10:42.', onApprove?.message);
+check('approving is refused with the holder\'s name', onApprove?.code === 'CONFLICT' && onApprove.message === 'Ana is working on ACME-123 since 10:42.', onApprove?.message);
 check('the card stays pending', h.repo.approvals.get(card.id).status === 'PENDING');
 check('the mission still waits for approval', status(m6.id) === 'AWAITING_PLAN_APPROVAL', status(m6.id));
 

@@ -4,9 +4,9 @@
   "ok": true,
   "checks": [
     {
-      "label": "GAR-5 is Ready with Start enabled",
+      "label": "ACME-5 is Ready with Start enabled",
       "ok": true,
-      "observed": "GAR-5\nTypeError: basket is null\nSentry · 132 events\nStart"
+      "observed": "ACME-5\nTypeError: basket is null\nSentry · 132 events\nStart"
     },
     {
       "label": "Start opens the mission",
@@ -26,7 +26,7 @@
       }
     },
     {
-      "label": "proof (fake YouTrack): GAR-5 is In Progress",
+      "label": "proof (fake YouTrack): ACME-5 is In Progress",
       "ok": true,
       "observed": "In Progress"
     },
@@ -38,9 +38,9 @@
       ]
     },
     {
-      "label": "GAR-5 moved under In progress, with its mission's status in words",
+      "label": "ACME-5 moved under In progress, with its mission's status in words",
       "ok": true,
-      "observed": "GAR-5\nTypeError: basket is null\nSentry · 132 events\nMission: Awaiting plan approval\nOpen mission\nfor GAR-5"
+      "observed": "ACME-5\nTypeError: basket is null\nSentry · 132 events\nMission: Awaiting plan approval\nOpen mission\nfor ACME-5"
     },
     {
       "label": "…and offers Open mission instead of Start",
@@ -48,7 +48,7 @@
       "observed": {
         "start": false,
         "open": {
-          "text": "Open mission\nfor GAR-5",
+          "text": "Open mission\nfor ACME-5",
           "href": "#/missions/msn_01m6abtjp7p48n925491"
         }
       }

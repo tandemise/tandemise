@@ -8,7 +8,7 @@ import { useWorkspaceId } from '../../lib/workspace.js';
 import { relativeTime } from '../../lib/format.js';
 import { Button, Card } from '@tandemise/design/react';
 
-/** `youtrack:GAR-12` → `GAR-12`, `github:acme/web#42` → `acme/web#42`: the key as the tracker shows it. */
+/** `youtrack:ACME-12` → `ACME-12`, `github:acme/web#42` → `acme/web#42`: the key as the tracker shows it. */
 function itemKey(ref: string | null): string {
   if (ref === null) return 'its task';
   const at = ref.indexOf(':');

@@ -64,7 +64,7 @@ export function claimHeld(error: unknown): { message: string; claimId: string; t
 }
 
 /**
- * "Ana is working on GAR-123 since 10:42." with **Take over** where the rules
+ * "Ana is working on ACME-123 since 10:42." with **Take over** where the rules
  * allow it, and **Not now**. There is no "start anyway": silent parallel work
  * is what this exists to prevent.
  */

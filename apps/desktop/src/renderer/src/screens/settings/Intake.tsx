@@ -227,8 +227,8 @@ function TrackerCard({ view, readOnly }: { view: IntakeConfigView; readOnly: boo
             <Field label="YouTrack address" hint="https, or http on this computer only.">
               <input className="input mono" value={draft.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://acme.youtrack.cloud" />
             </Field>
-            <Field label="Project" hint="Its short name, as in GAR-12.">
-              <input className="input" value={draft.project} onChange={(e) => set({ project: e.target.value })} placeholder="GAR" />
+            <Field label="Project" hint="Its short name, as in ACME-12.">
+              <input className="input" value={draft.project} onChange={(e) => set({ project: e.target.value })} placeholder="ACME" />
             </Field>
           </>
         ) : (
@@ -237,7 +237,7 @@ function TrackerCard({ view, readOnly }: { view: IntakeConfigView; readOnly: boo
           </Field>
         )}
         <Field label="Board query" hint="The tracker's own search for the work you choose from.">
-          <input className="input mono" value={draft.board} onChange={(e) => set({ board: e.target.value })} placeholder={youtrack ? 'project: GAR #Unresolved' : 'is:open label:ready'} />
+          <input className="input mono" value={draft.board} onChange={(e) => set({ board: e.target.value })} placeholder={youtrack ? 'project: ACME #Unresolved' : 'is:open label:ready'} />
         </Field>
       </div>
       <h4 className="intake-settings__minor">Your tracker's states</h4>

@@ -93,7 +93,7 @@ export interface BrainEntryView {
   readonly retired: { readonly at: string; readonly reason: string } | null;
   readonly promoted: { readonly target: string; readonly pr: string | null } | null;
   readonly flags: { readonly harmful: boolean; readonly stale: boolean };
-  /** "Developer · garipass · step build", or "Whole project". */
+  /** "Developer · acme · step build", or "Whole project". */
   readonly scopeLabel: string;
   /** "your hold", "a change you asked for", "a failed check", "you", "an agent", "a mission". */
   readonly sourceLabel: string;

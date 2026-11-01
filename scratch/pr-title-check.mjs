@@ -44,7 +44,7 @@ for (const [label, profile, title, hints, want] of rows) {
 section('tracker keys and names keep their case (#152)');
 const cases = [
   ['KEY-77 short summary', 'chore: KEY-77 short summary'],
-  ['GAR-12 Settings title', 'chore: GAR-12 Settings title'],
+  ['ACME-12 Settings title', 'chore: ACME-12 Settings title'],
   ['GitHub sign-in breaks', 'chore: GitHub sign-in breaks'],
   ['API returns 500', 'chore: API returns 500'],
   ['Settings title reads Setings', 'chore: settings title reads Setings'],

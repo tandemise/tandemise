@@ -36,7 +36,7 @@ process.env.PATH = `${FAKE.bin}:${process.env.PATH}`;
 process.env.GIT_CONFIG_GLOBAL = FAKE.gitconfig;
 process.env.TANDEMISE_OFFLINE = '1';
 const ghLog = () => (existsSync(FAKE.log) ? readFileSync(FAKE.log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
-const remoteDir = join(FAKE.remotes, 'garipass', 'brain.git');
+const remoteDir = join(FAKE.remotes, 'acme', 'brain.git');
 
 globalThis.__sqlite = await import('node:sqlite');
 const { startDaemon } = await import('../apps/daemon/dist/main.js');
@@ -57,10 +57,10 @@ async function daemonAt(name) {
   const repoDir = join(home, 'code');
   mkdirSync(repoDir, { recursive: true });
   git(repoDir, 'init', '-q', '-b', 'main');
-  writeFileSync(join(repoDir, 'README.md'), '# garipass\n');
+  writeFileSync(join(repoDir, 'README.md'), '# acme\n');
   git(repoDir, 'add', '-A');
   git(repoDir, 'commit', '-q', '-m', 'init');
-  const ws = (await api('POST', '/v1/workspaces', { name: 'Garipass', repositoryPath: repoDir })).body?.workspace?.id;
+  const ws = (await api('POST', '/v1/workspaces', { name: 'Acme', repositoryPath: repoDir })).body?.workspace?.id;
   return { home, daemon, api, ws, repoDir };
 }
 
@@ -72,14 +72,14 @@ try {
   const unlinked = await d1.api('GET', `/v1/workspaces/${d1.ws}/brain`);
   check('GET brain on a new project is unlinked', unlinked.status === 200 && unlinked.body?.linked === false && unlinked.body.status === 'unlinked', unlinked);
 
-  const created = await d1.api('POST', `/v1/workspaces/${d1.ws}/brain`, { mode: 'create', owner: 'garipass', name: 'brain' });
+  const created = await d1.api('POST', `/v1/workspaces/${d1.ws}/brain`, { mode: 'create', owner: 'acme', name: 'brain' });
   check('POST create links the brain', created.status === 200 && created.body?.status === 'up_to_date', created);
-  check('fake gh saw repo create --private', ghLog().some((l) => l.argv.join(' ') === 'repo create garipass/brain --private'));
+  check('fake gh saw repo create --private', ghLog().some((l) => l.argv.join(' ') === 'repo create acme/brain --private'));
   const tree = git(remoteDir, 'ls-tree', '-r', '--name-only', 'main');
   check('the remote has brain.yaml, a role and project rules', ['brain.yaml', 'factory/roles/development.md', 'memory/rules/project.md'].every((f) => tree.includes(f)), tree);
 
-  const again = await d1.api('POST', `/v1/workspaces/${d1.ws}/brain`, { mode: 'create', owner: 'garipass', name: 'brain' });
-  check('a second create is refused in words', again.status === 409 && again.body?.error?.message === 'This project already has a brain: github.com/garipass/brain.', again);
+  const again = await d1.api('POST', `/v1/workspaces/${d1.ws}/brain`, { mode: 'create', owner: 'acme', name: 'brain' });
+  check('a second create is refused in words', again.status === 409 && again.body?.error?.message === 'This project already has a brain: github.com/acme/brain.', again);
   check('factory/ holds no personal fields', !/(^|[\s'"])\/(home|Users|tmp|private)\//.test(git(remoteDir, 'log', '-p', '--all', '--', 'factory')));
 
   const synced = await d1.api('POST', `/v1/workspaces/${d1.ws}/brain/sync`);
@@ -93,7 +93,7 @@ try {
   d1 = undefined;
 
   d2 = await daemonAt('home2');
-  const preview = await d2.api('POST', `/v1/workspaces/${d2.ws}/brain`, { mode: 'adopt', remote: 'github.com/garipass/brain' });
+  const preview = await d2.api('POST', `/v1/workspaces/${d2.ws}/brain`, { mode: 'adopt', remote: 'github.com/acme/brain' });
   check('adopt answers a preview with items and a hash', preview.status === 200 && typeof preview.body?.hash === 'string' && Array.isArray(preview.body.items), preview);
   const linked = await d2.api('POST', `/v1/workspaces/${d2.ws}/brain/link`, { hash: preview.body?.hash, choices: {} });
   check('link applies the preview', linked.status === 200 && linked.body?.linked === true, linked);
@@ -123,7 +123,7 @@ try {
   section('daemon: a brain made from a project keeps the intake it had (#52 meets #51)');
   const withIntake = (await d2.api('POST', '/v1/workspaces', { name: 'With intake', repositoryPath: d2.repoDir })).body?.workspace?.id;
   const tracker = {
-    kind: 'youtrack', url: 'https://yt.test', project: 'GAR', board: 'project: GAR #Unresolved',
+    kind: 'youtrack', url: 'https://yt.test', project: 'ACME', board: 'project: ACME #Unresolved',
     states: { ready: ['Open'], in_progress: 'In Progress', in_review: 'In Review', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'in_review',
   };
   const localPut = await d2.api('PUT', `/v1/workspaces/${withIntake}/intake/config`, { tracker, intake: { sources: [{ id: 'web-form', kind: 'custom', instance: 'web-form' }] } });
@@ -132,7 +132,7 @@ try {
   check('it gets a brain on this machine', made.body?.status === 'local_only', made);
   const afterLink = (await d2.api('GET', `/v1/workspaces/${withIntake}/intake/config`)).body;
   check('intake now reads the brain', afterLink?.origin === 'brain', afterLink?.origin);
-  check('…which has the tracker the project had', afterLink?.tracker?.project === 'GAR' && afterLink.tracker.url === 'https://yt.test' && afterLink.tracker.states?.in_review === 'In Review', afterLink?.tracker);
+  check('…which has the tracker the project had', afterLink?.tracker?.project === 'ACME' && afterLink.tracker.url === 'https://yt.test' && afterLink.tracker.states?.in_review === 'In Review', afterLink?.tracker);
   check('…and its source, still on on this computer', afterLink?.sources?.some((s) => s.id === 'web-form') && afterLink.enabled?.['web-form'] === true, { sources: afterLink?.sources, enabled: afterLink?.enabled });
   const brainTree = git(join(d2.home, 'brains', withIntake), 'ls-tree', '-r', '--name-only', 'HEAD');
   check("the brain's first commit has factory/tracker.yaml and factory/intake.yaml", brainTree.includes('factory/tracker.yaml') && brainTree.includes('factory/intake.yaml'), brainTree);

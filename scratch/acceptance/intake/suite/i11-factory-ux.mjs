@@ -1,5 +1,5 @@
 // I11 — the factory explains itself (#103, #105, #113). On the Board a person picks the lane
-// before Start; the mission header reads "YouTrack GAR-50 · started by … · Open the issue" with a
+// before Start; the mission header reads "YouTrack ACME-50 · started by … · Open the issue" with a
 // short summary and the task behind a disclosure; "Why these steps" says which signal set type,
 // size and risk; Done-when lines show their Markdown as text; once the ship step opens the pull
 // request, the header links it.
@@ -10,7 +10,7 @@ import { boardRow, openBoard, yt, ytB } from '../common.mjs';
 const c = await context();
 const { page, until, sleep } = c;
 const ev = new Evidence('I11', 'The factory explains itself: lane before Start, a readable header, what decided the plan, the pull request link');
-const KEY = 'GAR-50';
+const KEY = 'ACME-50';
 const CRITERION = 'The receipt says **Total** next to `amount`';
 
 // I10 leaves the project's tracker moved to fake YouTrack B, so the item goes where the Board reads now.
@@ -37,7 +37,7 @@ const mission = (await c.api.get(`/v1/missions/${id}`)).mission;
 ev.check('proof (API): the mission carries the lane chosen on the Board', mission.laneRequest === 'quick', mission.laneRequest);
 
 const header = await until(() => page.evaluate(`(() => { const s = document.querySelector('.mission-subtitle'); if (!s) return null; return { lead: s.querySelector('.mission-subtitle__lead')?.innerText.replace(/\\s+/g, ' ').trim(), summary: s.querySelector('.mission-subtitle__summary')?.innerText ?? '', open: s.querySelector('details')?.open ?? null, raw: s.innerText.includes('## What happened') }; })()`), { label: 'the mission header', timeoutMs: 20_000 });
-ev.check('the header leads with the item, who started it and a link to it', /^YouTrack GAR-50 · started by .+ · Open the issue/.test(header.lead), header.lead);
+ev.check('the header leads with the item, who started it and a link to it', /^YouTrack ACME-50 · started by .+ · Open the issue/.test(header.lead), header.lead);
 ev.check('then a short summary in plain words (no Markdown)', header.summary.startsWith('The receipt shows the sum without a label') && !header.summary.includes('**'), header.summary);
 ev.check('the whole task is behind a closed disclosure', header.open === false, header);
 

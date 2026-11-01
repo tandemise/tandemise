@@ -6,7 +6,7 @@
 // and hands back its state, so a check can say exactly what the adapter asked
 // YouTrack to do. As a script, for the acceptance run:
 //
-//   node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project GAR] [--token perm:test] [--login tandemise-bot] [--states A,B,…]
+//   node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project ACME] [--token perm:test] [--login tandemise-bot] [--states A,B,…]
 //
 // it writes its base URL to <dir>/url and persists everything to
 // <dir>/state.json after each change (and reads it back on start).
@@ -56,7 +56,7 @@ function commandTokens(query) {
 }
 
 export async function startFakeYouTrack(options = {}) {
-  const project = options.project ?? 'GAR';
+  const project = options.project ?? 'ACME';
   const states = options.states ?? DEFAULT_STATES;
   const resolvedStates = new Set(options.resolved ?? DEFAULT_RESOLVED.filter((s) => states.includes(s)));
   const types = options.types ?? ['Bug', 'Task'];
@@ -448,14 +448,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const stateDir = arg('state');
   if (!stateDir) {
-    console.error('usage: node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project GAR] [--token perm:test] [--login tandemise-bot]');
+    console.error('usage: node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project ACME] [--token perm:test] [--login tandemise-bot]');
     process.exit(2);
   }
   mkdirSync(stateDir, { recursive: true });
   const fake = await startFakeYouTrack({
     port: Number(arg('port', '0')),
     stateDir,
-    project: arg('project', 'GAR'),
+    project: arg('project', 'ACME'),
     token: arg('token', 'perm:test'),
     login: arg('login', 'tandemise-bot'),
     // A comma-separated list (`--states 'Open,In Progress,Draft'`); the first is where a new issue starts.

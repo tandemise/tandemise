@@ -7,7 +7,7 @@
       "label": "the Board offers the lane before Start, named for the item",
       "ok": true,
       "observed": {
-        "label": "Lane for GAR-50",
+        "label": "Lane for ACME-50",
         "options": [
           "Factory decides",
           "Quick",
@@ -24,7 +24,7 @@
     {
       "label": "the header leads with the item, who started it and a link to it",
       "ok": true,
-      "observed": "YouTrack GAR-50 · started by Demostenes Garcia · Open the issue GAR-50 in YouTrack"
+      "observed": "YouTrack ACME-50 · started by Demostenes Garcia · Open the issue ACME-50 in YouTrack"
     },
     {
       "label": "then a short summary in plain words (no Markdown)",
@@ -35,7 +35,7 @@
       "label": "the whole task is behind a closed disclosure",
       "ok": true,
       "observed": {
-        "lead": "YouTrack GAR-50 · started by Demostenes Garcia · Open the issue GAR-50 in YouTrack",
+        "lead": "YouTrack ACME-50 · started by Demostenes Garcia · Open the issue ACME-50 in YouTrack",
         "summary": "The receipt shows the sum without a label, so people cannot tell it is the amount they paid. The copy should say Total.",
         "open": false,
         "raw": false

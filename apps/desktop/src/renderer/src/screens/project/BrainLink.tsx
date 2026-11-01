@@ -101,7 +101,7 @@ export function BrainLink({ workspaceId, ownerHint }: { workspaceId: string; own
           {mode === 'adopt' && preview === null ? (
             <div className="row" style={{ gap: 'var(--s2)', alignItems: 'flex-end', marginTop: 'var(--s3)' }} aria-label="Use an existing brain">
               <Field label="Brain repository" hint="github.com/owner/name, or a git address">
-                <input className="input" aria-label="Brain repository" value={remote} placeholder="github.com/garipass/brain" onChange={(e) => setRemote(e.target.value)} />
+                <input className="input" aria-label="Brain repository" value={remote} placeholder="github.com/acme/brain" onChange={(e) => setRemote(e.target.value)} />
               </Field>
               <Button variant="primary" disabled={link.isPending || remote.trim() === ''} onClick={() => run({ mode: 'adopt', remote: remote.trim() })}>
                 {link.isPending ? 'Reading…' : 'Preview'}

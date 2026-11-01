@@ -32,13 +32,13 @@
       }
     },
     {
-      "label": "the Board shows a Draft group with GAR-50, offering Refine and no Start",
+      "label": "the Board shows a Draft group with ACME-50, offering Refine and no Start",
       "ok": true,
       "observed": {
         "heading": "Draft\n1",
         "label": "Draft",
         "buttons": [
-          "GAR-50",
+          "ACME-50",
           "Refine\nGAR-50"
         ]
       }
@@ -94,9 +94,9 @@
       }
     },
     {
-      "label": "the item's own criteria read \"From GAR-50\" on the mission, not \"Added by you\"",
+      "label": "the item's own criteria read \"From ACME-50\" on the mission, not \"Added by you\"",
       "ok": true,
-      "observed": "Done when\n4 criteria\nU1\nAC01: The page loads in under two seconds\nFrom GAR-50\nAccepted\nU2\nAC02: The page works without JavaScript\nFrom GAR-50\nAccepted\nU3\nVisiting the home page shows \"Hello, <name>\" for a signed-in visitor\nProposed by the product agent; accepted by you\nAccepted\nU4\nA visitor who is not signed in sees \"Hello, friend\" instead of an empty name\nProposed by the product agent; accepted by you\nAccepted\nAdd"
+      "observed": "Done when\n4 criteria\nU1\nAC01: The page loads in under two seconds\nFrom ACME-50\nAccepted\nU2\nAC02: The page works without JavaScript\nFrom ACME-50\nAccepted\nU3\nVisiting the home page shows \"Hello, <name>\" for a signed-in visitor\nProposed by the product agent; accepted by you\nAccepted\nU4\nA visitor who is not signed in sees \"Hello, friend\" instead of an empty name\nProposed by the product agent; accepted by you\nAccepted\nAdd"
     },
     {
       "label": "two accepted, one rejected, the question answered: ready",
@@ -117,7 +117,7 @@
     {
       "label": "the card says it is ready to write, with Open refinement and the write button",
       "ok": true,
-      "observed": "GAR-50\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 4 Done-when lines.\nOpen refinement\nfor GAR-50\nWrite to YouTrack and mark ready\nGAR-50"
+      "observed": "ACME-50\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 4 Done-when lines.\nOpen refinement\nfor ACME-50\nWrite to YouTrack and mark ready\nGAR-50"
     },
     {
       "label": "…and the write button is enabled",
@@ -140,7 +140,7 @@
       }
     },
     {
-      "label": "proof (fake YouTrack): GAR-50 moved from Draft to Open",
+      "label": "proof (fake YouTrack): ACME-50 moved from Draft to Open",
       "ok": true,
       "observed": "Open"
     },
@@ -152,10 +152,10 @@
       ]
     },
     {
-      "label": "GAR-50 is in Ready with Start offered",
+      "label": "ACME-50 is in Ready with Start offered",
       "ok": true,
       "observed": {
-        "text": "GAR-50\nGreet visitors by name\nMission: Draft\nStart",
+        "text": "ACME-50\nGreet visitors by name\nMission: Draft\nStart",
         "start": true
       }
     },
@@ -165,7 +165,7 @@
       "observed": "#/missions/msn_01m6c1wqrvr5dkefve55"
     },
     {
-      "label": "proof (fake YouTrack): Start moved GAR-50 to In Progress",
+      "label": "proof (fake YouTrack): Start moved ACME-50 to In Progress",
       "ok": true,
       "observed": "In Progress"
     },

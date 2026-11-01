@@ -29,7 +29,7 @@ ev.check("the token pushes to its source only: refused in the daemon's words", e
 await openBoard(c, 'intake');
 const fingerprint = 'custom:web-form:form-18';
 const filed = await intakeStatus(c, fingerprint, (s) => s.startsWith('Filed as'), 'Filed as …');
-ev.check('the signal appears in the Intake tab, filed', /^Filed as GAR-\d+$/.test(filed.status) && filed.title === TITLE, filed);
+ev.check('the signal appears in the Intake tab, filed', /^Filed as ACME-\d+$/.test(filed.status) && filed.title === TITLE, filed);
 await page.screenshot(ev.shot('intake-custom'));
 const key = filed.status.slice('Filed as '.length);
 

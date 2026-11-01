@@ -23,7 +23,7 @@
       "ok": true,
       "observed": {
         "readyKeys": [
-          "GAR-1"
+          "ACME-1"
         ],
         "afterMs": 507
       }
@@ -34,7 +34,7 @@
       "observed": {
         "banner": "",
         "ready": [
-          "GAR-1"
+          "ACME-1"
         ]
       }
     }

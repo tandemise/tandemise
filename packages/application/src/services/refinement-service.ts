@@ -58,7 +58,7 @@ export interface RefinementDeps {
    * never throws and does nothing the second time.
    */
   readonly intake?: (missionId: MissionId) => Promise<unknown>;
-  /** The key of the tracker item a mission was made from (`GAR-71`), for "From GAR-71" (#185); optional for harnesses. */
+  /** The key of the tracker item a mission was made from (`ACME-71`), for "From ACME-71" (#185); optional for harnesses. */
   readonly trackerKey?: (missionId: MissionId) => string | null;
 }
 

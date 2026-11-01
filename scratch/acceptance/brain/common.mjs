@@ -10,7 +10,7 @@ import { connect } from '../p0/lib/cdp.mjs';
 export { readState, writeState, sleep, until };
 
 export const ACC = JSON.parse(readFileSync(`${SCRATCH}/brain-acceptance.json`, 'utf8'));
-export const REMOTE = join(ACC.remotes, 'garipass', 'brain.git');
+export const REMOTE = join(ACC.remotes, 'acme', 'brain.git');
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_CONFIG_GLOBAL: ACC.gitconfig } });
 export const ghLog = () => (existsSync(ACC.log) ? readFileSync(ACC.log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 export const remoteLog = () => git(REMOTE, 'log', '-p', '--all');

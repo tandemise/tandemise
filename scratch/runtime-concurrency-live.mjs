@@ -62,7 +62,7 @@ writeFileSync(join(repo, 'README.md'), '# live check\n');
 execFileSync('git', ['add', '.'], { cwd: repo, stdio: 'ignore', env: gitEnv });
 execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: repo, stdio: 'ignore', env: gitEnv });
 
-const yt = await startFakeYouTrack({ project: 'GAR', token: 'perm:test', login: 'tandemise-bot' });
+const yt = await startFakeYouTrack({ project: 'ACME', token: 'perm:test', login: 'tandemise-bot' });
 const first = yt.putIssue({ summary: 'Checkout fails on Safari', description: 'Pay does nothing.\n\n## Done when\n- [ ] Checkout works on Safari', state: 'Open' }).idReadable;
 const second = yt.putIssue({ summary: 'Search ignores the date filter', description: 'Everything comes back.\n\n## Done when\n- [ ] Search honours the date filter', state: 'Open' }).idReadable;
 
@@ -92,7 +92,7 @@ try {
   await api('PATCH', `/workspaces/${ws.id}`, { autonomy: { ...ws.autonomy, planApproval: 'auto' } });
   const tracker = await api('PUT', `/workspaces/${ws.id}/intake/config`, {
     tracker: {
-      kind: 'youtrack', url: yt.url, project: 'GAR', board: 'project: GAR #Unresolved',
+      kind: 'youtrack', url: yt.url, project: 'ACME', board: 'project: ACME #Unresolved',
       states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: ["Won't fix"] }, onComplete: 'done',
     },
   });

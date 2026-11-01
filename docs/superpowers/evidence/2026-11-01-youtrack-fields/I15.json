@@ -32,13 +32,13 @@
       }
     },
     {
-      "label": "the Board shows a Draft group with GAR-150, offering Refine and no Start",
+      "label": "the Board shows a Draft group with ACME-150, offering Refine and no Start",
       "ok": true,
       "observed": {
         "heading": "Draft\n1",
         "label": "Draft",
         "buttons": [
-          "GAR-150",
+          "ACME-150",
           "Refine\nGAR-150"
         ]
       }
@@ -104,7 +104,7 @@
     {
       "label": "the card says it is ready to write, with Open refinement and the write button",
       "ok": true,
-      "observed": "GAR-150\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 2 Done-when lines.\nOpen refinement\nfor GAR-150\nWrite to YouTrack and mark ready\nGAR-150"
+      "observed": "ACME-150\nGreet visitors by name\nMission: Draft\nReady to write to YouTrack: 2 Done-when lines.\nOpen refinement\nfor ACME-150\nWrite to YouTrack and mark ready\nGAR-150"
     },
     {
       "label": "…and the write button is enabled",
@@ -116,7 +116,7 @@
       "observed": "Visitors see a generic page. Make it feel personal.\n\n## Done when\n- [ ] Visiting the home page shows \"Hello, <name>\" for a signed-in visitor\n- [ ] A visitor who is not signed in sees \"Hello, friend\" instead of an empty name\n\n## Decisions\n- Which pages should greet the visitor by name? — Only the home page"
     },
     {
-      "label": "proof (fake YouTrack): GAR-150 moved from Draft to Open",
+      "label": "proof (fake YouTrack): ACME-150 moved from Draft to Open",
       "ok": true,
       "observed": "Open"
     },
@@ -128,10 +128,10 @@
       ]
     },
     {
-      "label": "GAR-150 is in Ready with Start offered",
+      "label": "ACME-150 is in Ready with Start offered",
       "ok": true,
       "observed": {
-        "text": "GAR-150\nGreet visitors by name\nMission: Draft\nStart",
+        "text": "ACME-150\nGreet visitors by name\nMission: Draft\nStart",
         "start": true
       }
     },
@@ -141,12 +141,12 @@
       "observed": "#/missions/msn_01m6c6bxspbvpsbnw4yg"
     },
     {
-      "label": "proof (fake YouTrack): Start moved GAR-150 to In Progress",
+      "label": "proof (fake YouTrack): Start moved ACME-150 to In Progress",
       "ok": true,
       "observed": "In Progress"
     },
     {
-      "label": "proof (fake YouTrack): GAR-150 went Draft → Open → In Progress and stayed In Progress",
+      "label": "proof (fake YouTrack): ACME-150 went Draft → Open → In Progress and stayed In Progress",
       "ok": true,
       "observed": {
         "stayed": "In Progress",

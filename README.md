@@ -119,10 +119,10 @@ window, on one install, with fakes for YouTrack, GitHub and the agent
 ([report](docs/superpowers/evidence/2026-10-31-integrated/REPORT.md)).
 
 1. **Work arrives.** A form reply is pushed with `tandemise intake push`. It is
-   filed in YouTrack as `GAR-2` and shows on the **Board** under Ready. A
+   filed in YouTrack as `ACME-2` and shows on the **Board** under Ready. A
    signal that matches an existing item is linked instead; noise is held back
    with the reason; an unsure match becomes one Inbox question ("Is this the
-   same as GAR-7?").
+   same as ACME-7?").
 2. **You start it.** **Start** opens a mission. The factory profiles the item
    as a tiny, low-risk fix and puts it in the quick lane: one step, then a pull
    request, with no plan approval. **Why these steps** on the Plan tab says
@@ -137,7 +137,7 @@ window, on one install, with fakes for YouTrack, GitHub and the agent
 5. **A pull request.** The ship step opens one pull request with the agent's
    change and yours, waits for CI, and decides. Auto-merge is off, so the
    Inbox gets **Review and merge** and YouTrack moves to In Review.
-6. **The team sees it.** Home's **Who's working on what** shows `GAR-2` as
+6. **The team sees it.** Home's **Who's working on what** shows `ACME-2` as
    yours; with a relay, every teammate sees the same.
 
 With a brain linked, what you corrected during the hold becomes a short lesson
@@ -153,7 +153,7 @@ runner of your own) send signals that are filed there once. Everything that
 comes in is recorded, but nothing starts until a person starts it. When the
 item is done, the loop closes at every source it came from. Custom runners push
 with a per-source token through the `tandemise` CLI (`tandemise intake push`,
-`tandemise intake closures`, `tandemise start GAR-12`) or over HTTP. See
+`tandemise intake closures`, `tandemise start ACME-12`) or over HTTP. See
 [Writing an intake runner](docs/intake/README.md).
 
 ### The planner: lanes, steps and models

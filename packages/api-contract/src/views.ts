@@ -310,7 +310,7 @@ export interface RefinementCriterionView {
    * the mission was made from (#185).
    */
   readonly origin: 'request' | 'added' | 'refinement' | 'issue' | 'tracker';
-  /** For `tracker`: the line the app shows, `From GAR-71`. Absent from an older daemon. */
+  /** For `tracker`: the line the app shows, `From ACME-71`. Absent from an older daemon. */
   readonly originLabel?: string | null;
   /** `autonomy` when accepted automatically, `person` when someone decided it, null while undecided or for request lines. */
   readonly decidedBy: 'autonomy' | 'person' | null;
@@ -732,7 +732,7 @@ export interface InboxView {
    */
   readonly parked?: readonly InboxParkedView[];
   /**
-   * Intake signals waiting on a person: "Is this the same as GAR-12?" or past
+   * Intake signals waiting on a person: "Is this the same as ACME-12?" or past
    * the daily cap (intake plan Task 7). Optional, like `parked`.
    */
   readonly intakeDecisions?: readonly InboxIntakeDecisionView[];

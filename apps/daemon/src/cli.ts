@@ -141,7 +141,7 @@ async function start(args: readonly string[]): Promise<number> {
     throw new UsageError(e instanceof Error ? e.message : String(e));
   }
   const key = positionals[0];
-  if (key === undefined || key === '' || positionals.length > 1) throw new UsageError('Name one item to start, e.g. tandemise start GAR-12.');
+  if (key === undefined || key === '' || positionals.length > 1) throw new UsageError('Name one item to start, e.g. tandemise start ACME-12.');
   const connection = connect();
   if (connection.intakeToken) throw new Refusal('An intake token can only push signals. Start from the machine running Tandemise.');
   const project = values['project'] ?? (await onlyProject(connection));

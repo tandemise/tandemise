@@ -92,7 +92,7 @@ try {
   await openBoard(c, 'intake');
   const filed = await intakeStatus(c, 'custom:web-form:form-7', (s) => s.startsWith('Filed as'), 'Filed as …');
   const key = filed.status.slice('Filed as '.length);
-  ev.check('Intake tab: the signal is filed in the tracker', /^GAR-\d+$/.test(key), filed);
+  ev.check('Intake tab: the signal is filed in the tracker', /^ACME-\d+$/.test(key), filed);
   const item = await yt.issue(key);
   ev.check(`fake YouTrack: ${key} exists, a Bug, Open`, item?.summary === TITLE && item.type === 'Bug' && item.state === 'Open', item && { summary: item.summary, type: item.type, state: item.state });
   await shot('intake-filed');
@@ -185,7 +185,7 @@ try {
   const testRuns = () => (existsSync(RAN) ? readFileSync(RAN, 'utf8').split('\n').filter(Boolean).length : 0);
   ev.check('the code change above ran the test suite exactly once (the gate\'s run; nothing ran it twice)', testRuns() === 1, testRuns());
   // Filed in the tracker as Docs, the way a person files a documentation task (a web-form signal is always a Bug).
-  const docsKey = 'GAR-50';
+  const docsKey = 'ACME-50';
   await yt.put({ idReadable: docsKey, summary: DOCS_TITLE, description: 'The quickstart should say runtimes are added with Discover runtimes.', type: 'Docs', state: 'Open' });
   await openBoard(c);
   await until(async () => { await page.evaluate(`[...document.querySelectorAll('button')].find((b) => b.innerText.trim() === 'Check sources now')?.click()`); await sleep(1500); return boardRow(c, docsKey); }, { label: `${docsKey} on the Board`, timeoutMs: 60_000 });

@@ -26,7 +26,7 @@ const second = (await api.post('/v1/workspaces', { name: 'Token project' })).wor
 ev.check('a second project exists', typeof second === 'string', second);
 await api.put(`/v1/workspaces/${second}/intake/config`, {
   tracker: {
-    kind: 'youtrack', url: ytUrl, project: 'GAR', board: 'project: GAR #Unresolved',
+    kind: 'youtrack', url: ytUrl, project: 'ACME', board: 'project: ACME #Unresolved',
     states: { ready: ['Open', 'Submitted'], in_progress: 'In Progress', in_review: 'In Review', done: ['Fixed', 'Done'], wont_do: ["Won't fix", 'Duplicate', 'Obsolete'] },
     onComplete: 'in_review',
   },
@@ -57,7 +57,7 @@ const savedAt = Date.now();
 // The cache, not a refresh: GET board never reads the tracker, and the 2-minute tick is not due.
 const cleared = await until(async () => {
   const b = await api.get(`/v1/workspaces/${second}/board`);
-  return b.problem === null && b.groups.ready.some((i) => i.key === 'GAR-1') && b;
+  return b.problem === null && b.groups.ready.some((i) => i.key === 'ACME-1') && b;
 }, { label: 'the board cache without its problem', timeoutMs: 20_000 }).catch(() => null);
 ev.check('proof (API): GET board answers no problem and the ready items right after Save token, without a refresh', cleared !== null,
   cleared === null ? (await api.get(`/v1/workspaces/${second}/board`)).problem : { readyKeys: cleared.groups.ready.map((i) => i.key), afterMs: Date.now() - savedAt });
@@ -66,7 +66,7 @@ await openBoard(c);
 await until(async () => (await boardGroups(c)).ready?.rows?.length > 0, { label: 'the ready items', timeoutMs: 20_000 }).catch(() => null);
 const groups = await boardGroups(c);
 const bannerAfter = await page.evaluate(`document.querySelector('.board__problem')?.innerText ?? ''`);
-ev.check('the Board shows the ready items and no problem banner', bannerAfter === '' && (groups.ready?.rows ?? []).some((r) => r.key === 'GAR-1'), { banner: bannerAfter, ready: (groups.ready?.rows ?? []).map((r) => r.key) });
+ev.check('the Board shows the ready items and no problem banner', bannerAfter === '' && (groups.ready?.rows ?? []).some((r) => r.key === 'ACME-1'), { banner: bannerAfter, ready: (groups.ready?.rows ?? []).map((r) => r.key) });
 await page.screenshot(ev.shot('board-after-token'));
 
 // Back to the run's project, so a later scenario sees the window as it was.

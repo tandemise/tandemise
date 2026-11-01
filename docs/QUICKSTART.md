@@ -108,7 +108,7 @@ secrets and noise filter. Then open **Board** in the sidebar:
 - **Start** on a ready item opens a mission with the item's "Done when"; the
   tracker moves it to in progress and keeps one activity comment up to date.
 - The **Intake** tab lists every signal and what happened to it, in words.
-  An unsure match waits in the Inbox as "Is this the same as GAR-7?".
+  An unsure match waits in the Inbox as "Is this the same as ACME-7?".
 
 A runner of your own pushes with a token from **Custom sources → Make a
 token**, through the `tandemise` CLI (`npx tandemise` from a checkout):
@@ -118,7 +118,7 @@ TANDEMISE_URL=http://127.0.0.1:<port> TANDEMISE_INTAKE_TOKEN=tdi_… \
   npx tandemise intake push --source web-form --title "Export drops accents" \
   --url https://forms.example.com/replies/18 --key form-18
 npx tandemise intake closures --source web-form   # what to close at your source
-npx tandemise start GAR-12                        # Start from a shell (daemon token)
+npx tandemise start ACME-12                        # Start from a shell (daemon token)
 ```
 
 [Writing an intake runner](intake/README.md) has the contract, auth, the

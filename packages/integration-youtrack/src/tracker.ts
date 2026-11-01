@@ -47,7 +47,7 @@ const idSchema = z.object({ id: z.string() }).passthrough();
 
 export interface YouTrackTrackerOptions {
   readonly url: string;
-  /** The project's short name (`GAR`). */
+  /** The project's short name (`ACME`). */
   readonly project: string;
   readonly token: string;
   readonly timeoutMs?: number;
@@ -210,7 +210,7 @@ export class YouTrackTracker implements PrimaryTracker {
     return this.#viewer;
   }
 
-  /** `https://acme.youtrack.cloud/issue/GAR-12/some-slug` is `youtrack:GAR-12` when GAR is this project. */
+  /** `https://acme.youtrack.cloud/issue/ACME-12/some-slug` is `youtrack:ACME-12` when ACME is this project. */
   refFromUrl(url: string): TrackerRef | null {
     const prefix = `${this.#client.base}/issue/`;
     if (!url.startsWith(prefix)) return null;
