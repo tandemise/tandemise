@@ -381,7 +381,8 @@ await attempt('revert and watch', async () => {
   await w.h.until(() => w.h.repo.missions.get(m3.id).status === 'COMPLETE', 60000);
   await watch.sweep(Date.now() + 8 * 86_400_000);
   await watch.sweep(Date.now() + 8 * 86_400_000);
-  check('after 8 days with no revert and no broken main: merged_clean, once', w.h.repo.outcomes.listByWorkspace(w.ws, '1970').filter((o) => o.mission === m3.id && o.kind === 'merged_clean').length === 1);
+  check('after 8 days with no revert and no broken main: merged_clean, once', w.h.repo.outcomes.listByWorkspace(w.ws, '1970').filter((o) => o.mission === m3.id && o.kind === 'merged_clean').length === 1,
+    w.h.repo.tasks.listByMission(m3.id).map((t) => `${t.key}:${t.status}:${t.statusReason ?? ''}`));
 });
 
 await attempt('main is judged by its own ci', async () => {

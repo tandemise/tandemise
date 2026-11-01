@@ -176,7 +176,9 @@ export async function world({ factory = {}, scripts = {}, brain = false, ciGrace
   }).id;
   const touch = scripts.touch ?? 'src/settings.ts';
   const devSteps = [
-    { kind: 'write-file', path: touch, content: `export const title = 'Settings';\n` },
+    // A line of its own per run: a task worktree starts from the remote's main (#167), which already holds
+    // what earlier missions merged, so the same content every time would be no change at all.
+    { kind: 'write-file', path: touch, content: `export const title = 'Settings'; // {{runId}}\n` },
     { kind: 'write-file', path: '.tandemise/out/ChangeSet.md', content: changeSet('Fixed the title') },
     { kind: 'complete', summary: 'done' },
   ];
