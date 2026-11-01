@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.1](https://github.com/tandemise/tandemise/compare/v0.12.0...v0.12.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* count only the latest run of each check, and stop repeating an identical ci round ([#198](https://github.com/tandemise/tandemise/issues/198)) ([0767675](https://github.com/tandemise/tandemise/commit/0767675c4f6ff8d0598e5b38cfe9b72fe2404760))
+* keep agents off the person's window devtools port ([#171](https://github.com/tandemise/tandemise/issues/171)) ([d363adb](https://github.com/tandemise/tandemise/commit/d363adbc459ad08a1ca05a20d7f7070772e9b6ce))
+* only add to a refined item's description when marking it ready ([#190](https://github.com/tandemise/tandemise/issues/190)) ([2d4721d](https://github.com/tandemise/tandemise/commit/2d4721db2bd30e71a9f4b44cbfdbb0b7a6c059fa))
+* record a notification only when the system takes it, and say why it does not show ([#182](https://github.com/tandemise/tandemise/issues/182)) ([e7a92a2](https://github.com/tandemise/tandemise/commit/e7a92a26b6f2938993fbe2db7318c0c397798a1f))
+* title the pull request with the change's real commit type ([#172](https://github.com/tandemise/tandemise/issues/172)) ([2b6b30d](https://github.com/tandemise/tandemise/commit/2b6b30db715152c71dfbc59dfa945f2c8a210cad))
+
+
+### Documentation
+
+* report on dogfooding the factory on 0.11.0 ([#168](https://github.com/tandemise/tandemise/issues/168)) ([17fa791](https://github.com/tandemise/tandemise/commit/17fa79177d99938a1e49dc3debd3ff5f8a5d4d53))
+
 ## [0.12.0](https://github.com/tandemise/tandemise/compare/v0.11.0...v0.12.0) (2026-11-01)
 
 
