@@ -5,8 +5,8 @@ import type { Migration } from './types.js';
  * `mission_tasks.run_skill` holds `{ name, args }` as JSON, null for a step
  * that runs its role's prompt (every step before it).
  */
-export const migration027: Migration = {
-  version: 27,
+export const migration028: Migration = {
+  version: 28,
   name: 'step_skills',
   up: `
 ALTER TABLE mission_tasks ADD COLUMN run_skill TEXT;

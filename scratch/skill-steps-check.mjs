@@ -170,7 +170,7 @@ const sql = (q, ...p) => {
 };
 
 try {
-  section('migration 027');
+  section('migration 028');
   check('mission_tasks.run_skill', sql("SELECT name FROM pragma_table_info('mission_tasks')").some((c) => c.name === 'run_skill'));
 
   const wsRes = await api('POST', '/v1/workspaces', { name: 'Skill steps', repositoryPath: repo });

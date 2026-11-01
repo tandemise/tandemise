@@ -40,6 +40,18 @@ export interface TrackerItem {
   /** ISO 8601, the tracker's own. */
   readonly createdAt: string;
   readonly type?: string;
+  /**
+   * How many of its subtasks are still open, when the tracker says (#136): an
+   * item with any is a container, and Start offers its subtasks instead.
+   * Absent when the tracker cannot tell (GitHub Issues through `gh`).
+   */
+  readonly subtasks?: number;
+  /**
+   * The item's tags (YouTrack) or its labels that are not mapped states
+   * (GitHub), as written. `repoTag` reads them to tell another repository's
+   * item. Absent when the tracker has none to give.
+   */
+  readonly tags?: readonly string[];
 }
 
 /** A cached board item: the tracker's item plus what Tandemise keeps about it. */
@@ -201,6 +213,50 @@ export function stateMappingProblem(
 }
 
 // ------------------------------------------------------------------ Start (spec §7, plan Task 8)
+
+/**
+ * Why an item must not be started in this project, as the Board says it beside
+ * a disabled Start and `start` refuses it, or null when it may be (#136). Read
+ * from what the tracker reported, with the project's tracker config:
+ *
+ *  - an item tagged for another repository: with `repoTag: repo:web`, an item
+ *    carrying `repo:api` (a tag with the same prefix, up to and including its
+ *    first `:`) and not `repo:web` "Belongs to another repository (repo:api)."
+ *    An item with no such tag is this project's;
+ *  - a type the project does not build: with `buildTypes: [Bug, Task]`, a
+ *    Spike is "Spike: this project starts Bug and Task items." An item with no
+ *    type, or no `buildTypes`, is buildable;
+ *  - a container: an item with open subtasks "Has 4 subtasks. Start one of them."
+ *
+ * Checked in that order: another repository's container is still not ours.
+ * Tags and types match without regard to case.
+ */
+export function startRefusal(
+  item: Pick<TrackerItem, 'type' | 'subtasks' | 'tags'>,
+  config: Pick<TrackerConfig, 'buildTypes' | 'repoTag'>,
+): string | null {
+  const repoTag = config.repoTag?.trim();
+  if (repoTag !== undefined && repoTag.includes(':')) {
+    const prefix = repoTag.slice(0, repoTag.indexOf(':') + 1).toLowerCase();
+    const tags = item.tags ?? [];
+    const ours = tags.some((t) => t.trim().toLowerCase() === repoTag.toLowerCase());
+    const other = tags.find((t) => t.trim().toLowerCase().startsWith(prefix) && t.trim().toLowerCase() !== repoTag.toLowerCase());
+    if (!ours && other !== undefined) return `Belongs to another repository (${other.trim()}).`;
+  }
+  const buildTypes = (config.buildTypes ?? []).map((t) => t.trim()).filter((t) => t !== '');
+  const type = item.type?.trim();
+  if (buildTypes.length > 0 && type !== undefined && type !== '' && !buildTypes.some((t) => t.toLowerCase() === type.toLowerCase())) {
+    return `${type}: this project starts ${andList(buildTypes)} items.`;
+  }
+  const open = item.subtasks ?? 0;
+  if (open > 0) return open === 1 ? 'Has 1 subtask. Start it instead.' : `Has ${open} subtasks. Start one of them.`;
+  return null;
+}
+
+/** `Bug`, `Bug and Task`, `Bug, Task and Story`. */
+function andList(words: readonly string[]): string {
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
 
 /** `mission_criteria.decided_by` for the Done-when lines parsed from a tracker item, as P14's `ISSUE_CRITERIA_AUTHOR`. */
 export const TRACKER_CRITERIA_AUTHOR = 'tracker';
