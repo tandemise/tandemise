@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { workerEnv } from '@tandemise/runtimes-core';
 import { promisify } from 'node:util';
 import type {
   AgentEvent, AgentEventType, RuntimeCapability, RuntimeDiscovery, RuntimeHealth, RuntimeProfile,
@@ -147,7 +148,7 @@ export class GenericCliAdapter implements AgentRuntimeAdapter {
         cwd: request.workingDirectory,
         // Inherited on purpose: a configured CLI authenticates through the
         // user's own environment, exactly as Claude Code does (MVP.md §10.3).
-        env: process.env,
+        env: workerEnv(request),
         stdio: [stdin === null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
         windowsHide: true,
       }),
