@@ -542,7 +542,7 @@ export class SchedulerService implements LifecycleComponent {
         return;
       case 'ciFailed': {
         const ship = this.deps.ship;
-        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : ship.ciFailed(mission, current(), outcome.failing);
+        const sent = ship === undefined ? { kind: 'blocked' as const, reason: outcome.detail } : ship.ciFailed(mission, current(), outcome.failing, outcome.pr.headSha);
         if (sent.kind === 'reopened') {
           this.#failedHead.set(task.id, outcome.pr.headSha);
           this.#setStatus(current(), scope, 'PENDING', sent.reason);
