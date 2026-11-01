@@ -1456,6 +1456,7 @@ function shipPrFacts(r: Resolver, mission: import('@tandemise/domain').Mission):
     issue: item === undefined ? null : { label, key: item.key, url: item.url },
     holds,
     qaReported: artifacts.latest(mission.id, 'QAReport') !== undefined,
+    trackerType: item?.type ?? null,
   };
 }
 
