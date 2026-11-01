@@ -12,12 +12,56 @@ const PREFIX: Readonly<Record<TaskType, string>> = {
 };
 
 const CONVENTIONAL = /^\s*(feat|fix|docs|chore|refactor|test|build|perf|ci|revert|style)(\([^)]*\))?!?:\s/i;
+const COMMIT = /^\s*(feat|fix|docs|chore|refactor|test|build|perf|ci|revert|style)(\([^)]*\))?(!)?:\s+(\S.*)$/i;
 
-export function prTitle(profile: { readonly type: TaskType }, title: string): string {
+/** What else is known about the change when the item's title is not a Conventional Commit (#157). */
+export interface PrTitleHints {
+  /** The type the tracker's labels or item type say, mapped by the planner's `labels`/`trackerTypes`. */
+  readonly labelType?: TaskType | null;
+  /** The subjects of the commits on the branch that ships, oldest first. Tandemise's own are left out by the caller. */
+  readonly commits?: readonly string[];
+}
+
+/** A type that says nothing: the planner could not tell, or fell back to its default. */
+const weak = (type: TaskType): boolean => type === 'unknown' || type === 'chore';
+
+/**
+ * Lower-cases the subject's first letter only when its first word is an
+ * ordinary capitalised word ("Planner" → "planner"). A tracker key, an
+ * acronym or a mixed-case name keeps its case: "KEY-77", "API", "GitHub" (#152).
+ */
+export function lowerFirstWord(subject: string): string {
+  const first = /^\S+/.exec(subject)?.[0] ?? '';
+  return /^[A-Z][a-z]*[,:;.]?$/.test(first) && first !== 'I' ? subject.charAt(0).toLowerCase() + subject.slice(1) : subject;
+}
+
+/**
+ * The pull request's title: a Conventional Commit whose type is what is known
+ * about the change, in order (#157). An item title that already is one is used
+ * as written. Otherwise the type comes from the tracker's labels, then the
+ * planner's profile, then the agent's own commit; `chore` only when nothing
+ * says otherwise. The subject is the agent's commit subject (which says what
+ * changed) when there is one, else the item's title. A squash-merged
+ * repository makes this title the commit on its default branch.
+ */
+export function prTitle(profile: { readonly type: TaskType }, title: string, hints: PrTitleHints = {}): string {
   const clean = title.trim().replace(/\s+/g, ' ');
   if (CONVENTIONAL.test(clean)) return clean;
-  const subject = clean.length === 0 ? 'change' : clean.charAt(0).toLowerCase() + clean.slice(1);
-  return `${PREFIX[profile.type]}: ${subject}`;
+  const commit = (hints.commits ?? [])
+    .map((c) => COMMIT.exec(c.trim().replace(/\s+/g, ' ')))
+    .find((m): m is RegExpExecArray => m !== null);
+  const commitType = commit?.[1]?.toLowerCase() ?? null;
+  const type = hints.labelType != null && !weak(hints.labelType) ? PREFIX[hints.labelType]
+    : !weak(profile.type) ? PREFIX[profile.type]
+      : commitType ?? PREFIX[hints.labelType ?? profile.type];
+  if (commit !== undefined) {
+    // The commit's scope and breaking mark belong to its own type.
+    const scope = commitType === type ? (commit[2] ?? '') : '';
+    const bang = commit[3] ?? '';
+    return `${type}${scope}${bang}: ${lowerFirstWord(commit[4]!.trim())}`;
+  }
+  const subject = clean.length === 0 ? 'change' : lowerFirstWord(clean);
+  return `${type}: ${subject}`;
 }
 
 export interface PrBodyInput {

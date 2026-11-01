@@ -23,6 +23,8 @@
 // P3 knobs (SCRIPTED_PLAN_SKIP, SCRIPTED_WORKSPACE_LINK) are described where they are read, as are SCRIPTED_NEEDS and SCRIPTED_STOP (plan fit).
 // P8 usage knobs (SCRIPTED_USAGE_MIN, SCRIPTED_COST_USD) are described where they are read, at the end.
 // #53: SCRIPTED_TOUCH=<path> (repeatable) is described where the ChangeSet is written.
+// #157: SCRIPTED_COMMIT="<subject>" (in the goal) has the code step commit its work itself, as a real agent does.
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -364,6 +366,13 @@ for (const { type, destination } of outputs) {
       if (isAbsolute(touch) || touch.split('/').includes('..')) continue;
       mkdirSync(dirname(join(workIn, touch)), { recursive: true });
       appendFileSync(join(workIn, touch), `// touched by the scripted agent (${inRound ? 'round' : 'first'})\n`);
+    }
+    // #157: SCRIPTED_COMMIT="<subject>" commits the step's work with that subject, the way an agent
+    // writes its own Conventional Commit; the ship step reads it for the pull request's title.
+    const subject = /SCRIPTED_COMMIT="([^"\n]+)"/.exec(prompt)?.[1];
+    if (subject !== undefined && !inRound) {
+      const g = (...args) => execFileSync('git', ['-c', 'user.name=Scripted agent', '-c', 'user.email=scripted@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd: workIn, stdio: 'ignore' });
+      try { g('add', '-A'); g('commit', '-q', '-m', subject); } catch { /* nothing to commit */ }
     }
   }
   const front = {

@@ -165,7 +165,7 @@ await attempt('ship decides, audit, person merge, closed, crash', async () => {
   const rows = w.h.repo.mergeDecisions.listByMission(m.id);
   check('green CI → one decision, ask, auto-merge off, would have merged', rows.length === 1 && rows[0].verdict === 'ask' && rows[0].reasons.includes(D.AUTO_MERGE_OFF) && rows[0].wouldMerge === true, rows.map((r) => [r.verdict, r.reasons, r.score]));
   const cards = w.h.repo.approvals.list({ missionId: m.id, statuses: ['PENDING'] });
-  check('one Review and merge card', cards.length === 1 && cards[0].kind === 'release' && cards[0].title === 'Review and merge fix: typo in the settings title', cards.map((c) => c.title));
+  check('one Review and merge card', cards.length === 1 && cards[0].kind === 'release' && cards[0].title === `Review and merge #${prOf().number}: fix: typo in the settings title`, cards.map((c) => c.title));
   check('the reviewers in the policy were asked', fake.calls(w.ghDir).some((c) => c.args[1] === 'edit' && c.args.includes('--add-reviewer') && c.args.includes('sam')));
 
   section('audit');

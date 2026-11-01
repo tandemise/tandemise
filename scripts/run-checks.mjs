@@ -79,6 +79,7 @@ export const OFFLINE_CHECKS = [
   'ci-wait-check',
   'routing-check',
   'policy-eval-check',
+  'pr-title-check',
   'relay-check',
   'resume-check',
   'review-sees-diff-check',
