@@ -1,0 +1,55 @@
+{
+  "id": "I16",
+  "title": "The tracker item's type and labels decide the kind of work; a reproduction command does not raise risk",
+  "ok": true,
+  "checks": [
+    {
+      "label": "GAR-60: the Board's lane is \"Factory decides\"",
+      "ok": true,
+      "observed": "auto"
+    },
+    {
+      "label": "a User Story is planned as a feature, because the tracker says so",
+      "ok": true,
+      "observed": "Type feature: the tracker calls it a User Story.\nSize small: its description is short (30 words) and it has 2 Done-when lines.\nRisk low: nothing it names is in a sensitive area."
+    },
+    {
+      "label": "…and no quick model was asked what kind of work it is",
+      "ok": true,
+      "observed": "Feature\nsmall\nlow risk\nMake it careful\n\nFeature · small · low risk\n\nType feature: the tracker calls it a User Story.\nSize small: its description is short (30 words) and it has 2 Done-when lines.\nRisk low: nothing it names is in a sensitive area.\n\nQuick lane: one step, then a pull request. The project's lane rules matched it.\n\nNo plan approval.\nNo separate review or QA: the tests carry it, and the merge decision will take that into account.\nImplement · role model"
+    },
+    {
+      "label": "GAR-61: the Board's lane is \"Factory decides\"",
+      "ok": true,
+      "observed": "auto"
+    },
+    {
+      "label": "an item tagged \"bug\" with a plain title is planned as a fix, from its tag",
+      "ok": true,
+      "observed": "Type fix: it has the label \"bug\".\nSize small: its description is short (45 words) and it has 1 Done-when line.\nRisk low: nothing it names is in a sensitive area."
+    },
+    {
+      "label": "a db:migrate command in its reproduction steps does not make it risky",
+      "ok": true,
+      "observed": "Type fix: it has the label \"bug\".\nSize small: its description is short (45 words) and it has 1 Done-when line.\nRisk low: nothing it names is in a sensitive area."
+    },
+    {
+      "label": "…so it is not in the careful lane",
+      "ok": true,
+      "observed": "Fix\nsmall\nlow risk\n\nFix · small · low risk\n\nType fix: it has the label \"bug\".\nSize small: its description is short (45 words) and it has 1 Done-when line.\nRisk low: nothing it names is in a sensitive area.\n\nQuick lane: one step, then a pull request. The project's lane rules matched it.\n\nNo plan approval.\nNo separate review or QA: the tests carry it, and the merge decision will take that into account.\nImplement · role model"
+    },
+    {
+      "label": "…and no quick model was asked",
+      "ok": true,
+      "observed": "Fix\nsmall\nlow risk\n\nFix · small · low risk\n\nType fix: it has the label \"bug\".\nSize small: its description is short (45 words) and it has 1 Done-when line.\nRisk low: nothing it names is in a sensitive area.\n\nQuick lane: one step, then a pull request. The project's lane rules matched it.\n\nNo plan approval.\nNo separate review or QA: the tests carry it, and the merge decision will take that into account.\nImplement · role model"
+    }
+  ],
+  "notes": [
+    "GAR-60 → msn_01m6cker23g000w7vy4j",
+    "GAR-61 → msn_01m6ckevy6pr84d0qfdb"
+  ],
+  "shots": [
+    "scratch/acceptance/intake/evidence/I16-story-why.png",
+    "scratch/acceptance/intake/evidence/I16-bug-why.png"
+  ]
+}

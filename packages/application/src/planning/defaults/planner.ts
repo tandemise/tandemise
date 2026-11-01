@@ -7,7 +7,7 @@
 export const SHIPPED_PLANNER = {
   version: 1,
   areas: [
-    { name: 'migrations', paths: ['**/migrations/**', '**/*.sql'], sensitivity: 'critical' },
+    { name: 'migrations', paths: ['**/migrations/**', '**/*.sql', '**/schema.prisma', '**/db/schema.*'], sensitivity: 'critical' },
     { name: 'auth', paths: ['**/auth/**', '**/session*/**', '**/*oauth*'], sensitivity: 'critical', skills: ['security-review'] },
     { name: 'payments', paths: ['**/billing/**', '**/payment*/**', '**/stripe*/**'], sensitivity: 'critical' },
     { name: 'ci-and-infra', paths: ['.github/**', 'infra/**', '**/Dockerfile', '**/*.tf', '**/docker-compose*.yml'], sensitivity: 'critical' },
@@ -19,8 +19,13 @@ export const SHIPPED_PLANNER = {
       checks: { tests: 'none', typecheck: 'none', lint: 'none', build: 'none' },
     },
   ],
-  trackerTypes: { Bug: 'fix', Feature: 'feature', Task: 'chore', Chore: 'chore', Docs: 'docs', Security: 'security' },
-  labels: { bug: 'fix', enhancement: 'feature', dependencies: 'deps', documentation: 'docs', security: 'security' },
+  // A tracker's own word for the kind of work (#154): a YouTrack type, a GitHub
+  // label. Case, spaces and hyphens don't matter when matching.
+  trackerTypes: {
+    Bug: 'fix', Feature: 'feature', 'User Story': 'feature', Story: 'feature', Enhancement: 'feature', Improvement: 'feature',
+    Task: 'chore', Chore: 'chore', Docs: 'docs', Documentation: 'docs', Security: 'security',
+  },
+  labels: { bug: 'fix', enhancement: 'feature', feature: 'feature', dependencies: 'deps', documentation: 'docs', security: 'security' },
   profile: {
     rules: [
       { when: 'item.prefix == "docs"', set: { type: 'docs', size: 'xs' } },
