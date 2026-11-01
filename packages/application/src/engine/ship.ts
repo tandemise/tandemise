@@ -493,8 +493,10 @@ export class ShipService {
 
   #mergedReason(decision: MergeDecisionRecord, pr: PullRequestRef): string {
     if (decision.mergedBy === 'tandemise') return `Merged on its own: risk score ${decision.score} of ${decision.allowed ?? 0} allowed.`;
+    // Merged on the approval only when it was recorded as the approver's: a merge in GitHub is recorded by login.
     const approved = this.deps.decide!.approvals.list({ missionId: decision.missionId })
-      .some((a) => a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id));
+      .some((a) => a.status === 'APPROVED' && a.selectedOptionId === APPROVE_OPTION && a.evidence.some((e) => e.label === DECISION_LABEL && e.value === decision.id)
+        && (a.decidedBy ?? 'a person') === decision.mergedBy);
     return approved ? `Merged on your approval: risk score ${decision.score} of ${decision.allowed ?? 0}.` : `Merged in GitHub by ${pr.mergedBy ?? 'a person'}: ${pr.url}`;
   }
 
