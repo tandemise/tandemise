@@ -36,6 +36,11 @@ export interface PlanDecisionView {
   /** "Fix · tiny · low risk". */
   readonly profileLine: string;
   readonly chips: readonly PlanChipView[];
+  /**
+   * The signal that decided each of type, size and risk, in plain words (#103):
+   * "Size tiny: the item says "copy"."
+   */
+  readonly decidedBy: readonly string[];
   /** "Quick lane: one step, then a pull request." */
   readonly laneLine: string;
   /** Why this lane: "The rules matched quick work", "You chose it". */
