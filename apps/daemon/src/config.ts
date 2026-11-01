@@ -56,7 +56,7 @@ export function loadConfig(overrides: Partial<DaemonConfig> = {}): DaemonConfig 
     paths: createPaths(home),
     port: overrides.port ?? Number(process.env.TANDEMISE_PORT ?? 0),
     logLevel: overrides.logLevel ?? ((process.env.TANDEMISE_LOG_LEVEL as LogLevel) ?? 'info'),
-    version: overrides.version ?? versionFromEnv() ?? '0.12.1', // x-release-please-version
+    version: overrides.version ?? versionFromEnv() ?? '0.12.2', // x-release-please-version
     build: overrides.build ?? buildFromEnv() ?? readBuildInfo(),
     offline: overrides.offline ?? process.env.TANDEMISE_OFFLINE === '1',
     tickIntervalMs: overrides.tickIntervalMs ?? Number(process.env.TANDEMISE_TICK_MS ?? 1500),

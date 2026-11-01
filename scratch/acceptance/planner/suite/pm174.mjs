@@ -1,4 +1,4 @@
-// PM14 (#174) — A merge Tandemise runs on a person's Merge is recorded as merged on approval, not as a merge
+// PM174 (#174) — A merge Tandemise runs on a person's Merge is recorded as merged on approval, not as a merge
 // in GitHub. The repository allows auto-merge and requires a check, so Merge in the Inbox queues it on
 // GitHub; GitHub then merges it under the person's own gh login. The outcome is `merged`, keeping who
 // approved it and the card; the step and the Timeline say "Merged on your approval".
@@ -15,10 +15,10 @@ const SHOTS = resolve(here, '../../../../docs/superpowers/evidence/2026-11-01-me
 const GH = `${SCRATCH}/gh`;
 const c = await context();
 const { page, until, sleep, api } = c;
-const ev = new Evidence('PM14', 'A merge on your approval is recorded as merged on approval, not merged by a person in GitHub');
+const ev = new Evidence('PM174', 'A merge on your approval is recorded as merged on approval, not merged by a person in GitHub');
 const shot = async (name) => {
   mkdirSync(SHOTS, { recursive: true });
-  const path = join(SHOTS, `pm14-${name}.png`);
+  const path = join(SHOTS, `pm174-${name}.png`);
   await page.screenshot(path);
   ev.shots.push(path);
 };
