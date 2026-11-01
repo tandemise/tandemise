@@ -111,6 +111,25 @@ with zero overlapping holding windows, and four processes × 150 appends produce
 boundary, environment isolation, and the permission engine's default-deny
 posture each have their own regression suite. See `docs/ACCEPTANCE.md`.
 
+## An agent can reach a window's DevTools port if one is open
+
+An agent runs as you, with your network, so it can connect to anything on
+loopback, including a Tandemise window started with `--remote-debugging-port`.
+The DevTools protocol has no authentication, so a connection there can read
+the window and act in it (#162). Tandemise narrows this but cannot close it
+without a sandbox:
+
+- Every worker's environment loses what points at the app: Electron's and an
+  AppImage's launch variables, `TANDEMISE_PORT`, any variable naming a CDP,
+  DevTools or remote-debugging port, and inspector flags in `NODE_OPTIONS`
+  (`packages/runtimes-core/src/agent-env.ts`, `scratch/app-port-env-check.mjs`).
+- The packaged app opens no DevTools port. `scripts/factory.sh` opens one only
+  with `start --cdp`, on a random port written to a 0600 file.
+
+What is left: an agent that lists listening sockets (`ss -ltn`) or other
+processes' command lines can still find a port you opened. Keep the port
+closed unless you are driving the window, and close the window afterwards.
+
 ## The daemon's CORS grant is loopback-wide
 
 Any process that can serve a page on `http://localhost` can have that page read

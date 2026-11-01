@@ -35,6 +35,7 @@ export const OFFLINE_CHECKS = [
   'design-react-check',
   'env-leak-check',
   'agent-env-check',
+  'app-port-env-check',
   'worker-credentials-check',
   'first-run-words-check',
   'execution-check',

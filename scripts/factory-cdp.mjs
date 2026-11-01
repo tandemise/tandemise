@@ -12,14 +12,20 @@
  *   node scripts/factory-cdp.mjs type 'text'           type into the held terminal, then Enter
  *   node scripts/factory-cdp.mjs key Down|Up|Enter|Esc a key into the held terminal
  *
- * The port is $FACTORY_HOME/cdp-port, written by scripts/factory.sh start.
+ * The port is $FACTORY_HOME/cdp-port, written by scripts/factory.sh start --cdp.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const home = process.env.FACTORY_HOME ?? join(homedir(), '.tandemise-factory');
-const port = Number(readFileSync(join(home, 'cdp-port'), 'utf8').trim());
+let port;
+try {
+  port = Number(readFileSync(join(home, 'cdp-port'), 'utf8').trim());
+} catch {
+  console.error('the window has no DevTools port open; start it with: scripts/factory.sh start --cdp');
+  process.exit(1);
+}
 const [command, a1, a2] = process.argv.slice(2);
 
 const tabs = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
