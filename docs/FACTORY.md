@@ -71,8 +71,9 @@ modules:                     # only ever add
               gate: 'artifact.ReviewReport.exists && review.blocking_findings == 0' }
 holdApproval: { minTasks: 5, rate: 0.4 }
 tiebreak: on                 # a cheap model breaks ties only when the rules can't tell
-ci:                          # what a failing CI check is about: metadata | code | unknown
-  checks: { "deploy-*": code }
+ci:                          # CI on the pull request
+  checks: { "deploy-*": code }   # what a failing check is about: metadata | code | unknown
+  maxRounds: 3               # rounds a mission takes on its own before a card asks you
 ```
 
 - **Profile**: type, size and risk, each with the signals that set it. Any
@@ -289,6 +290,26 @@ log, and a round starts only once you say it is about code. The name decides
 first, then what the check printed; `ci.checks` in `planner.yaml` maps a name
 or a glob to `metadata`, `code` or `unknown` and wins over both. Until GitHub
 has registered a check, the step reads "Waiting for checks to start".
+
+**Rounds from CI are bounded.** A step whose branch has no commit beyond the
+remote base opens no pull request: the ship step ends with "Nothing to ship:
+the change is already on `<base>`", and the mission says so. A red check sends
+the code step back for another round only while the mission has taken fewer
+rounds (review findings and CI alike) than `ci.maxRounds` (3 unless
+`planner.yaml` says otherwise); past it, the step stops on a card with the last
+failure: **Try again** allows one more round, **Hold** leaves it stopped, and
+**Cancel the mission** ends it. A round whose pass leaves the code as it was
+(the same commit, or the same tree, as the one CI failed on) stops at once on
+the same card, before any later step runs again.
+
+**A round is checked against CI as it is now.** Before a CI round's code step
+starts (after a pause, a restart, or a retry), and before the steps after it
+start again, CI is read on the pull request: if the check that started the
+round passes now on the same commit, the round is dropped, the feed says so,
+and the mission goes on to ship. A step in such a round that says the plan no
+longer fits offers **Re-check and continue to ship**, recommended once the
+check passes; while the pull request is open and green, the card never
+recommends skipping the steps after it.
 
 **Revert** on the ship card undoes a merge through its own pull request. For a
 day after a merge, a failing check on main puts a card in the Inbox; Tandemise

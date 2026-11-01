@@ -1,11 +1,12 @@
 import type {
   Approval, ApprovalRepositoryPort, ArtifactManifest, ArtifactRepositoryPort, Mission, MissionTask,
 } from '@tandemise/domain';
-import { CONTINUE_PLAN_OPTION, REPLAN_REST_OPTION, REQUEST_CHANGES_OPTION, SKIP_REST_OPTION, isPlanFitCard, isTrialMission } from '@tandemise/domain';
+import { CONTINUE_PLAN_OPTION, RECHECK_SHIP_OPTION, REPLAN_REST_OPTION, REQUEST_CHANGES_OPTION, SKIP_REST_OPTION, isPlanFitCard, isTrialMission } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
 import type { WorkspaceId } from '@tandemise/shared';
 import type { EventRecorder } from '../support/event-recorder.js';
 import type { RequestAddress } from './reviews.js';
+import { RECHECKED_NOTE, recommendedFor, type CiNow } from './ci-rounds.js';
 
 export interface PlanFitDeps {
   readonly artifacts: ArtifactRepositoryPort;
@@ -14,6 +15,10 @@ export interface PlanFitDeps {
   readonly recorder: EventRecorder;
   /** Who a card on the stopping step goes to: the same people as any other card on it. */
   readonly addressFor: (task: MissionTask, workspaceId: WorkspaceId) => RequestAddress;
+  /** Whether the step is in a round a red CI check started (#200): its card can re-check CI and go on to ship. */
+  readonly inCiRound?: (task: MissionTask) => boolean;
+  /** CI on the mission's pull request as last read, for the card's recommendation (#200). */
+  readonly ciNow?: (missionId: string) => CiNow | undefined;
 }
 
 const HELD_PREFIX = "Waiting for you: '";
@@ -68,11 +73,23 @@ export class PlanFit {
       this.#file(mission, dependency, stopped);
       return planFitReason(dependency);
     }
-    return card.status === 'PENDING' ? planFitReason(dependency) : null;
+    // "Re-check and continue to ship" holds the steps until the re-check has dropped the round (#200).
+    const rechecking = card.selectedOptionId === RECHECK_SHIP_OPTION && !(card.decisionNote ?? '').startsWith(RECHECKED_NOTE);
+    return card.status === 'PENDING' || rechecking ? planFitReason(dependency) : null;
   }
 
   #file(mission: Mission, task: MissionTask, stopped: ArtifactManifest): void {
     const stop = stopped.handoff?.stop ?? '';
+    const recheck = this.deps.inCiRound?.(task) === true;
+    const options = [
+      ...(recheck ? [{ id: RECHECK_SHIP_OPTION, label: 'Re-check and continue to ship' }] : []),
+      { id: SKIP_REST_OPTION, label: 'Skip the steps after it' },
+      { id: REQUEST_CHANGES_OPTION, label: 'Send it back with a note' },
+      { id: REPLAN_REST_OPTION, label: 'Plan the rest again' },
+      { id: CONTINUE_PLAN_OPTION, label: 'Continue as planned' },
+    ];
+    // Never "skip the steps after it" while the pull request is open and green (#200).
+    const recommended = recommendedFor({ options }, this.deps.ciNow?.(mission.id) ?? null);
     const approval = this.deps.approvalFactory.createOrThrow({
       workspaceId: mission.workspaceId,
       missionId: mission.id,
@@ -81,20 +98,16 @@ export class PlanFit {
       risk: 'read',
       title: `‘${task.title}’ says the plan no longer fits`,
       rationale: stop,
-      effect: 'Skip the steps after it and the mission finishes on what was done. Send it back and it goes again as its next round, '
+      effect: (recheck ? 'Re-check reads CI again: if the check that started this round passes now on the same commit, the round is dropped and the mission goes on to ship. ' : '')
+        + 'Skip the steps after it and the mission finishes on what was done. Send it back and it goes again as its next round, '
         + 'briefed by your note. Plan the rest again and the planner writes new steps from what is done, for you to approve. '
         + 'Continue as planned and the next steps start on what it wrote.',
       evidence: [
         { kind: 'artifact', label: stopped.title, value: stopped.id },
         ...(stopped.handoff?.needs ? [{ kind: 'text' as const, label: 'It needs', value: stopped.handoff.needs }] : []),
       ],
-      options: [
-        { id: SKIP_REST_OPTION, label: 'Skip the steps after it', recommended: true },
-        { id: REQUEST_CHANGES_OPTION, label: 'Send it back with a note' },
-        { id: REPLAN_REST_OPTION, label: 'Plan the rest again' },
-        { id: CONTINUE_PLAN_OPTION, label: 'Continue as planned' },
-      ],
-      recommendedOptionId: SKIP_REST_OPTION,
+      options: options.map((o) => ({ ...o, recommended: o.id === recommended })),
+      recommendedOptionId: recommended,
       ...this.deps.addressFor(task, mission.workspaceId),
     });
     this.deps.approvals.create(approval);
@@ -104,6 +117,11 @@ export class PlanFit {
     );
     this.deps.recorder.invalidate('approvals', mission.id);
   }
+}
+
+/** Whether the step's newest output says the plan no longer fits. */
+export function stopsPlan(outputs: readonly ArtifactManifest[]): boolean {
+  return stoppedOutput(outputs) !== undefined;
 }
 
 /** The newest live output of a step whose handoff says stop, if any. */

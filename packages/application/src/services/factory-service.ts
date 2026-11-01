@@ -224,7 +224,7 @@ function shipStage(ship: MissionTask | undefined, prs: number): Pick<ShipView, '
     case 'SUCCEEDED':
       return { stage: 'opened', headline: 'Pull request opened', status: ship.statusReason ?? 'The pull request is open.' };
     case 'SKIPPED':
-      return { stage: 'skipped', headline: 'No pull request', status: ship.statusReason ?? 'Nothing was shipped.' };
+      return { stage: 'skipped', headline: (ship.statusReason ?? '').startsWith('Nothing to ship') ? 'Nothing to ship' : 'No pull request', status: ship.statusReason ?? 'Nothing was shipped.' };
     case 'CANCELLED':
       return { stage: 'cancelled', headline: 'No pull request', status: 'The mission stopped before the pull request opened.' };
     case 'BLOCKED':

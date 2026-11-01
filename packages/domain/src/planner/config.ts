@@ -105,13 +105,16 @@ export const plannerConfigSchema = z.object({
   tiebreak: onOff.default('on'),
   checks: checkSettings.default({ budgets: {} }),
   /**
-   * What a failing CI check on the pull request is about (#194): a check's
-   * name, or a glob over it, mapped to `metadata`, `code` or `unknown`. Wins
-   * over the defaults, which read the check's name and what it printed.
+   * CI on the pull request. `checks` (#194): what a failing check is about, a
+   * check's name or a glob over it mapped to `metadata`, `code` or `unknown`,
+   * winning over the defaults, which read the check's name and what it
+   * printed. `maxRounds` (#196): how many rounds a mission takes on its own
+   * before a person decides.
    */
   ci: z.object({
     checks: z.record(name, z.enum(CI_CHECK_KINDS)).default({}),
-  }).default({ checks: {} }),
+    maxRounds: z.number().int().min(1).max(50).default(3),
+  }).default({ checks: {}, maxRounds: 3 }),
 });
 
 export type PlannerConfig = z.infer<typeof plannerConfigSchema>;

@@ -363,8 +363,11 @@ for (const { type, destination } of outputs) {
     : type === 'ChangeSet'
       ? { ...FRONT.ChangeSet, filesChanged: 1 }
       : FRONT[type] ?? {};
-  // A ChangeSet touches a file, so a round leaves a commit on the task's branch.
-  if (type === 'ChangeSet') appendFileSync(join(workIn, 'hello.txt'), `round ${inRound ? feedbackItems.map((f) => f.id).join(',') : 'first'}\n`);
+  // A ChangeSet touches a file, so a round leaves a commit on the task's branch. #196: SCRIPTED_NO_CHANGE (in the
+  // goal) never touches it, so the branch has nothing beyond the base; SCRIPTED_SAME_IN_ROUND leaves it as it was
+  // in a round, so the round changes nothing.
+  const keepsCode = mode('SCRIPTED_NO_CHANGE') || (inRound && mode('SCRIPTED_SAME_IN_ROUND'));
+  if (type === 'ChangeSet' && !keepsCode) appendFileSync(join(workIn, 'hello.txt'), `round ${inRound ? feedbackItems.map((f) => f.id).join(',') : 'first'}\n`);
   // #53: SCRIPTED_TOUCH=<path> (repeatable, in the goal) makes the code step create or append to that file
   // in its worktree too, so a scenario can steer which paths the measured change touches.
   if (type === 'ChangeSet') {

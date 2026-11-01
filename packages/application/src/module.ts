@@ -44,7 +44,7 @@ import { RecoveryService } from './engine/recovery.js';
 import { RemediationPlanner } from './engine/remediation.js';
 import { FeedbackRounds } from './engine/feedback-rounds.js';
 import { SchedulerService } from './engine/scheduler.js';
-import { PlanFit } from './engine/plan-fit.js';
+import { PlanFit, stopsPlan } from './engine/plan-fit.js';
 import { McpGatewayProvisioner } from './engine/mcp-gateway.js';
 import { TaskExecutor } from './engine/task-executor.js';
 import { EvalRunner } from './engine/eval-runner.js';
@@ -66,6 +66,7 @@ import { ArtifactServiceImpl } from './services/artifact-service.js';
 import { WorkflowServiceImpl } from './services/workflow-service.js';
 import { Waiter } from './engine/waiter.js';
 import { PullRequestWait } from './engine/pr-wait.js';
+import { CiRoundGuard, ciRoundOf } from './engine/ci-rounds.js';
 import { IntegrationServiceImpl } from './services/integration-service.js';
 import { MissionServiceImpl } from './services/mission-service.js';
 import { HoldServiceImpl } from './services/hold-service.js';
@@ -476,6 +477,26 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       },
     }), { source: SOURCE });
 
+    bind(t.CI_ROUND_GUARD, (r) => new CiRoundGuard({
+      missions: r.resolve(t.MISSION_REPOSITORY),
+      tasks: r.resolve(t.TASK_REPOSITORY),
+      feedback: r.resolve(t.FEEDBACK_REPOSITORY),
+      events: r.resolve(t.EVENT_REPOSITORY),
+      approvals: r.resolve(t.APPROVAL_REPOSITORY),
+      approvalFactory: r.resolve(APPROVAL_FACTORY),
+      repositories: r.resolve(t.REPO_REPOSITORY),
+      pullRequests: r.resolve(t.PULL_REQUEST_FLOW),
+      exec: r.tryResolve(INTEGRATION_COMMAND_EXECUTOR) ?? null,
+      branchesFor: (mission) => r.resolve(t.BRANCH_INTEGRATION_SERVICE).branchesFor(mission),
+      opened: (mission) => openedPullRequests(r, mission.id),
+      stops: (task) => stopsPlan(r.resolve(t.ARTIFACT_REPOSITORY).listByTask(task.id)),
+      unitOfWork: r.resolve(t.UNIT_OF_WORK),
+      recorder: r.resolve(t.EVENT_RECORDER),
+      clock: clock(r),
+      log: log(r).child({ component: 'ci-rounds' }),
+      lookEveryMs: shipPollMs,
+    }), { source: SOURCE });
+
     bind(t.SCHEDULER, (r) => new SchedulerService({
       workspaces: r.resolve(t.WORKSPACE_REPOSITORY),
       missions: r.resolve(t.MISSION_REPOSITORY),
@@ -510,7 +531,10 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
         approvalFactory: r.resolve(APPROVAL_FACTORY),
         recorder: r.resolve(t.EVENT_RECORDER),
         addressFor: (task, workspaceId) => r.resolve(t.REVIEW_PIPELINE).addressFor(task, workspaceId),
+        inCiRound: (task) => ciRoundOf(task, r.resolve(t.FEEDBACK_REPOSITORY)) !== null,
+        ciNow: (missionId) => r.resolve(t.CI_ROUND_GUARD).ciNow(missionId),
       }),
+      ciRounds: r.resolve(t.CI_ROUND_GUARD),
       // Resolved per pass, not at construction: the backlog plans through the
       // planning service, which is composed with the API services after this.
       // Resolved per pass: routines create missions through the mission service, composed after this.
@@ -840,6 +864,8 @@ export function createApplicationModule(options: ApplicationModuleOptions = {}):
       skills: r.resolve(t.SKILL_SERVICE),
       proposals: r.resolve(t.PLAN_PROPOSAL_REPOSITORY),
       replanRest: (missionId, note, planFitApprovalId) => r.resolve(t.PLANNING_SERVICE).replan(missionId, { note, planFitApprovalId }),
+      recheckCiRound: (card) => r.resolve(t.CI_ROUND_GUARD).recheck(card),
+      cancelMission: (missionId, reason) => r.resolve(t.MISSION_SERVICE).cancel(missionId, reason),
       claims: {
         assertMayStart: (mission) => r.resolve(t.COORDINATION_SERVICE).assertMayStart(mission),
         abandonStart: (mission) => r.resolve(t.COORDINATION_SERVICE).abandonStart(mission),
