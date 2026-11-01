@@ -242,6 +242,12 @@ export function TaskDetail({ task, detail, onClose }: { task: TaskView; detail: 
           {task.targetName ? <Chip>{task.targetName}</Chip> : null}
           <Chip muted>{task.executionPolicy.isolation} isolation</Chip>
         </div>
+        {/* #131: the team's own skill this step runs instead of its role's prompt. */}
+        {task.runSkill ? (
+          <p className="muted" aria-label="Runs the skill" style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>
+            Runs the skill <span className="mono">/{task.runSkill.name}{task.runSkill.args ? ` ${task.runSkill.args}` : ''}</span> instead of the role&apos;s instructions.
+          </p>
+        ) : null}
         {/* The skills the newest run got, at their pinned versions (P13). */}
         {skillsLine(task) ? (
           <p className="muted" aria-label="Skills" style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>{skillsLine(task)}</p>

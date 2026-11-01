@@ -268,6 +268,8 @@ function TaskCard({
       <div className="taskcard__ids">
         <span className="dim">{task.key}</span>
       </div>
+      {/* #131: the team's own skill this step runs instead of its role's prompt. */}
+      {task.runSkill ? <div className="taskcard__ids" aria-label="Runs skill"><span className="mono">Runs /{task.runSkill.name}</span></div> : null}
 
       <TaskPeople task={task} actors={actors} />
 

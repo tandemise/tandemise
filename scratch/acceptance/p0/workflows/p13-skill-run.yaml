@@ -1,0 +1,10 @@
+name: P13 team skill
+description: One step that runs the team's own plugin skill instead of the Developer's prompt (#131).
+steps:
+  - key: implement
+    title: Implement
+    role: development
+    objective: Build the hello page.
+    outputs: [ChangeSet]
+    gate: artifact.ChangeSet.exists
+    runSkill: { name: 'team:build-feature', args: '{{mission.title}}' }

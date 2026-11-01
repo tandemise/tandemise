@@ -60,6 +60,27 @@ section('pure: refs, markers and the Sources section');
   check('sourcesCommentBody renders entries as the Sources section', typeof D.sourcesCommentBody === 'function' && eq(D.parseSourcesSection?.(D.sourcesCommentBody([{ url: 'https://a.test/1', title: 'A', context: '' }])), ['https://a.test/1']));
 }
 
+section('pure: what Start refuses (#136)');
+{
+  const cfg = { buildTypes: ['Bug', 'Task'], repoTag: 'repo:web' };
+  const refuse = (item, config = cfg) => D.startRefusal?.(item, config);
+  check('a plain Task with no tags or subtasks may start', refuse({ type: 'Task' }) === null);
+  check('a container: Has 4 subtasks. Start one of them.', refuse({ type: 'Task', subtasks: 4 }) === 'Has 4 subtasks. Start one of them.', refuse({ type: 'Task', subtasks: 4 }));
+  check('one subtask is said in the singular', refuse({ type: 'Task', subtasks: 1 }) === 'Has 1 subtask. Start it instead.', refuse({ type: 'Task', subtasks: 1 }));
+  check('no open subtasks is not a container', refuse({ type: 'Task', subtasks: 0 }) === null);
+  check('a Spike: this project starts Bug and Task items.', refuse({ type: 'Spike' }) === 'Spike: this project starts Bug and Task items.', refuse({ type: 'Spike' }));
+  check('three build types read as a list', refuse({ type: 'Epic' }, { buildTypes: ['Bug', 'Task', 'Story'] }) === 'Epic: this project starts Bug, Task and Story items.');
+  check('types match without regard to case', refuse({ type: 'bug' }) === null);
+  check('no buildTypes: every type is buildable', refuse({ type: 'Spike' }, {}) === null && refuse({ type: 'Spike' }, { buildTypes: [] }) === null);
+  check('an item with no type is not refused for its type', refuse({}) === null);
+  check('another repository: Belongs to another repository (repo:api).', refuse({ type: 'Bug', tags: ['urgent', 'repo:api'] }) === 'Belongs to another repository (repo:api).', refuse({ type: 'Bug', tags: ['repo:api'] }));
+  check("an item carrying this project's tag may start, even with another", refuse({ type: 'Bug', tags: ['repo:api', 'Repo:Web'] }) === null);
+  check('an item with no repository tag may start', refuse({ type: 'Bug', tags: ['urgent'] }) === null);
+  check('no repoTag: another repository tag refuses nothing', refuse({ type: 'Bug', tags: ['repo:api'] }, {}) === null);
+  check("another repository's Spike container is refused for the repository first",
+    refuse({ type: 'Spike', subtasks: 2, tags: ['repo:api'] }) === 'Belongs to another repository (repo:api).');
+}
+
 // ------------------------------------------------------------------ youtrack
 section('pure: the mission header for a tracker item (#105)');
 {
@@ -211,6 +232,24 @@ try {
   const withFile = await yt.create({ title: 'With a file', description: 'x', attachments: [{ name: 'trace.txt', mediaType: 'text/plain', content: new TextEncoder().encode('stack') }] });
   check('an attachment with content is uploaded to the item', eq((fake.attachments.get(withFile.key) ?? []).map((a) => a.name), ['trace.txt']), fake.attachments.get(withFile.key));
 
+  // #136: tags and open subtasks, as the board and a fresh read report them.
+  const parent = fake.putIssue({ summary: 'Container of work', state: 'Open', type: 'Task', tags: ['repo:web'] });
+  fake.putIssue({ summary: 'First part', state: 'Open', type: 'Task', parent: parent.idReadable });
+  fake.putIssue({ summary: 'Second part', state: 'Open', type: 'Task', parent: parent.idReadable });
+  fake.putIssue({ summary: 'Third part, done', state: 'Done', type: 'Task', parent: parent.idReadable });
+  const spike = fake.putIssue({ summary: 'Research the cache', state: 'Open', type: 'Spike', tags: ['repo:api', 'research'] });
+  const read = await yt.get(D.trackerRef('youtrack', parent.idReadable));
+  check('get() counts the open subtasks: 2 of 3', read.subtasks === 2, read);
+  check('get() reports the tags', eq(read.tags, ['repo:web']), read.tags);
+  check('every issue read asks for the tags and the subtasks', fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('tags(name)')
+    && fake.calls.findLast((c) => c.path.startsWith('/api/issues/'))?.query.get('fields')?.includes('subtasks(issues(idReadable,resolved))'));
+  const onBoard = await yt.board({ query: 'project: GAR #Unresolved', limit: 50 });
+  const boardSpike = onBoard.find((i) => i.key === spike.idReadable);
+  const plain = onBoard.find((i) => i.title === 'First part');
+  check('board() reports the type, tags and subtasks too', boardSpike?.type === 'Spike' && eq(boardSpike?.tags, ['repo:api', 'research']) && boardSpike?.subtasks === 0
+    && onBoard.find((i) => i.key === parent.idReadable)?.subtasks === 2, boardSpike);
+  check('an item with neither has no tags and no open subtasks', plain !== undefined && eq(plain.tags, []) && plain.subtasks === 0, plain);
+
   // The composition seam: the module contributes a factory for `kind: youtrack`.
   check('integrations-core exports PRIMARY_TRACKER_FACTORIES', I.PRIMARY_TRACKER_FACTORIES !== undefined && K.isMultiToken(I.PRIMARY_TRACKER_FACTORIES));
   const container = K.compose(new K.Container(), Y.youtrackIntegrationModule);
@@ -296,6 +335,7 @@ try {
 
   await gt.transition(made.ref, 'status: in progress');
   const inProgress = await gt.get(made.ref);
+  check('the state label is not among the tags (#136)', Array.isArray(inProgress.tags) && !inProgress.tags.includes('status: in progress'), inProgress.tags);
   check("transition(#1, 'status: in progress'): the labels have it and state reads it",
     readState(GH).repos['acme/web'].issues[0].labels.some((l) => l.name === 'status: in progress') && inProgress.state === 'status: in progress', inProgress);
   await gt.transition(made.ref, 'status: in review');
@@ -399,6 +439,64 @@ try {
   check('the factory refuses without a repo', noRepo?.code === 'PRECONDITION_FAILED', noRepo?.message);
 } catch (e) {
   check('the github section ran', false, String(e?.stack ?? e));
+}
+
+// ------------------------------------------------------------------ refine a draft (#135)
+section('refine a draft (#135): the refined description, the activity line, and both adapters');
+{
+  const original = 'Customers on Safari cannot pay.\n\n## Done when\n- [ ] Something vague\n\n## Notes\nKeep the old flow.';
+  const refined = D.refinedDescription(original, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]);
+  check('refinedDescription keeps the text, replaces the Done-when section and adds Decisions',
+    refined === 'Customers on Safari cannot pay.\n\n## Notes\nKeep the old flow.\n\n## Done when\n- [ ] Checkout completes on Safari 17\n- [ ] A failed payment says why\n\n## Decisions\n- Which Safari versions? — 17 and later', refined);
+  check('…parseCriteria reads exactly the accepted lines back', eq(D.parseCriteria(refined), ['Checkout completes on Safari 17', 'A failed payment says why']), D.parseCriteria(refined));
+  check('…and writing it twice writes the same text', D.refinedDescription(refined, ['Checkout completes on Safari 17', 'A failed payment says why'], [{ question: 'Which Safari versions?', answer: '17 and later' }]) === refined);
+  check('an empty description gets only the sections', D.refinedDescription('', ['A'], []) === '## Done when\n- [ ] A');
+  const line = D.refinedActivityLine({ by: 'Ana', criteria: 2, answered: 1, from: 'Draft', to: 'Open' });
+  check('refinedActivityLine: Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.',
+    line === 'Refined in Tandemise by Ana: 2 Done-when lines, 1 answered question. Moved from Draft to Open.', line);
+  check('…with one line and no answers', D.refinedActivityLine({ by: 'Ana', criteria: 1, answered: 0, from: 'Draft', to: 'Open' }) === 'Refined in Tandemise by Ana: 1 Done-when line. Moved from Draft to Open.');
+  const started = D.activityCommentBody({ starter: 'Ana', missionTitle: 'Checkout', steps: null, prUrl: null, completed: null, cancelled: null, refined: D.refinedLineOf(`${line}`) });
+  check('a later activity comment keeps the refined line on top', started === `${line}\n\nStarted in Tandemise by Ana: Checkout.`, started);
+  check('refinedLineOf finds nothing in a plain activity comment', D.refinedLineOf('Started in Tandemise by Ana: Checkout.') === null);
+  const mapping = { kind: 'youtrack', project: 'GAR', states: { ready: ['Open'], in_progress: 'In Progress', done: ['Done'], wont_do: [], draft: ['Draft'] }, onComplete: 'done' };
+  check('a draft state the tracker lacks is a mapping problem', D.stateMappingProblem(mapping, { states: ['Open', 'In Progress', 'Done'] })?.startsWith("YouTrack has no state 'Draft' in GAR."));
+  check('…and one it has is not', D.stateMappingProblem(mapping, { states: ['Draft', 'Open', 'In Progress', 'Done'] }) === null);
+
+  const Y = await import('@tandemise/integration-youtrack');
+  const ytFake = await startFakeYouTrack({ project: 'GAR', states: ['Draft', ...STATES], token: 'perm:test', login: 'tandemise-bot' });
+  try {
+    ytFake.putIssue({ idReadable: 'GAR-7', summary: 'Pay on Safari', description: original, state: 'Draft' });
+    const yt = new Y.YouTrackTracker({ url: ytFake.url, project: 'GAR', token: 'perm:test' });
+    const ref = D.trackerRef('youtrack', 'GAR-7');
+    await yt.updateDescription(ref, refined);
+    check('youtrack: updateDescription posts the description to /api/issues/GAR-7', ytFake.issues.get('GAR-7')?.description === refined
+      && ytFake.calls.some((c) => c.method === 'POST' && c.path === '/api/issues/GAR-7'), ytFake.issues.get('GAR-7')?.description);
+    check('…and leaves the summary and state alone', ytFake.issues.get('GAR-7')?.summary === 'Pay on Safari' && ytFake.issues.get('GAR-7')?.state === 'Draft');
+  } catch (e) {
+    check('the youtrack refine section ran', false, String(e?.stack ?? e));
+  } finally {
+    await ytFake.close();
+  }
+
+  const G = await import('@tandemise/integration-github');
+  const draftStates = { ready: ['open'], in_progress: 'status: in progress', done: ['closed'], wont_do: [], draft: ['draft'] };
+  check('github: the draft label is a state label', eq(G.githubStateLabels(draftStates), ['status: in progress', 'draft']));
+  try {
+    const gt = new G.GhPrimaryTracker(exec, { repo: 'acme/refine', stateLabels: G.githubStateLabels(draftStates) });
+    putLabels(GH, 'acme/refine', ['draft', 'status: in progress']);
+    const made = await gt.create({ title: 'Pay on Safari', description: original });
+    await gt.transition(made.ref, 'draft');
+    check('github: an open issue carrying the draft label reads as draft', (await gt.get(made.ref)).state === 'draft');
+    await gt.updateDescription(made.ref, refined);
+    const editCall = calls(GH).findLast((c) => c.args[0] === 'issue' && c.args[1] === 'edit' && c.args.includes('--body'));
+    check('github: updateDescription is gh issue edit N --repo acme/refine --body <text>', editCall?.args[editCall.args.indexOf('--body') + 1] === refined
+      && editCall.args[editCall.args.indexOf('--repo') + 1] === 'acme/refine', editCall?.args);
+    await gt.transition(made.ref, 'open');
+    const after = await gt.get(made.ref);
+    check('github: moving it to open drops the draft label, and the body is the refined one', after.state === 'open' && after.description === refined, after);
+  } catch (e) {
+    check('the github refine section ran', false, String(e?.stack ?? e));
+  }
 }
 
 // ------------------------------------------------------------------ resolver

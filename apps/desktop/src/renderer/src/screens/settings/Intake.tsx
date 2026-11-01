@@ -147,7 +147,10 @@ interface TrackerDraft {
   inReview: string;
   done: string;
   wontDo: string;
+  draft: string;
   onComplete: TrackerConfig['onComplete'];
+  buildTypes: string;
+  repoTag: string;
 }
 
 const list = (text: string): string[] => text.split(',').map((s) => s.trim()).filter((s) => s !== '');
@@ -164,7 +167,10 @@ function trackerDraft(t: TrackerConfig | null): TrackerDraft {
     inReview: t?.states.in_review ?? '',
     done: (t?.states.done ?? ['Done']).join(', '),
     wontDo: (t?.states.wont_do ?? []).join(', '),
+    draft: (t?.states.draft ?? []).join(', '),
     onComplete: t?.onComplete ?? 'done',
+    buildTypes: (t?.buildTypes ?? []).join(', '),
+    repoTag: t?.repoTag ?? '',
   };
 }
 
@@ -179,10 +185,13 @@ function trackerOf(d: TrackerDraft, before: TrackerConfig | null): TrackerConfig
       ...(d.inReview.trim() === '' ? {} : { in_review: d.inReview.trim() }),
       done: list(d.done),
       wont_do: list(d.wontDo),
+      ...(list(d.draft).length === 0 ? {} : { draft: list(d.draft) }),
     },
     onComplete: d.onComplete,
     // Item types to workflows are not edited here; what is set is kept.
     ...(before?.workflows === undefined ? {} : { workflows: before.workflows }),
+    ...(list(d.buildTypes).length === 0 ? {} : { buildTypes: list(d.buildTypes) }),
+    ...(d.repoTag.trim() === '' ? {} : { repoTag: d.repoTag.trim() }),
   };
 }
 
@@ -248,11 +257,23 @@ function TrackerCard({ view, readOnly }: { view: IntakeConfigView; readOnly: boo
         <Field label="Won't do" hint="Optional. Separate several with commas.">
           <input className="input" value={draft.wontDo} onChange={(e) => set({ wontDo: e.target.value })} />
         </Field>
+        <Field label="Draft" hint="Optional. Work still to be refined: the Board offers Refine on it, never Start.">
+          <input className="input" value={draft.draft} onChange={(e) => set({ draft: e.target.value })} />
+        </Field>
         <Field label="When a mission completes">
           <select className="select" aria-label="When a mission completes" value={draft.onComplete} onChange={(e) => set({ onComplete: e.target.value as TrackerDraft['onComplete'] })}>
             <option value="in_review">Move it to in review</option>
             <option value="done">Move it to done</option>
           </select>
+        </Field>
+      </div>
+      <h4 className="intake-settings__minor">What Start offers</h4>
+      <div className="grid grid--2">
+        <Field label="Types to build" hint="Optional. Your tracker's item types this project starts, like Bug, Task. Others show on the Board with Start off. Empty starts every type.">
+          <input className="input" value={draft.buildTypes} onChange={(e) => set({ buildTypes: e.target.value })} placeholder="Bug, Task" />
+        </Field>
+        <Field label="Repository tag" hint="Optional. The tag that marks this repository's work, like repo:web. An item tagged for another repository (repo:api) shows with Start off.">
+          <input className="input mono" value={draft.repoTag} onChange={(e) => set({ repoTag: e.target.value })} placeholder="repo:web" />
         </Field>
       </div>
       {save.isError ? <Refusal error={save.error} /> : null}
