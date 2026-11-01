@@ -6,7 +6,7 @@
 // and hands back its state, so a check can say exactly what the adapter asked
 // YouTrack to do. As a script, for the acceptance run:
 //
-//   node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project GAR] [--token perm:test] [--login tandemise-bot]
+//   node scratch/fake-youtrack.mjs --port 0 --state <dir> [--project GAR] [--token perm:test] [--login tandemise-bot] [--states A,B,…]
 //
 // it writes its base URL to <dir>/url and persists everything to
 // <dir>/state.json after each change (and reads it back on start).
@@ -324,6 +324,14 @@ export async function startFakeYouTrack(options = {}) {
         const sub = m[2] ?? '';
         const key = issue.idReadable;
         if (req.method === 'GET' && sub === '') return send(200, issueJson(issue, u.searchParams.get('fields') ?? ''));
+        if (req.method === 'POST' && sub === '') {
+          const body = json();
+          if (typeof body.summary === 'string') issue.summary = body.summary;
+          if (typeof body.description === 'string') issue.description = body.description;
+          issue.updated = now();
+          save();
+          return send(200, issueJson(issue, u.searchParams.get('fields') ?? ''));
+        }
         if (req.method === 'GET' && sub === '/comments') {
           return send(200, (comments.get(key) ?? []).map((c) => ({ $type: 'IssueComment', id: c.id, text: c.text, author: { $type: 'User', login: c.author } })));
         }
@@ -416,6 +424,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     project: arg('project', 'GAR'),
     token: arg('token', 'perm:test'),
     login: arg('login', 'tandemise-bot'),
+    // A comma-separated list (`--states 'Open,In Progress,Draft'`); the first is where a new issue starts.
+    ...(arg('states') === undefined ? {} : { states: arg('states').split(',') }),
   });
   writeFileSync(join(stateDir, 'url'), fake.url);
   console.log(`fake YouTrack on ${fake.url} (state in ${stateDir})`);

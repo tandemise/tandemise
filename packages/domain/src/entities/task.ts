@@ -4,7 +4,7 @@ import type { ArtifactType } from './artifact.js';
 import type { GateExpression } from '../gate.js';
 import type { ResolvedStaffingSnapshot, StaffingPatch } from '../staffing.js';
 import type { ModelPolicy } from './models.js';
-import type { SkillPin } from './skill.js';
+import type { SkillPin, StepSkill } from './skill.js';
 import type { StepClass } from '../planner/types.js';
 
 /** Who carries a task out (MVP.md §11). */
@@ -151,6 +151,8 @@ export interface MissionTask {
    * engine added later resolves its role's pins on its first run.
    */
   readonly skills?: readonly SkillPin[] | null;
+  /** The team's skill this step runs instead of its role's prompt (#131); null or absent: the role's prompt. */
+  readonly runSkill?: StepSkill | null;
   readonly status: TaskStatus;
   /** What a person reads about the task's current state. Changes whenever it waits. */
   readonly statusReason: string | null;

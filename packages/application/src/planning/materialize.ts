@@ -234,6 +234,7 @@ function fromPlanned(
     retryPolicy: task.retryPolicy,
     completionGate: task.completionGate,
     modelPolicy: task.modelPolicy ?? null,
+    runSkill: task.runSkill ?? null,
     ...(task.stepClass === undefined || task.stepClass === null ? {} : { stepClass: task.stepClass }),
     status: task.dependsOn.length === 0 ? 'READY' : 'PENDING',
     statusReason: null,
