@@ -25,6 +25,14 @@ export interface ProvisionRequest {
    * same target rather than orphaning the old one (MVP.md §21.2).
    */
   readonly id?: ExecutionTargetId;
+  /**
+   * Bring a reused branch up to `baseBranch` before it is handed out (#138).
+   * Set when the base is an upstream step's branch: a round that redoes this
+   * step after the upstream step committed again must not run it on the old
+   * commit. Fast-forwards when it can, merges when the branch has its own
+   * commits, and refuses (CONFLICT) when they conflict.
+   */
+  readonly syncToBase?: boolean;
 }
 
 export interface ReleaseOptions {

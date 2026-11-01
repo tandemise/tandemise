@@ -2147,6 +2147,8 @@ export class TaskExecutor {
         repositoryPath,
         baseBranch: upstreamBranch ?? mission.baseBranch ?? repository?.defaultBranch,
         missionSlug: slugify(mission.title),
+        // #138: built on an upstream step's work, so it runs on that work as it is now.
+        syncToBase: upstreamBranch !== null,
       });
       const record = target.describe();
       this.deps.targets.update(id, {
