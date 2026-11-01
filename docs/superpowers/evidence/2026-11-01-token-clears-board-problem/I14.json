@@ -1,0 +1,47 @@
+{
+  "id": "I14",
+  "title": "Saving the tracker token clears the Board's cached problem",
+  "ok": true,
+  "checks": [
+    {
+      "label": "a second project exists",
+      "ok": true,
+      "observed": "ws_01m6b4r4gbjp2m3qkqem"
+    },
+    {
+      "label": "without a token the Board says to save a YouTrack permanent token",
+      "ok": true,
+      "observed": "Couldn't reach YouTrack: Save a YouTrack permanent token in this project's tracker settings first. Tandemise will try again."
+    },
+    {
+      "label": "proof (API): the board cache holds that problem",
+      "ok": true,
+      "observed": "Couldn't reach YouTrack: Save a YouTrack permanent token in this project's tracker settings first. Tandemise will try again."
+    },
+    {
+      "label": "proof (API): GET board answers no problem and the ready items right after Save token, without a refresh",
+      "ok": true,
+      "observed": {
+        "readyKeys": [
+          "GAR-1"
+        ],
+        "afterMs": 507
+      }
+    },
+    {
+      "label": "the Board shows the ready items and no problem banner",
+      "ok": true,
+      "observed": {
+        "banner": "",
+        "ready": [
+          "GAR-1"
+        ]
+      }
+    }
+  ],
+  "notes": [],
+  "shots": [
+    "I14-board-no-token.png",
+    "I14-board-after-token.png"
+  ]
+}
