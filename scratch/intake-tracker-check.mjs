@@ -37,7 +37,7 @@ const D = await import('@tandemise/domain');
 const I = await import('@tandemise/integrations-core');
 const K = await import('@tandemise/kernel');
 
-const STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete'];
+const STATES = ['Open', 'Submitted', 'In Progress', 'In Review', 'To Verify', 'Fixed', 'Done', "Won't fix", 'Duplicate', 'Obsolete'];
 
 // ------------------------------------------------------------------ pure
 section('pure: refs, markers and the Sources section');
@@ -123,7 +123,7 @@ try {
   });
   const bad = D.stateMappingProblem(mapping({ in_progress: 'In Review!' }), described);
   check("a mapping naming a missing state: YouTrack has no state 'In Review!' in GAR. Its states are: …",
-    bad === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
+    bad === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", bad);
   const noReview = mapping({});
   const { in_review: _dropped, ...withoutReview } = noReview.states;
   const missing = D.stateMappingProblem({ ...noReview, states: withoutReview }, described);
@@ -135,7 +135,7 @@ try {
   const created = await yt.create({ title: 'T', description: 'D\n\n## Sources\n- Sentry · acme/web · https://s.test/1', type: 'Bug' });
   check("create() returns key 'GAR-1' and ref youtrack:GAR-1", created.key === 'GAR-1' && created.ref === 'youtrack:GAR-1' && created.title === 'T', created);
   check('create() reads the item back: type Bug, state Open, a url on the tracker', created.type === 'Bug' && created.state === 'Open' && created.url === `${fake.url}/issue/GAR-1`, created);
-  check('the fake recorded one command, Type Bug', eq(fake.commands.map((c) => c.query), ['Type Bug']) && fake.commands[0].issues[0].idReadable === 'GAR-1', fake.commands);
+  check('the type is set as data, not by command (#187): Type=Bug on GAR-1, no command', eq(fake.fieldSets, [{ issue: 'GAR-1', fields: ['Type=Bug'] }]) && fake.commands.length === 0, { sets: fake.fieldSets, commands: fake.commands });
   check('every request carried the token and asked for JSON', fake.calls.length > 0 && fake.calls.every((c) => c.authorization === 'Bearer perm:test' && c.accept === 'application/json'));
 
   const found = await yt.search({ url: 'https://s.test/1', limit: 5 });
@@ -145,7 +145,7 @@ try {
   check('search({ url }) of an unknown URL finds nothing', (await yt.search({ url: 'https://s.test/2', limit: 5 })).length === 0);
 
   const second = await yt.create({ title: "TypeError: cannot read 'id' of undefined", description: 'x', fields: { Subsystem: 'Web' } });
-  check('fields are set by one command', fake.commands.at(-1)?.query === 'Subsystem Web', fake.commands.at(-1));
+  check('fields are set in one request', eq(fake.fieldSets.at(-1), { issue: 'GAR-2', fields: ['Subsystem=Web'] }), fake.fieldSets.at(-1));
   await yt.search({ text: "TypeError: cannot read 'id' of undefined in checkout", unresolvedOnly: true, limit: 20 });
   const textCall = fake.calls.findLast((c) => c.path === '/api/issues' && c.method === 'GET');
   check('search({ text }) asks for the unresolved items with the title words', textCall?.query.get('query') === 'project: GAR #Unresolved typeerror read id undefined checkout' && textCall?.query.get('$top') === '20', textCall?.query.get('query'));
@@ -185,7 +185,12 @@ try {
   check('search({ url }) finds an item by a URL in its sources comment', eq((await yt.search({ url: 'https://slack.test/a', limit: 5 })).map((i) => i.key), ['GAR-1']));
 
   await yt.transition(ref, 'In Progress');
-  check('transition() sends the command State {In Progress} (a value with a space is braced)', fake.commands.at(-1)?.query === 'State {In Progress}' && fake.commands.at(-1)?.issues[0].idReadable === 'GAR-1', fake.commands.at(-1));
+  check('transition() sets State as data, so a state with a space is sent as written (#187): State=In Progress', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['State=In Progress'] }), fake.fieldSets.at(-1));
+  const viaCommand = await fetch(`${fake.url}/api/commands`, {
+    method: 'POST', headers: { authorization: 'Bearer perm:test', accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify({ query: 'State {In Progress}', issues: [{ idReadable: 'GAR-1' }] }),
+  });
+  check('…the fake refuses that value as a command, as a real YouTrack did: 400 State expected: {In Progress}', viaCommand.status === 400 && (await viaCommand.json()).error_description === 'State expected: {In Progress}');
   const got = await yt.get(ref);
   check("get() then shows state 'In Progress'", got.state === 'In Progress' && got.key === 'GAR-1', got);
 
@@ -198,7 +203,7 @@ try {
     fake.issues.get('GAR-2')?.links.filter((l) => l.type === 'duplicates').length === 1 && (fake.comments.get('GAR-2') ?? []).length === gar2Comments,
     { links: fake.issues.get('GAR-2')?.links, comments: (fake.comments.get('GAR-2') ?? []).length });
   await yt.assign(ref, 'ana');
-  check('assign() sends the command Assignee <login>', fake.commands.at(-1)?.query === 'Assignee ana' && (await yt.get(ref)).assignee === 'ana');
+  check('assign() sets Assignee as data, by login', eq(fake.fieldSets.at(-1), { issue: 'GAR-1', fields: ['Assignee=ana'] }) && (await yt.get(ref)).assignee === 'ana');
   check('viewer() is the signed-in login', (await yt.viewer()) === 'tandemise-bot');
 
   // GAR-2 is a duplicate now, so resolved; GAR-1 is fixed by a person; GAR-3 is new.
@@ -222,13 +227,15 @@ try {
     refused?.code === 'INTEGRATION_FAILED' && refused?.message === "YouTrack refused the token. Make a new permanent token and save it in the project's tracker settings.", { code: refused?.code, message: refused?.message });
 
   const braced = await yt.create({ title: 'Braced values', description: 'x', fields: { Subsystem: 'Web App', Priority: 'Major' } });
-  check('a multi-word field value is braced, a single word is not: Subsystem {Web App} Priority Major',
-    fake.commands.at(-1)?.query === 'Subsystem {Web App} Priority Major' && fake.issues.get(braced.key)?.fields?.Subsystem === 'Web App', fake.commands.at(-1));
+  check('multi-word field values are sent as written: Subsystem=Web App, Priority=Major',
+    eq(fake.fieldSets.at(-1), { issue: braced.key, fields: ['Subsystem=Web App', 'Priority=Major'] }) && fake.issues.get(braced.key)?.fields?.Subsystem === 'Web App', fake.fieldSets.at(-1));
+  await yt.transition(braced.ref, 'To Verify');
+  check('a state with a space, To Verify, moves the item', fake.issues.get(braced.key)?.state === 'To Verify', fake.issues.get(braced.key)?.state);
   const unbraced = await refusal(() => fetch(`${fake.url}/api/commands`, {
     method: 'POST', headers: { authorization: 'Bearer perm:test', accept: 'application/json', 'content-type': 'application/json' },
     body: JSON.stringify({ query: 'State In Progress', issues: [{ idReadable: braced.key }] }),
   }).then((r) => { if (!r.ok) throw new Error(String(r.status)); }));
-  check('the fake, like YouTrack, refuses an unbraced multi-word value', unbraced !== null && fake.issues.get(braced.key)?.state === 'Open', unbraced?.message);
+  check('the fake, like YouTrack, refuses an unbraced multi-word value', unbraced !== null && fake.issues.get(braced.key)?.state === 'To Verify', unbraced?.message);
   const withFile = await yt.create({ title: 'With a file', description: 'x', attachments: [{ name: 'trace.txt', mediaType: 'text/plain', content: new TextEncoder().encode('stack') }] });
   check('an attachment with content is uploaded to the item', eq((fake.attachments.get(withFile.key) ?? []).map((a) => a.name), ['trace.txt']), fake.attachments.get(withFile.key));
 
@@ -571,7 +578,7 @@ try {
   check('validate() of a valid mapping is null', (await resolver.validate('ws_yt')) === null);
   configs.set('ws_yt', ytConfig({ in_progress: 'In Review!' }));
   const v = await resolver.validate('ws_yt');
-  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
+  check('validate() with the bad mapping returns the Task 4 sentence', v === "YouTrack has no state 'In Review!' in GAR. Its states are: Open, Submitted, In Progress, In Review, To Verify, Fixed, Done, Won't fix, Duplicate, Obsolete.", v);
   check('a changed config builds a new tracker', (await resolver.for('ws_yt')).tracker !== tracker);
   await resolver.saveCredential('ws_yt', 'perm:wrong');
   check('a new credential replaces the old one in the store', (await secrets.list()).filter((r) => r.includes(':intake:ws_yt:tracker:')).length === 1);
