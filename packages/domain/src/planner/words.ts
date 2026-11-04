@@ -135,8 +135,12 @@ export function bucketWords(bucket: string): string {
   return `${l} · ${SENSITIVITY_WORDS[sensitivity ?? 'none'] ?? 'not sensitive'}`;
 }
 
+/** A measured decision's `laneBecause` when the change was less risky than the item's text (#210). */
+export const LANE_STEPPED_DOWN = 'the change was lighter than its text';
+
 /** Why the lane, in words. `because` is a person's choice, the default, or the rule that matched. */
 export function laneBecauseSentence(because: string): string {
+  if (because === LANE_STEPPED_DOWN) return 'It stepped down once the change was measured: what it touches is less risky than its text said.';
   if (because === 'you chose it') return 'You chose it.';
   if (because === 'you made it quick') return 'You made it quick.';
   if (because === 'the default' || because === 'no lane rule matched') return 'No lane rule matched it, so it took the default lane.';

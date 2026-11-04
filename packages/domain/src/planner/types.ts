@@ -87,6 +87,12 @@ export interface ProfileInput {
   /** Set when the tiebreak ran and failed: the profile takes the conservative default and says so. */
   readonly tiebreakFailed?: string | null;
   readonly basis: 'predicted' | 'measured';
+  /**
+   * The files the change touched, once it is measured (#210). A keyword rule
+   * that would set risk from the item's text gives way to them: the areas
+   * they fall in, and those areas' sensitivity floor, decide.
+   */
+  readonly changed?: readonly string[];
 }
 
 /** The fields a failed tiebreak leaves conservative (#53 §2). */

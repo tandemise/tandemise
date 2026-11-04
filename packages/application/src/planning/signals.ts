@@ -3,9 +3,9 @@ import type { Mission, MissionCriterion, ProfileHistory, ProfileInput, Repositor
 /**
  * Gathers a task's profile signals from what is known at Start (#53 §2): its
  * title and goal, the Done-when lines a person gave, file paths named in the
- * text, the repositories named, and a person's Quick or Careful. #52's
- * tracker item (type, labels, sources) plugs in here when it lands; until
- * then a P14 issue contributes its title, which the mission already carries.
+ * text, the repositories named, and a person's Quick or Careful; and, when
+ * Start made the mission from a tracker item, that item's type and labels
+ * (#154). Once the change is measured, the files it touched (#210).
  */
 const PATH_PATTERN = /(?:^|[\s`'"(])((?:[\w.-]+\/)+[\w.-]+\.\w+)/g;
 
@@ -29,6 +29,8 @@ export function gatherSignals(input: {
   readonly trackerType?: string | null;
   readonly labels?: readonly string[];
   readonly sources?: readonly string[];
+  /** The files the change touched, once measured (#210). */
+  readonly changed?: readonly string[];
 }): ProfileInput {
   const { mission, repositories } = input;
   const text = `${mission.title}\n${mission.goal}`;
@@ -52,5 +54,6 @@ export function gatherSignals(input: {
     person: mission.laneRequest ?? 'auto',
     tiebreak: null,
     basis: input.basis ?? 'predicted',
+    ...(input.changed === undefined ? {} : { changed: input.changed }),
   };
 }

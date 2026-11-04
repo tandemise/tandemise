@@ -6,7 +6,7 @@ import type {
 } from '@tandemise/domain';
 import {
   APPROVE_OPTION, DEFAULT_ESCALATE_AFTER_MS, REJECT_OPTION, RUNTIME_ACTOR, decideMerge, decisionComment, foldOutcomes,
-  classifyCheck, closingLine, githubRepoFromRemote, isTitleCheck, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor,
+  classifyCheck, closingLine, githubRepoFromRemote, isTitleCheck, isTrialMission, prBody, prTitle, profileLine, squashTrailers, stepClassFor, trackerKindType,
 } from '@tandemise/domain';
 import type { CiCheckKind } from '@tandemise/domain';
 import type { ApprovalFactory } from '@tandemise/policy';
@@ -837,13 +837,12 @@ export class ShipService {
     });
   }
 
-  /** The tracker item's type (a YouTrack Bug), mapped as the shipped planner maps it. */
+  /** The tracker item's type (a YouTrack Bug), mapped as the planner's profile maps it (#154). */
   #trackerType(mission: Mission): TaskType | null {
     const type = this.deps.prFacts?.(mission).trackerType ?? null;
     if (type === null) return null;
-    const maps: Readonly<Record<string, TaskType>> = { ...SHIPPED_PLANNER.labels, ...SHIPPED_PLANNER.trackerTypes } as Readonly<Record<string, TaskType>>;
-    const key = Object.keys(maps).find((k) => k.toLowerCase() === type.toLowerCase());
-    return key === undefined ? null : maps[key]!;
+    const maps: Readonly<Record<string, TaskType>> = { ...SHIPPED_PLANNER.labels, ...SHIPPED_PLANNER.trackerTypes };
+    return trackerKindType(type, maps) ?? null;
   }
 
   /**

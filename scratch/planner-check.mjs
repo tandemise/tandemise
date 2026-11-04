@@ -700,6 +700,89 @@ await attempt('a tracker item\'s type profiles the mission', async () => {
   const fromTracker = await planner.predict(w.h.repo.missions.get(id));
   check('a Bug from the tracker profiles as a fix, saying so', fromTracker.profile.type === 'fix' && fromTracker.profile.signals.some((s) => s.name === 'tracker type' && s.value === 'Bug'), fromTracker.profile.signals);
   check('…which the same text alone does not say', !plain.profile.signals.some((s) => s.name === 'tracker type'), plain.profile.signals);
+
+  // #154: a GitHub issue's labels reach the profile, and a YouTrack User Story is a feature, both before any tiebreak.
+  const labelled = items.upsert(w.ws, { ref: 'github:acme/web#8', key: '#8', url: 'https://github.com/acme/web/issues/8', title: 'Planner tiebreak fails on fenced replies', description: 'x', state: 'open', assignee: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), tags: ['bug', 'area: daemon', 'dogfood'] });
+  const lm = await w.h.services.missions.create(w.caller, { workspaceId: w.ws, goal: 'The planner tiebreak fails when the reply is fenced', title: 'Planner tiebreak fails on fenced replies', workflowPreset: 'auto' });
+  const lid = lm.id ?? lm.mission?.id;
+  w.h.repo.missions.update(lid, { trackerItemId: labelled.id });
+  const byLabel = await planner.predict(w.h.repo.missions.get(lid));
+  check('#154: a GitHub issue labelled bug, with a plain title, profiles as a fix', byLabel.profile.type === 'fix' && byLabel.profile.signals.some((s) => s.name === 'label' && s.value === 'bug'), byLabel.profile.signals);
+  check('#154: …so no tiebreak is needed', D.tiebreakReason({ paths: [], projectRepos: 1 }, byLabel.profile) === null);
+  check('#154: …and Why these steps says the label decided', D.decidingLines(byLabel.profile)[0] === 'Type fix: it has the label "bug".', D.decidingLines(byLabel.profile)[0]);
+  const story = items.upsert(w.ws, { ref: 'youtrack:KEY-9', key: 'KEY-9', url: 'https://yt.example/issue/KEY-9', title: 'Export the board', description: 'x', state: 'Open', assignee: null, updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(), type: 'User Story' });
+  const sm = await w.h.services.missions.create(w.caller, { workspaceId: w.ws, goal: 'Export the board as CSV', title: 'Export the board', workflowPreset: 'auto' });
+  const sid = sm.id ?? sm.mission?.id;
+  w.h.repo.missions.update(sid, { trackerItemId: story.id });
+  const byStory = await planner.predict(w.h.repo.missions.get(sid));
+  check('#154: a YouTrack User Story profiles as a feature, with no tiebreak', byStory.profile.type === 'feature' && D.tiebreakReason({ paths: [], projectRepos: 1 }, byStory.profile) === null, byStory.profile.signals);
+  check('#154: the pull request title maps the tracker type the same way', D.trackerKindType('user-story', app.SHIPPED_PLANNER.trackerTypes) === 'feature' && D.trackerKindType('BUG', app.SHIPPED_PLANNER.labels) === 'fix');
+  clearInterval(keepAlive);
+});
+
+await attempt('risk words in a reproduction are not the change (#210)', async () => {
+  section('risk words in a reproduction are not the change (#210)');
+  const shipped = D.parsePlannerConfig(app.SHIPPED_PLANNER).config;
+  const repro = [
+    'The export test fails on a clean checkout.',
+    '',
+    '## Steps to reproduce',
+    '',
+    '1. Run `npm run db:migrate`.',
+    '2. Run the export test.',
+    '',
+    '```',
+    'npm run db:migrate && npm test',
+    '```',
+    '',
+    '## Done when',
+    '',
+    '- The export test passes on a clean checkout.',
+  ].join('\n');
+  const bug = D.profileTask(input({ item: { trackerType: 'Bug', title: 'Export test fails on a clean checkout', description: repro, criteria: 1 } }), shipped);
+  check('a migrate command in the reproduction steps does not raise risk', bug.risk === 'low' && !bug.signals.some((s) => s.effect === 'risk high'), bug.signals);
+  check('…so the bug is not in the careful lane', D.chooseLane(bug, shipped, 'auto').lane !== 'careful', D.chooseLane(bug, shipped, 'auto'));
+  const span = D.profileTask(input({ item: { title: 'Export test flakes', description: 'It flakes right after `db:migrate` runs in the setup script of the suite.', criteria: 1 } }), shipped);
+  check('a code span is not prose', span.risk === 'low', span.signals);
+  const fenced = D.profileTask(input({ item: { title: 'Export test flakes', description: 'Seen in CI:\n\n~~~\nrunning schema migration 12\n~~~\n\nThe export test then times out.', criteria: 1 } }), shipped);
+  check('a fenced block is not prose', fenced.risk === 'low', fenced.signals);
+  const label = D.profileTask(input({ item: { title: 'Export test flakes', description: 'The export test flakes.\n\n**Repro**\n1. run the schema migration\n\n**Expected**\nIt passes.', criteria: 1 } }), shipped);
+  check('a bold "Repro" section is left out too, up to the next label', label.risk === 'low', label.signals);
+  const prose = D.profileTask(input({ item: { title: 'Add a schema for exports', description: 'Exports need a schema migration for the new column.', criteria: 1 } }), shipped);
+  check('the same word in the item\'s own prose still raises risk', prose.risk === 'high', prose.signals);
+  check('keywordText keeps the title and prose, without code', D.keywordText({ title: 'Fix `db:migrate` docs', description: 'Prose.\n\n## Repro\n\nmigrate\n\n## Done when\n\n- schema ok' }) === 'fix   docs\nprose.\n\n## done when\n\n- schema ok', D.keywordText({ title: 'Fix `db:migrate` docs', description: 'Prose.\n\n## Repro\n\nmigrate\n\n## Done when\n\n- schema ok' }));
+
+  // Graded again from the change: the text says migration, the diff touches none.
+  const text = input({ item: { trackerType: 'Bug', title: 'Export test fails after the migration to the new runner', description: 'The export test fails since the migration to the new test runner last week.', criteria: 1 } });
+  const predicted = D.profileTask(text, shipped);
+  check('predicted from text alone, it is high risk', predicted.risk === 'high', predicted.signals);
+  const measuredLight = D.profileTask({ ...text, basis: 'measured', changed: ['test/export.test.ts', 'src/export.ts', 'src/export-format.ts'], paths: ['test/export.test.ts', 'src/export.ts', 'src/export-format.ts'] }, shipped);
+  check('measured from a diff that touches no schema, it is low risk', measuredLight.risk === 'low', measuredLight.signals);
+  check('…and Why these steps says the change decided', D.decidingLines(measuredLight)[2] === 'Risk low: the change itself touches no sensitive area, though the item says "migration".', D.decidingLines(measuredLight)[2]);
+  const measuredHeavy = D.profileTask({ ...text, basis: 'measured', changed: ['db/migrations/0012_runner.sql'], paths: ['db/migrations/0012_runner.sql'] }, shipped);
+  check('a diff with a migration file stays high risk', measuredHeavy.risk === 'high', measuredHeavy.signals);
+  const prisma = D.profileTask({ ...text, basis: 'measured', changed: ['prisma/schema.prisma'], paths: ['prisma/schema.prisma'] }, shipped);
+  check('a schema file is in the migrations area', prisma.risk === 'high', prisma.signals);
+
+  // In the engine: careful from text, then the ship step measures the diff and the lane steps down.
+  const keepAlive = setInterval(() => {}, 1000);
+  const { world } = await import('./planner-harness.mjs');
+  const w = await world();
+  const planner = w.h.container.resolve(app.PLANNER_SERVICE);
+  const m = await w.mission('Export test fails after the migration to the new runner', { goal: 'The export test fails since the migration to the new test runner last week.', successCriteria: ['The export test passes.'] });
+  const first = w.h.repo.planDecisions.latest(m.id);
+  check('planned careful from its text', first?.lane === 'careful' && first.basis === 'predicted', [first?.lane, first?.laneBecause]);
+  const keys = w.h.repo.tasks.listByMission(m.id).map((t) => t.key);
+  await planner.escalate(w.h.repo.missions.get(m.id), ['test/export.test.ts', 'src/export.ts']);
+  const after = w.h.repo.planDecisions.latest(m.id);
+  check('measured from a diff with no schema, the lane steps down', after?.basis === 'measured' && after.lane !== 'careful' && after.profile.risk === 'low', [after?.lane, after?.profile.risk]);
+  check('…and the plan decision records why', after?.laneBecause === D.LANE_STEPPED_DOWN && D.laneBecauseSentence(after.laneBecause).startsWith('It stepped down once the change was measured'), after?.laneBecause);
+  check('…removing no step', eq(w.h.repo.tasks.listByMission(m.id).map((t) => t.key), keys), [keys, w.h.repo.tasks.listByMission(m.id).map((t) => t.key)]);
+  const notes = w.h.repo.events.listByMission(m.id).filter((e) => e.body.type === 'note').map((e) => e.body.text);
+  check('…and the feed says so', notes.some((n) => n.startsWith('What the change touches is less risky than its text said')), notes.slice(-3));
+  const mine = await w.mission('Export test fails after the migration to the new runner', { goal: 'The export test fails since the migration to the new test runner last week.', successCriteria: ['The export test passes.'], lane: 'careful' });
+  await planner.escalate(w.h.repo.missions.get(mine.id), ['test/export.test.ts']);
+  check('a lane a person chose never steps down', w.h.repo.planDecisions.latest(mine.id)?.lane === 'careful', w.h.repo.planDecisions.latest(mine.id)?.lane);
   clearInterval(keepAlive);
 });
 
