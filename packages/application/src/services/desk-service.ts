@@ -82,7 +82,9 @@ export class DeskService {
 
   /**
    * What waits on a person, for anyone: the Inbox's items minus checks (they
-   * wait on nobody) and minus stalled rows (counted apart). Counted from rows
+   * wait on nobody). A stalled row offers its action to a person, so it waits
+   * on one and counts here too (#151), as it does in Home's "Needs you" tile
+   * and list (`waitsOnMember` in `@tandemise/api-contract/for-me`). Counted from rows
    * rather than by building the Inbox, which would name every card a second
    * time on the same Home read.
    */
@@ -98,7 +100,7 @@ export class DeskService {
       const counts = this.deps.readiness.counts(m.id);
       return counts.openQuestions + counts.proposedPending > 0;
     }).length;
-    return cards + steps + parked + refinements + this.deps.liveness.silentRuns(workspaceId).length;
+    return cards + steps + parked + refinements + this.deps.liveness.silentRuns(workspaceId).length + this.deps.liveness.stalled(workspaceId).length;
   }
 
   /** A real mission of this workspace: never an eval trial's, which no person is asked about. */

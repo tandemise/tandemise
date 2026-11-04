@@ -245,7 +245,7 @@ section('engine: a seeded project, the desk numbers and a report rendered twice'
     const home = await h.services.projections.home(ws);
     const m = home.metrics;
     check('home carries metrics', m !== undefined, Object.keys(home));
-    check('needsYou 1: the release card (a stalled mission is counted apart)', m?.needsYou === 1, m);
+    check('needsYou 2: the release card and the stalled mission, which waits on a person too (#151)', m?.needsYou === 2, m);
     check('working on 2 of 2, 1 queued (the paused one is not in progress)', m?.active === 2 && m.wipLimit === 2 && m.queued === 1, m);
     check('criteria 4 of 6 verified across 2 missions', m?.criteriaVerified === 4 && m.criteriaTotal === 6 && m.criteriaMissions === 2, m);
     check('stalled 1 (= liveness.stalled)', m?.stalled === 1 && m.stalled === h.services.liveness.stalled(ws).length, m);
@@ -269,7 +269,7 @@ section('engine: a seeded project, the desk numbers and a report rendered twice'
     check('A: its limit and its card', body.includes('- Limit: 15 / 30 agent min (50%).') && body.includes('- Waiting on you: “release” exhausted its retries.'));
     check('B: stalled with "Retry release"; its last failure, not its later pass', body.includes("- Stalled: 'release' is blocked: A human declined to retry this task. Next: Retry release.") && body.includes('- Last gate failure (release): Not met: artifact.ReleaseCandidate.exists is false'), body);
     check('the backlog: Dark theme queued first; Search not queued', body.includes('1. Dark theme · High · Ready to plan') && body.includes('- Not queued: Search · Normal'), body.split('## Backlog')[1]);
-    check('at a glance: the desk numbers', ['- Needs you: 1', '- Working on: 2 of 2 · 1 queued', '- Criteria verified: 4 of 6, across 2 missions in progress', '- Stalled: 1'].every((l) => body.includes(l)) && /- This month \(\d{4}-\d{2}\): 25\.5 \/ 30 agent min \(85%\)/.test(body), body.split('## Missions')[0]);
+    check('at a glance: the desk numbers', ['- Needs you: 2', '- Working on: 2 of 2 · 1 queued', '- Criteria verified: 4 of 6, across 2 missions in progress', '- Stalled: 1'].every((l) => body.includes(l)) && /- This month \(\d{4}-\d{2}\): 25\.5 \/ 30 agent min \(85%\)/.test(body), body.split('## Missions')[0]);
 
     h.db.handle.exec(`VACUUM INTO '${join(COPY, 'copy.db').replace(/'/g, "''")}'`);
     const h2Home = join(COPY, 'home');

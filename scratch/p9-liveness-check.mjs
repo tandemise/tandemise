@@ -363,6 +363,21 @@ section('engine: one mission per shape; stalled count equals inbox.stalled.lengt
     const rowsRejected = inbox.stalled.find((s) => s.missionId === rejected);
     check('the rejected plan row says so and offers Re-plan', rowsRejected?.reason === 'The plan was rejected. Re-plan or change the mission goal.' && rowsRejected.action.kind === 'replan' && rowsRejected.action.taskId === null, rowsRejected);
 
+    // #151: Home's "Needs you" tile, its "Needs you now" list and the Inbox's badge, by the one rule in for-me.
+    const FM = await import('@tandemise/api-contract/for-me');
+    const me = h.services.team.me(caller).memberships.find((m) => m.workspaceId === ws)?.memberId ?? null;
+    const forIds = (ids) => ids.length === 0 || (me !== null && ids.includes(me));
+    const facts = [
+      ...inbox.approvals.map((a) => ({ kind: 'approval', approvalKind: a.approval.kind, forMe: FM.isApprovalForMember(a.addressees.map((x) => x.id), me) })),
+      ...inbox.tasks.map(() => ({ kind: 'task', approvalKind: null, forMe: true })),
+      ...inbox.stalled.map((s) => ({ kind: 'stalled', approvalKind: null, forMe: forIds(s.forIds) })),
+    ];
+    const listed = facts.filter((f) => FM.waitsOnMember(f));
+    check('#151: the Needs you tile counts exactly what Needs you now lists', FM.needsYouCount(facts) === listed.length && listed.length > 0, { tile: FM.needsYouCount(facts), list: listed.length });
+    const mineStalled = inbox.stalled.filter((s) => forIds(s.forIds));
+    check('#151: every stalled row with an action counts in Needs you, in the tile and the list', mineStalled.length > 0 && mineStalled.every((s) => s.action !== null) && listed.filter((f) => f.kind === 'stalled').length === mineStalled.length, { stalled: mineStalled.length, listed: listed.filter((f) => f.kind === 'stalled').length });
+    check('#151: a check counts in neither', facts.some((f) => f.approvalKind === 'check') && !listed.some((f) => f.approvalKind === 'check'));
+
     // The row goes when the action moves the mission: retry the left-blocked step.
     await h.services.missions.retryTask(caller, row.action.taskId, {});
     const after = h.services.projections.inbox(ws);

@@ -30,7 +30,7 @@ export async function openHome(c) {
 }
 
 /** One desk card's visible text on one line ("Needs you 1 Decisions and steps in your inbox"), or ''. */
-export const deskCard = (c, label) => c.page.evaluate(`(document.querySelector('section[aria-label="Desk"] a[aria-label=${JSON.stringify(label)}]')?.innerText ?? '').replace(/\\s+/g, ' ').trim()`);
+export const deskCard = (c, label) => c.page.evaluate(`(document.querySelector('section[aria-label="Desk"] a[data-desk=${JSON.stringify(label)}]')?.innerText ?? '').replace(/\\s+/g, ' ').trim()`);
 
 /** Waits until a card reads `prefix` (the numbers refresh as the daemon's facts change). */
 export async function waitCard(c, label, prefix, timeoutMs = 30_000) {
@@ -40,7 +40,7 @@ export async function waitCard(c, label, prefix, timeoutMs = 30_000) {
 
 /** Clicks a desk card, as a person would. */
 export async function clickCard(c, label) {
-  const ok = await c.page.evaluate(`(() => { const a = document.querySelector('section[aria-label="Desk"] a[aria-label=${JSON.stringify(label)}]'); if (!a) return false; a.click(); return true; })()`);
+  const ok = await c.page.evaluate(`(() => { const a = document.querySelector('section[aria-label="Desk"] a[data-desk=${JSON.stringify(label)}]'); if (!a) return false; a.click(); return true; })()`);
   if (!ok) throw new Error(`no desk card "${label}"`);
   await c.sleep(1200);
 }

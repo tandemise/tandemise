@@ -19,8 +19,8 @@ import { Badge, Banner, Button, Card, Chip, Tooltip, Truncate } from '@tandemise
 export function Home(): JSX.Element {
   const home = useHome();
   const roles = useRoles();
-  // The same inbox read as the nav badge. The badge counts everything for me;
-  // Home leaves out checks, which nothing waits on.
+  // What waits on me (#151): one list, one rule, shared with the Inbox and the nav badge.
+  // The "Needs you" tile counts it and "Needs you now" shows it, so the two always agree.
   const needsMe = useInbox().needsMe;
   const [, navigate] = useLocation();
   const workspaceId = useWorkspaceId();
@@ -40,6 +40,7 @@ export function Home(): JSX.Element {
   const actors = useActors();
   const raw = home.data;
   // A blocked mission already in "Needs you now" (its card, its step, its Stalled row) is not shown twice (P9).
+  // The rest wait on someone else: listed apart, so "Needs you now" holds exactly what the tile counts (#151).
   const listed = new Set(needsMe.map(missionOfItem));
   const data = raw === undefined ? undefined : { ...raw, blockedMissions: raw.blockedMissions.filter((s) => !listed.has(s.mission.id)) };
   // The desk's month banner says the project's warning with the rule it triggers first (P10): not twice.
@@ -73,7 +74,7 @@ export function Home(): JSX.Element {
           {report.isError ? <ErrorState error={report.error} onRetry={writeReport} /> : null}
 
           {/* The desk (P10): five numbers, each opening the view behind it. */}
-          {data?.metrics ? <Desk metrics={data.metrics} needsYou={needsMe.filter((i) => i.kind !== 'stalled').length} /> : null}
+          {data?.metrics ? <Desk metrics={data.metrics} needsYou={needsMe.length} /> : null}
 
           {(data?.banners ?? []).length > 0 ? (
             <section className="section" aria-label="What this means">
@@ -119,11 +120,11 @@ export function Home(): JSX.Element {
           <section className="section">
             <SectionHead
               title="Needs you now"
-              meta={data ? describeAttention(needsMe.length, data.blockedMissions.length) : undefined}
+              meta={data ? describeAttention(needsMe.length) : undefined}
             />
             {home.isPending ? (
               <SkeletonCards count={2} />
-            ) : needsMe.length === 0 && (data?.blockedMissions.length ?? 0) === 0 ? (
+            ) : needsMe.length === 0 ? (
               <Card>
                 <Empty
                   icon="check"
@@ -154,12 +155,21 @@ export function Home(): JSX.Element {
                     <Icon name="chevronRight" size={13} />
                   </Link>
                 ) : null}
-                {(data?.blockedMissions ?? []).map((summary) => (
-                  <MissionRow key={summary.mission.id} summary={summary} />
-                ))}
               </div>
             )}
           </section>
+
+          {/* Blocked missions that wait on someone else: seen, but not counted as waiting on you. */}
+          {(data?.blockedMissions.length ?? 0) > 0 ? (
+            <section className="section" aria-label="Blocked">
+              <SectionHead title="Blocked" meta={pluralize(data!.blockedMissions.length, 'mission')} />
+              <div className="stack">
+                {data!.blockedMissions.map((summary) => (
+                  <MissionRow key={summary.mission.id} summary={summary} />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="section" aria-label="Who's working on what">
             <SectionHead title="Who's working on what" />
@@ -296,9 +306,11 @@ export function Home(): JSX.Element {
 }
 
 /**
- * The five numbers a person opening the app wants first. "Needs you" and
- * "Stalled" never count the same thing: a stalled mission is counted once,
- * as stalled, though it also sits in "Needs you now" below.
+ * The five numbers a person opening the app wants first. "Needs you" is the
+ * number of items in "Needs you now" below, by the one rule Home and the Inbox
+ * share (#151). A stalled mission whose step offers you an action waits on
+ * you, so it counts there as well as in "Stalled": "Stalled" says nothing
+ * moves it, "Needs you" says you are the one who can.
  */
 function Desk({ metrics, needsYou }: { metrics: HomeMetricsView; needsYou: number }): JSX.Element {
   const month = [...metrics.monthUsage].sort((a, b) => (b.percent ?? -1) - (a.percent ?? -1))[0];
@@ -438,11 +450,8 @@ function RefinementRow({ item }: { item: Extract<InboxItem, { kind: 'refinement'
   );
 }
 
-function describeAttention(waiting: number, blocked: number): string {
-  const parts: string[] = [];
-  if (waiting > 0) parts.push(pluralize(waiting, 'request'));
-  if (blocked > 0) parts.push(`${pluralize(blocked, 'mission')} blocked`);
-  return parts.length > 0 ? parts.join(' · ') : 'all clear';
+function describeAttention(waiting: number): string {
+  return waiting > 0 ? pluralize(waiting, 'request') : 'all clear';
 }
 
 /**

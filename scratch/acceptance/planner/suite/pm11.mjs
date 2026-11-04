@@ -138,6 +138,11 @@ try {
   const crowded = /\d+ more requests? in your inbox/.test(home);
   ev.check('Home: Needs you counts the review', /Needs you\s*\n\s*[1-9]/.test(home) && !home.includes('Nothing waits on you'), home.slice(0, 400));
   ev.check('Home: Stalled counts the wait', /Stalled\s*\n\s*1/.test(home) && !home.includes('Everything can move'), home.slice(0, 400));
+  // #151: the tile and the list come from one count; the stalled wait offers Retry ci, so it waits on you in both.
+  const tile = Number(home.match(/Needs you\s*\n\s*(\d+)/)?.[1] ?? NaN);
+  const listed = Number(home.match(/Needs you now\s*\n?\s*(\d+) requests?/)?.[1] ?? 0);
+  const badge = Number(home.match(/Inbox\s*\n\s*(\d+)/)?.[1] ?? 0);
+  ev.check('Home: the Needs you tile and the Needs you now list agree, and the Inbox badge with them', tile === listed && tile === badge && tile >= 2, { tile, listed, badge });
   ev.check('Home "Needs you now": Review and merge', home.includes('Review and merge'), home);
   ev.check('Home "Needs you now": the stalled wait, with what it waits for (or behind "more requests" when the list is full)',
     crowded || (home.includes('Stalled: fix: the footer link is broken') && home.includes("'ci' is still waiting: Waiting for CI on #")), home);

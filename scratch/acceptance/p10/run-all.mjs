@@ -12,11 +12,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { keepPainting } from '../p0/lib/frame-pump.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
-const LINK = '/tmp/tdm-p10';
-const PORT = 9345;
+const LINK = process.env.ACCEPTANCE_LINK ?? '/tmp/tdm-p10';
+const PORT = Number(process.env.CDP_PORT ?? 9345);
 const EVIDENCE = join(here, 'evidence');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (m) => console.log(`\n### ${m}`);
@@ -57,6 +58,8 @@ const desktop = spawn('npx', ['electron-vite', 'dev', '--', `--remote-debugging-
   detached: true,
 });
 desktop.unref();
+// --keep-painting (or ACCEPTANCE_KEEP_PAINTING=1): for a display that is idle during the run.
+keepPainting([PORT]);
 
 const keepGoing = process.argv.includes('--keep-going');
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice('--only='.length).split(',');
