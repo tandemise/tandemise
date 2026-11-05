@@ -131,7 +131,7 @@ jobs:
         run: xvfb-run -a --server-args="-screen 0 1440x900x24" node scratch/acceptance/a11y/run-all.mjs --keep-painting
         env:
           A11Y_EVIDENCE: ${{ runner.temp }}/a11y-evidence
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: a11y-desktop-evidence
