@@ -37,12 +37,12 @@
     "@tandemise/desktop-control": "*",
     "@tandemise/application": "*",
     "zod": "^3.24.1",
-    "ws": "^8.22.0",
+    "ws": "^8.22.1",
     "yaml": "^2.9.1",
     "@tandemise/integration-mcp": "*",
     "@tandemise/terminal": "*"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.18.2"
   }
 }
