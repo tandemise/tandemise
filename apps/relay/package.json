@@ -16,7 +16,7 @@
     "@tandemise/coordination": "*",
     "better-sqlite3": "^13.0.3",
     "ws": "^8.22.0",
-    "zod": "^3.24.1"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
