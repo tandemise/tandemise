@@ -19,7 +19,7 @@
     "@tandemise/domain": "*",
     "@tandemise/kernel": "*",
     "@tandemise/shared": "*",
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12"
