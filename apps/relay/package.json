@@ -14,12 +14,12 @@
   "dependencies": {
     "@tandemise/api-contract": "*",
     "@tandemise/coordination": "*",
-    "better-sqlite3": "^13.0.3",
-    "ws": "^8.22.0",
+    "better-sqlite3": "^13.2.0",
+    "ws": "^8.23.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.18.2"
   }
 }
